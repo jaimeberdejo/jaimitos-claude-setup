@@ -284,16 +284,11 @@ for i in $(seq 1 "$MAX_ITER"); do
       fi
       ;;
     PASS)
-      # Record the independent grade as evidence for the shared tick gate. run_id binds it to
-      # the exact commit being graded; NO_TESTS_OK (only if the grader emitted it) authorizes
-      # ticking a phase that legitimately has no test suite.
-      NO_TESTS_OK=0
-      printf '%s' "$VERDICT" | grep -q 'NO_TESTS_OK' && NO_TESTS_OK=1
-      {
-        echo "run_id=$(git rev-parse HEAD 2>/dev/null)"
-        echo "verdict=PASS"
-        echo "no_tests_ok=$NO_TESTS_OK"
-      } > .claude/.phase-grade
+      # Record the independent grade as evidence for the shared tick gate (same writer the
+      # in-session /wrap path uses, so the grade-file format has one source). run_id binds it to
+      # the exact commit; NO_TESTS_OK (only if the grader emitted it) authorizes ticking a phase
+      # that legitimately has no test suite.
+      bash scripts/record-grade.sh "$VERDICT" >>autopilot.log 2>&1
 
       # Route through the SINGLE completion gate. tick.sh verifies the evidence (grade + fresh
       # green tests bound to HEAD), secret-scans the whole phase diff, blocks high-stakes paths,

@@ -8,6 +8,7 @@ set -uo pipefail
 SCAFFOLD="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TICK="$SCAFFOLD/scripts/tick.sh"
 EVID="$SCAFFOLD/scripts/test-evidence.sh"
+RG="$SCAFFOLD/scripts/record-grade.sh"
 HS_LIB="$SCAFFOLD/.claude/lib/_high-stakes.sh"
 SS_LIB="$SCAFFOLD/.claude/lib/_secret-scan.sh"
 TC_LIB="$SCAFFOLD/.claude/lib/_test-cmd.sh"
@@ -16,7 +17,7 @@ FAILS=0
 pass() { printf '  ✓ %s\n' "$1"; }
 fail() { printf '  ✗ %s\n' "$1"; FAILS=$((FAILS+1)); }
 
-for f in "$TICK" "$EVID" "$HS_LIB" "$SS_LIB" "$TC_LIB"; do
+for f in "$TICK" "$EVID" "$RG" "$HS_LIB" "$SS_LIB" "$TC_LIB"; do
   [ -f "$f" ] || { echo "test: missing $f" >&2; exit 1; }
 done
 command -v jq  >/dev/null 2>&1 || { echo "test: jq required";  exit 1; }
@@ -135,6 +136,7 @@ mkevrepo() {
   REPO="$WORK/$1"; rm -rf "$REPO"
   mkdir -p "$REPO/.claude/lib" "$REPO/scripts"
   cp "$EVID" "$REPO/scripts/test-evidence.sh"; cp "$TC_LIB" "$REPO/.claude/lib/_test-cmd.sh"
+  cp "$RG" "$REPO/scripts/record-grade.sh"
   printf '.claude/.tick-evidence.json\n' > "$REPO/.gitignore"
   ( cd "$REPO" && git init -q && git config user.email t@t.t && git config user.name t \
       && git add -A && git commit -q -m init )
@@ -161,6 +163,38 @@ mkevrepo e3; ( cd "$REPO" && bash scripts/test-evidence.sh >/dev/null 2>&1 ); er
 mkevrepo e4; ( cd "$REPO" && bash scripts/test-evidence.sh --allow-no-tests >/dev/null 2>&1 ); erc=$?
 { [ "$erc" = 0 ] && [ "$(jq -r .passed "$REPO/.claude/.tick-evidence.json")" = null ]; } \
   && pass "test-evidence: no tests --allow-no-tests → exit0, passed:null" || fail "no-tests allow wrong (rc=$erc)"
+
+echo ""
+echo "record-grade producer tests"; echo ""
+
+# g1 — PASS verdict → grade with run_id==HEAD, verdict=PASS, no_tests_ok=0.
+mkevrepo g1
+( cd "$REPO" && bash scripts/record-grade.sh "all criteria met
+PASS" ) >/dev/null 2>&1; grc=$?
+gf="$REPO/.claude/.phase-grade"
+{ [ "$grc" = 0 ] && grep -q "verdict=PASS" "$gf" && grep -q "run_id=$HEAD" "$gf" && grep -q "no_tests_ok=0" "$gf"; } \
+  && pass "record-grade: PASS → grade bound to HEAD, no_tests_ok=0" || fail "record-grade PASS wrong (rc=$grc)"
+
+# g2 — verdict carrying NO_TESTS_OK → no_tests_ok=1.
+mkevrepo g2
+( cd "$REPO" && bash scripts/record-grade.sh "no suite for this docs phase
+NO_TESTS_OK
+PASS" ) >/dev/null 2>&1
+grep -q "no_tests_ok=1" "$REPO/.claude/.phase-grade" 2>/dev/null \
+  && pass "record-grade: NO_TESTS_OK token recorded" || fail "record-grade did not record NO_TESTS_OK"
+
+# g3 — non-PASS verdict → refuses, writes no grade file.
+mkevrepo g3
+( cd "$REPO" && bash scripts/record-grade.sh "NEEDS_WORK: missing tests" ) >/dev/null 2>&1; grc=$?
+{ [ "$grc" = 1 ] && [ ! -f "$REPO/.claude/.phase-grade" ]; } \
+  && pass "record-grade: non-PASS refuses, no grade written" || fail "record-grade non-PASS wrong (rc=$grc)"
+
+# g4 — a per-criterion 'PASS' that is not the final line must NOT record a grade.
+mkevrepo g4
+( cd "$REPO" && bash scripts/record-grade.sh "Criterion 1: PASS
+NEEDS_WORK: criterion 2 unmet" ) >/dev/null 2>&1; grc=$?
+{ [ "$grc" = 1 ] && [ ! -f "$REPO/.claude/.phase-grade" ]; } \
+  && pass "record-grade: mid-text 'PASS' line does not record (anchored last line)" || fail "record-grade anchored-parse wrong (rc=$grc)"
 
 echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All tick gate + evidence tests passed."; exit 0

@@ -52,3 +52,4 @@ jobs:
           bash scripts/test-checkpoint.sh
           bash scripts/test-autopilot-gates.sh
           bash scripts/test-tick.sh
+          bash scripts/test-docs-invariants.sh
