@@ -21,8 +21,9 @@ rules, and two autonomous loops (one watchable, one headless) — all project-ne
 ```
 your-repo/
 ├── CLAUDE.md                      # lean constitution: commands + working agreement
+├── SCAFFOLD.md                    # scaffold quick-start (named so it can't clobber YOUR README)
 ├── .gitignore                     # ignores control/scratch/evidence files
-├── .github/workflows/ci.yml       # regression CI: shell syntax, settings, hook smoke tests
+├── .github/workflows/             # OPT-IN CI (only with `install.sh --with-ci`): lean-stack-ci.yml
 ├── docs/
 │   ├── SPEC.md                    # what & why + a MEASURABLE success criterion
 │   ├── ROADMAP.md                 # phases with checkboxes + "Done when" (the roadmap skill writes this)
@@ -45,14 +46,16 @@ your-repo/
     │   └── evaluator.md           # independent grader (default-FAIL, no edit tools)
     ├── rules/
     │   └── high-stakes.md         # path-scoped: extra care for auth/migrations/money/etc.
-    └── hooks/                     # 7 deterministic shell hooks (see Part 4)
+    └── hooks/                     # 7 deterministic shell hooks (see Part 4) + 2 shared libs
         ├── session-start.sh       # re-injects STATE+ROADMAP+findings+git log into context
         ├── steer.sh               # STEER.md injects mid-run guidance (JSON additionalContext)
         ├── kill-switch.sh         # AGENT_STOP blocks the next tool call onward
-        ├── format-on-edit.sh      # auto format/lint after every edit
+        ├── format-on-edit.sh      # auto FORMAT (whitespace/style) after every edit — no lint --fix
         ├── test-gate.sh           # opt-in deterministic test gate (LEAN_TEST_GATE)
-        ├── commit-on-stop.sh      # honest git checkpoint each turn
-        └── ownership-nudge.sh     # reminds you to ADR / teach-back / mapme after code changes
+        ├── commit-on-stop.sh      # honest git checkpoint each turn (secret-scans before committing)
+        ├── ownership-nudge.sh     # reminds you to ADR / teach-back / run the mapme skill after changes
+        ├── _secret-scan.sh        # SHARED lib: filename+content secret scan (commit-on-stop + autopilot)
+        └── _high-stakes.sh        # SHARED lib: high-stakes path list/matcher (autopilot's supervised-gate)
 ```
 
 > **Canonical source:** the repo-root `README.md` is the master map; this GUIDE is the
@@ -140,7 +143,7 @@ SPEC once  →  ROADMAP once  →  [ /resume → /phase → review → teach-bac
 ```
 
 - **SPEC once** — describe the project; write `docs/SPEC.md` with a *measurable* success
-  criterion (grill yourself, or use the `grill-with-docs` skill if installed).
+  criterion (grill yourself, or use the external `grill-me` skill if installed — see Optional companions).
 - **ROADMAP once** — the **`roadmap` skill** breaks the spec into phases, each with a checklist
   and a machine-checkable `Done when:` line. It recommends a phase count (few/medium/many) and
   tags each phase loopable or supervised.
@@ -176,10 +179,32 @@ Manual mode = you drive each arrow. Autopilot mode = a loop drives the bracket. 
 | `session-start.sh` | start/resume/clear/compact | Re-injects STATE + open roadmap + `NEXT_FINDINGS` + architecture overview + recent commits. |
 | `steer.sh` | prompt submit + before each tool call | Injects `STEER.md` as JSON `additionalContext`, then clears it. |
 | `kill-switch.sh` | before each tool call | `AGENT_STOP` present → `exit 2`, blocking the call. |
-| `format-on-edit.sh` | after Write/Edit | Formats/lints the touched file (ruff / prettier+eslint). |
+| `format-on-edit.sh` | after Write/Edit | **Formats only** the touched file (ruff format / prettier). Deliberately no `lint --fix` — autofixers can change semantics silently. |
 | `test-gate.sh` | turn end (opt-in) | `LEAN_TEST_GATE=warn\|block` runs the suite, writes `test-results.json`, blocks on red in `block` mode. |
-| `commit-on-stop.sh` | turn end | Honest git checkpoint (only claims success when a commit happened; catches untracked files). |
-| `ownership-nudge.sh` | turn end | After code changes, nudges: ADR the decision, run teach-back, `/mapme`. |
+| `commit-on-stop.sh` | turn end | Honest git checkpoint (only claims success when a commit happened; catches untracked files). Runs the shared **secret-scan** and refuses to commit credentials. |
+| `ownership-nudge.sh` | turn end | After code changes, nudges: ADR the decision, run teach-back, run the `mapme` skill. |
+
+> **Two sourced libraries**, not event hooks: `_secret-scan.sh` (filename+content secret scan)
+> and `_high-stakes.sh` (the high-stakes path list + matcher). `commit-on-stop.sh` and
+> `scripts/autopilot.sh` both source them, so the same secret guard and high-stakes gate apply
+> whether a commit comes from the Stop hook or the headless loop.
+
+### Enforcement reality (deterministic layer vs advisory layer)
+Be honest about what actually *enforces* versus what merely *advises* — they are different tiers:
+
+- **Deterministic (the code enforces it):** the shell hooks and `autopilot.sh`'s control flow.
+  The kill-switch, the strict PASS/NEEDS_WORK verdict parsing, the script-as-sole-ticker, the
+  evaluator-change cleanup, the secret-scan before commit/push, and the high-stakes gate are all
+  plain shell — they run regardless of what any model "decides," and they fail closed.
+- **Advisory (a model is asked to comply):** `CLAUDE.md`, `.claude/rules/*`, and the evaluator's
+  prompt. These shape behavior but a sufficiently confused or adversarial model can ignore them.
+- **`permissions.deny` is two-tier:** the `Read(...)` denies are a real boundary; the `Bash(...)`
+  denies are a **best-effort speed-bump**, bypassable (`less`, `source`, `python -c …`), not a
+  wall. Treat them as defense-in-depth, never as containment.
+- **The real boundary for truly unattended runs is the environment, not this scaffold:** run in a
+  sandbox / container with **no production credentials** and constrained network egress. The
+  guardrails here make a good run likely and a bad run loud; only the sandbox makes a bad run
+  *harmless*. Set a hard budget cap as the outer backstop.
 
 ---
 
@@ -222,7 +247,7 @@ the evaluator subagent (still independent). It warns and stops when context gets
 
 ### 5. A whole milestone, overnight
 ```bash
-bash scripts/autopilot.sh 12 --worktree --pr     # up to 12; isolated branch → PR
+bash scripts/autopilot.sh 12 --pr     # up to 12; isolated worktree (default) → PR
 ```
 The **headless** loop: a fresh `claude` process per phase (no context rot), independent grade,
 commit on green, ticks only on PASS. You wake up to a reviewed branch and an `autopilot.log`.
@@ -246,18 +271,23 @@ touch AGENT_STOP     # halt at next tool call   ·   rm AGENT_STOP   # resume
 
 **Flexible counts** (both autopilots): `5` (up to 5) · `3-5` (aim ≥3, cap 5) · `all`/`max` (until roadmap empty, safety-capped).
 
-**`autopilot.sh` flags:** `--worktree` (isolated branch — a bad run can't touch your checkout) ·
-`--pr` (push + open a PR, never touches main) · `--allow-dirty` (skip the clean-tree preflight).
+**`autopilot.sh` flags:** worktree isolation is **the default** (a bad run can't touch your
+checkout) · `--no-worktree` (opt out — run IN-PLACE, mutating your current checkout; warned
+loudly) · `--pr` (push + open a PR, never touches main; secret-scanned before any push) ·
+`--allow-dirty` (skip the clean-tree preflight) · `--max-minutes N` (wall-clock ceiling).
 
 **The guardrails** (full theory in `LOOP-ENGINEERING.md`): verifiable signal · bounded stop ·
 bounded retries (3-strike thrash cap) · blast-radius limit · **independent verifier as the
 sole roadmap-ticker** · `AGENT_STOP` kill-switch · budget cap. The builder *never* marks its own work done.
 
 **Never loop:** auth, migrations against shared/prod data, money movement, irreversible
-deletes, external side effects, or anything whose correctness is a judgment call. The
-`high-stakes.md` rule is meant to reinforce supervised-only on those paths — but
-path-scoped rule loading is currently unreliable in Claude Code, so the same constraints
-are also kept in `CLAUDE.md` (which loads every turn). Don't rely on the rule auto-loading.
+deletes, external side effects, or anything whose correctness is a judgment call. Two layers
+back this: the advisory `high-stakes.md` rule + `CLAUDE.md` constraints (path-scoped rule
+loading is unreliable in Claude Code, so the constraints are also in `CLAUDE.md`, which loads
+every turn), AND a **deterministic gate**: `autopilot.sh` sources `_high-stakes.sh` and, when a
+graded phase's diff touches a high-stakes path, **refuses to auto-tick/commit/push** and stops
+for supervised review. Keep the `paths:` in `high-stakes.md` and `HIGH_STAKES_RE` in
+`_high-stakes.sh` in sync, and point both at your sensitive dirs.
 
 ---
 
@@ -336,9 +366,10 @@ SKILLS       roadmap (spec→phases, adaptive count) · setup-lean-stack (instal
              · adr · ship-check · scope-guard · explain-diff · unstick
              · teach-back · mapme · quizme
 
-AUTOPILOT    bash scripts/autopilot.sh [N|N-M|all] [--worktree] [--pr] [--allow-dirty]
+AUTOPILOT    bash scripts/autopilot.sh [N|N-M|all] [--no-worktree] [--pr] [--allow-dirty] [--max-minutes N]
+             (worktree isolation is the DEFAULT; --no-worktree runs in-place)
              touch AGENT_STOP   halt   ·   rm AGENT_STOP   resume   ·   echo … > STEER.md   redirect
-             (ticks the roadmap only on an INDEPENDENT evaluator PASS)
+             (ticks the roadmap only on an INDEPENDENT evaluator PASS; high-stakes paths → supervised stop)
 
 GUARDRAILS   verifiable signal · bounded stop · 3-strike thrash cap · blast-radius limit
              · independent verifier (sole ticker) · kill-switch · budget cap (set it!)

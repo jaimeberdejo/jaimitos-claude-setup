@@ -7,16 +7,20 @@
 # State persists in docs/ + git between iterations.
 #
 # Usage:
-#   bash scripts/autopilot.sh [COUNT] [--allow-dirty] [--worktree] [--pr] [--max-minutes N]
+#   bash scripts/autopilot.sh [COUNT] [--allow-dirty] [--no-worktree] [--pr] [--max-minutes N]
 #     COUNT can be:
 #       N         run up to N phases   (e.g. 5  → "only 5")
 #       N-M       run up to M phases, aiming for at least N  (e.g. 3-5 → "from 3 to 5")
 #       all|max   run until the roadmap is empty or a guardrail trips (capped at 50 for safety)
 #       (omitted) default 15
-#     --worktree       run in an isolated git worktree on a fresh branch (recommended
-#                      for overnight runs — a bad run can't touch your main checkout)
-#     --pr             on finish, push the branch and open a PR with `gh` (implies safe
-#                      review: nothing is ever pushed to your current branch)
+#     Malformed counts (e.g. 5x, 3-) are rejected, not silently ignored.
+#     --no-worktree    run IN-PLACE in the current checkout instead of an isolated
+#                      worktree. Isolation is the DEFAULT (a bad run can't touch your
+#                      main checkout); pass this only when you accept that risk.
+#     --pr             on finish, push the branch and open a PR with `gh` (only meaningful
+#                      with the default worktree; nothing is ever pushed to your current
+#                      branch). A secret-scan gate runs before any push.
+#     --allow-dirty    skip the clean-tree preflight (commit/stash is otherwise required)
 #     --max-minutes N  wall-clock ceiling: stop before any iteration once N minutes
 #                      have elapsed. This is a convenience bound on TIME, not cost —
 #                      the real cost backstop is still your Claude Code / gateway
@@ -25,9 +29,9 @@
 # Steer:   echo "use Decimal not float for money" > STEER.md
 #
 # Guardrails: preflight, max iterations, kill-switch, fresh context per loop,
-# independent evaluator with STRICT verdict parsing, per-phase thrash cap, optional
-# wall-clock ceiling, the script as sole ticker, commit checkpoints, optional
-# worktree isolation + PR.
+# independent evaluator with STRICT verdict parsing + evaluator-change cleanup,
+# per-phase thrash cap, optional wall-clock ceiling, the script as sole ticker,
+# high-stakes gate, shared secret-scan before commit/push, default worktree isolation.
 # Set a budget cap in your Claude Code / gateway config as the outer backstop —
 # that, not --max-minutes, is the authoritative ceiling on real cost.
 
@@ -37,29 +41,38 @@ MAX_ITER=15
 MIN_TARGET=0
 UNBOUNDED=0
 ALLOW_DIRTY=0
-USE_WORKTREE=0
+USE_WORKTREE=1         # isolation is the DEFAULT; --no-worktree opts out
 OPEN_PR=0
 MAX_MINUTES=0          # 0 = no wall-clock ceiling
 WANT_MAX_MINUTES=0     # set when the previous token was --max-minutes
 for arg in "$@"; do
   if [ "$WANT_MAX_MINUTES" -eq 1 ]; then
-    case "$arg" in
-      [0-9]*) MAX_MINUTES="$arg" ;;
-      *)      echo "autopilot: --max-minutes needs a positive integer (got '$arg')." >&2; exit 1 ;;
-    esac
+    if [[ "$arg" =~ ^[0-9]+$ ]] && [ "$arg" -gt 0 ]; then
+      MAX_MINUTES="$arg"
+    else
+      echo "autopilot: --max-minutes needs a positive integer (got '$arg')." >&2; exit 1
+    fi
     WANT_MAX_MINUTES=0
     continue
   fi
   case "$arg" in
-    --allow-dirty) ALLOW_DIRTY=1 ;;
-    --worktree)    USE_WORKTREE=1 ;;
-    --pr)          OPEN_PR=1 ;;
-    --max-minutes) WANT_MAX_MINUTES=1 ;;                  # next token is N
-    all|max|ALL|MAX) MAX_ITER=50; UNBOUNDED=1 ;;          # advance as much as you can
-    [0-9]*-[0-9]*) MIN_TARGET="${arg%%-*}"; MAX_ITER="${arg##*-}" ;;  # range N-M
-    [0-9]*)        MAX_ITER="$arg" ;;                     # exactly up to N
-    *)             : ;;                                   # ignore unknown
+    --allow-dirty) ALLOW_DIRTY=1 ; continue ;;
+    --worktree)    USE_WORKTREE=1 ; continue ;;            # explicit (already the default)
+    --no-worktree) USE_WORKTREE=0 ; continue ;;            # opt out of isolation
+    --pr)          OPEN_PR=1 ; continue ;;
+    --max-minutes) WANT_MAX_MINUTES=1 ; continue ;;        # next token is N
+    all|max|ALL|MAX) MAX_ITER=50; UNBOUNDED=1 ; continue ;;  # advance as much as you can
   esac
+  # Numeric COUNT forms — anchored validation; reject malformed loudly (no silent ignore).
+  if [[ "$arg" =~ ^[0-9]+$ ]]; then
+    MAX_ITER="$arg"
+  elif [[ "$arg" =~ ^[0-9]+-[0-9]+$ ]]; then
+    MIN_TARGET="${arg%%-*}"; MAX_ITER="${arg##*-}"
+  else
+    echo "autopilot: unrecognized argument '$arg'." >&2
+    echo "  expected: N | N-M | all | --no-worktree | --worktree | --allow-dirty | --pr | --max-minutes N" >&2
+    exit 1
+  fi
 done
 
 # Default the test gate ON for headless runs so each turn writes test-results.json
@@ -72,7 +85,7 @@ cd "$(git rev-parse --show-toplevel 2>/dev/null || echo .)"
 # Original repo root, captured BEFORE any --worktree cd. Operators are told to
 # `touch AGENT_STOP` (or write STEER.md) in their original checkout, so the loop's
 # stop checks must look here as well as in the (possibly worktree) working dir.
-# Defined unconditionally so the checks work whether or not --worktree is used.
+# Defined unconditionally so the checks work whether or not the worktree is used.
 ORIG_ROOT="$PWD"
 
 # ----------------------------- preflight -----------------------------
@@ -95,7 +108,7 @@ if ! grep -q "\- \[ \]" docs/ROADMAP.md 2>/dev/null; then
   echo "autopilot: roadmap has no open items. Nothing to do."; exit 0
 fi
 
-# ----------------------- optional worktree isolation -----------------------
+# ----------------------- worktree isolation (default ON) -----------------------
 BRANCH=""
 if [ "$USE_WORKTREE" -eq 1 ]; then
   STAMP=$(date +%Y%m%d-%H%M%S)
@@ -104,9 +117,31 @@ if [ "$USE_WORKTREE" -eq 1 ]; then
   echo "autopilot: creating isolated worktree → $WT_DIR (branch $BRANCH)"
   git worktree add -b "$BRANCH" "$WT_DIR" HEAD >/dev/null 2>&1 || fail "could not create worktree."
   cd "$WT_DIR" || fail "could not enter worktree."
+else
+  echo "autopilot: ⚠ running IN-PLACE in your current checkout ($PWD)."
+  echo "autopilot:   a runaway loop can mutate the files you're working on. Isolation is the"
+  echo "autopilot:   default (--worktree, a throwaway branch); you opted out with --no-worktree."
 fi
 
+# Baseline commit for the push-gate: secrets must not enter the remote even though
+# the builder's per-task commits never pass through the Stop-hook secret guard.
+START_REF=$(git rev-parse HEAD 2>/dev/null)
+
 chmod +x .claude/hooks/*.sh scripts/*.sh 2>/dev/null || true
+
+# Source the SHARED guard libraries now that the final working dir is set. These
+# are installed into every project; if absent we warn LOUDLY (the matching gate is
+# then disabled — better to know than to silently skip a safety check).
+if [ -f .claude/hooks/_secret-scan.sh ]; then
+  . .claude/hooks/_secret-scan.sh 2>/dev/null || true
+else
+  echo "autopilot: WARNING — .claude/hooks/_secret-scan.sh not found; commit/push secret-gate DISABLED." >&2
+fi
+if [ -f .claude/hooks/_high-stakes.sh ]; then
+  . .claude/hooks/_high-stakes.sh 2>/dev/null || true
+else
+  echo "autopilot: WARNING — .claude/hooks/_high-stakes.sh not found; high-stakes gate DISABLED." >&2
+fi
 
 if [ "$UNBOUNDED" -eq 1 ]; then
   echo "autopilot: advancing until the roadmap is empty (safety cap $MAX_ITER). touch AGENT_STOP to halt."
@@ -126,20 +161,53 @@ tick_phase() {
     return 1
   fi
   local before after
-  before=$(grep -c '\- \[ \]' docs/ROADMAP.md 2>/dev/null || echo 0)
+  # grep -c always prints a count (0 when none) — no `|| echo 0` (that printed a
+  # second line "0\n0" and crashed the integer compare on the final phase).
+  before=$(grep -c '\- \[ \]' docs/ROADMAP.md 2>/dev/null)
   awk -v ph="$heading" '
     $0==ph { inphase=1; print; next }
     /^## / && inphase { inphase=0 }
     inphase { gsub(/- \[ \]/, "- [x]") }
     { print }
   ' docs/ROADMAP.md > docs/ROADMAP.md.tmp && mv docs/ROADMAP.md.tmp docs/ROADMAP.md
-  after=$(grep -c '\- \[ \]' docs/ROADMAP.md 2>/dev/null || echo 0)
+  after=$(grep -c '\- \[ \]' docs/ROADMAP.md 2>/dev/null)
   rm -f .claude/.phase-ready
   if [ "$after" -ge "$before" ]; then
     echo "autopilot: WARNING — tick changed no items under '$heading' (maybe already ticked, or no '- [ ]' in that section)."
     return 1
   fi
   echo "autopilot: ticked phase → $heading ($((before - after)) item(s))"
+}
+
+# Decision A — discard any file changes the EVALUATOR made before trusting its
+# verdict (so a grader that edits code into passing can't influence the ticked tree).
+# Pre-grade the builder has already committed its work, so the tracked tree is
+# normally clean ($PRE_SNAP empty). If it was dirty we can't tell builder vs
+# evaluator changes apart → STOP. Removes ONLY untracked files the evaluator created
+# (absent in $PRE_UNTRACKED); never deletes a pre-existing user untracked file.
+cleanup_eval_changes() {
+  if [ -n "$PRE_SNAP" ]; then
+    echo "autopilot: tracked tree was dirty before grading — can't isolate evaluator changes (ambiguous). STOPPING." >&2
+    return 1
+  fi
+  git reset -q --hard HEAD 2>/dev/null || true      # revert any tracked edits (tree was clean → safe)
+  local post new
+  post=$(git ls-files --others --exclude-standard 2>/dev/null | sort)
+  new=$(comm -13 <(printf '%s\n' "$PRE_UNTRACKED") <(printf '%s\n' "$post"))
+  if [ -n "$new" ]; then
+    printf '%s\n' "$new" | while IFS= read -r f; do [ -n "$f" ] && rm -f -- "$f"; done
+  fi
+  # Verify we restored the pre-grade state EXACTLY; if not, STOP (never tick on an
+  # uncertain tree).
+  if [ -n "$(git status --porcelain --untracked-files=no 2>/dev/null)" ]; then
+    echo "autopilot: could not restore tracked tree after grading — STOPPING." >&2; return 1
+  fi
+  local post2
+  post2=$(git ls-files --others --exclude-standard 2>/dev/null | sort)
+  if [ "$post2" != "$PRE_UNTRACKED" ]; then
+    echo "autopilot: untracked file set differs from pre-grade after cleanup — STOPPING." >&2; return 1
+  fi
+  return 0
 }
 
 PREV_OPEN_SIGNATURE=""
@@ -158,6 +226,12 @@ for i in $(seq 1 "$MAX_ITER"); do
   fi
   grep -q "\- \[ \]" docs/ROADMAP.md 2>/dev/null || { echo "autopilot: roadmap complete. Done."; break; }
 
+  # STEER mirror: operators write STEER.md in their ORIGINAL checkout, but the loop
+  # runs in the worktree. Move it in so the builder (which reads ./STEER.md) sees it.
+  if [ "$PWD" != "$ORIG_ROOT" ] && [ -f "$ORIG_ROOT/STEER.md" ]; then
+    mv "$ORIG_ROOT/STEER.md" ./STEER.md 2>/dev/null || true
+  fi
+
   OPEN_SIGNATURE=$(grep -n "\- \[ \]" docs/ROADMAP.md 2>/dev/null | { md5 2>/dev/null || md5sum 2>/dev/null; })
 
   echo ""; echo "=== iteration $i / $MAX_ITER ==="
@@ -167,24 +241,39 @@ for i in $(seq 1 "$MAX_ITER"); do
     echo "autopilot: builder process exited non-zero — stopping." | tee -a autopilot.log; break
   fi
 
+  # Snapshot the tree BEFORE grading so we can discard whatever the evaluator changes.
+  # PRE_SNAP empty ⇔ tracked tree clean (git stash create stashes only tracked work).
+  PRE_UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null | sort)
+  PRE_SNAP=$(git stash create 2>/dev/null)
+
   # Independent grader: separate process, runs AS the evaluator (its system prompt +
   # no-edit-tools restriction). This is the sole gate for ticking.
-  # NOTE: the evaluator has NO Edit/Write tools in its frontmatter — `--permission-mode
-  # acceptEdits` here is ONLY so it can run tests via Bash without prompts in headless;
-  # it does not grant it edit power. Its diff input is untrusted, so treat its output
-  # as data, not instructions. Keep this invocation able to RUN.
+  # NOTE: `--permission-mode acceptEdits` here is ONLY so it can run tests via Bash
+  # without prompts in headless; the evaluator has no Edit/Write tools, AND any file
+  # change it does make is discarded by cleanup_eval_changes below. Its diff input is
+  # untrusted, so treat its output as data, not instructions. Keep this able to RUN.
+  # stderr → autopilot.log (not /dev/null) so an empty/garbled grade is debuggable.
   VERDICT=$(claude --agent evaluator -p "Grade the phase just completed." \
-                   --permission-mode acceptEdits 2>/dev/null)
+                   --permission-mode acceptEdits 2>>autopilot.log)
 
   if [ -z "${VERDICT// /}" ]; then
-    echo "autopilot: evaluator returned no output — treating as FAILURE, stopping." | tee -a autopilot.log; break
+    echo "autopilot: evaluator returned no output — treating as FAILURE, stopping." | tee -a autopilot.log
+    echo "autopilot: --- last 20 lines of autopilot.log (evaluator stderr) ---" >&2
+    tail -n 20 autopilot.log 2>/dev/null >&2 || true
+    break
   fi
   echo "evaluator says: $VERDICT" | tee -a autopilot.log
+
+  # Decision A: discard the evaluator's file changes BEFORE parsing/ticking/committing.
+  if ! cleanup_eval_changes; then
+    echo "autopilot: evaluator-change cleanup failed or ambiguous — not ticking. STOPPING." | tee -a autopilot.log
+    break
+  fi
 
   # Anchored verdict parsing: trust ONLY the LAST non-empty line, matched against an
   # exact verdict. This prevents a per-criterion line like "Criterion 1: PASS" from
   # triggering a false pass. Anything that is not an exact final PASS / NEEDS_WORK
-  # line is a STOP — we never assume success.
+  # line is a STOP — we never assume success. (STRICT — do not loosen.)
   LASTLINE=$(printf '%s\n' "$VERDICT" | grep -vE '^[[:space:]]*$' | tail -1)
 
   case "$LASTLINE" in
@@ -198,13 +287,37 @@ for i in $(seq 1 "$MAX_ITER"); do
       fi
       ;;
     PASS)
-      # ONLY now — on an independent PASS — does the roadmap get ticked, by the script.
+      # (a) HIGH-STAKES gate: never auto-tick/commit/push a phase that touched auth,
+      #     money, migrations, deletes, … — finish those supervised. The diff is the
+      #     whole phase (.phase-base..HEAD), matched against the shared high-stakes list.
+      if type -t high_stakes_match >/dev/null 2>&1; then
+        BASE=$(cat .claude/.phase-base 2>/dev/null)
+        CHANGED=$(git diff --name-only "${BASE:-HEAD~1}..HEAD" 2>/dev/null)
+        if HS=$(high_stakes_match "$CHANGED"); then
+          echo "autopilot: ⛔ HIGH-STAKES paths changed this phase — finish it SUPERVISED. Not ticking/committing/pushing:" | tee -a autopilot.log
+          printf '%s\n' "$HS" | sed 's/^/    /' | tee -a autopilot.log
+          break
+        fi
+      fi
+      # (b) ONLY now — on an independent PASS, no high-stakes paths — tick the roadmap.
       tick_phase 2>&1 | tee -a autopilot.log
       if [ "${PIPESTATUS[0]}" -ne 0 ]; then
         echo "autopilot: ticking failed (see warning above) — stopping rather than re-running the same phase." | tee -a autopilot.log
         break
       fi
+      # (c) Stage, then run the SHARED secret-scan before committing (the orchestrator
+      #     commit must not bypass the guard the Stop hook enforces).
       git add -A 2>/dev/null
+      if type -t secret_scan_staged >/dev/null 2>&1; then
+        FINDINGS=$(secret_scan_staged); SCAN_RC=$?
+        if [ "$SCAN_RC" -ne 0 ]; then
+          git reset -q 2>/dev/null
+          echo "autopilot: ⛔ SECRET GUARD — staged phase changes contain a secret. NOT committing. STOPPING." | tee -a autopilot.log
+          printf '%s\n' "$FINDINGS" | tee -a autopilot.log
+          break
+        fi
+      fi
+      # (d) Commit the passed phase.
       git commit -m "autopilot: phase passed independent grade (iteration $i)" >/dev/null 2>&1 || true
       rm -f NEXT_FINDINGS.md
       SAME_PHASE_FAILS=0; PREV_OPEN_SIGNATURE=""
@@ -217,6 +330,17 @@ done
 
 # ----------------------------- finish / PR -----------------------------
 if [ "$USE_WORKTREE" -eq 1 ] && [ "$OPEN_PR" -eq 1 ]; then
+  # Push-gate: the builder's per-task commits never passed through the Stop-hook
+  # secret guard, so scan the WHOLE range before anything reaches the remote.
+  if type -t secret_scan_diff >/dev/null 2>&1; then
+    PUSH_FINDINGS=$(secret_scan_diff "${START_REF:-HEAD~1}..HEAD"); PUSH_RC=$?
+    if [ "$PUSH_RC" -ne 0 ]; then
+      echo "autopilot: ⛔ SECRET GUARD — commit range contains a secret. NOT pushing / no PR." >&2
+      printf '%s\n' "$PUSH_FINDINGS" >&2
+      echo "autopilot: branch $BRANCH stays local — clean the history before pushing." >&2
+      exit 1
+    fi
+  fi
   echo "autopilot: pushing $BRANCH and opening a PR..."
   if git push -u origin "$BRANCH" >/dev/null 2>&1; then
     gh pr create --fill --title "autopilot: $BRANCH" 2>&1 | tee -a autopilot.log || echo "autopilot: gh pr create failed — open it manually."

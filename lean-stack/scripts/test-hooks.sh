@@ -60,5 +60,42 @@ else
 fi
 
 echo ""
+# Verify the SHARED secret-scan library blocks a planted credential and does NOT
+# false-positive on a clean file. Runs in an ISOLATED temp git repo so we never
+# stage a secret into this repo.
+SCAN_LIB="$PWD/.claude/hooks/_secret-scan.sh"
+if [ -f "$SCAN_LIB" ]; then
+  (
+    set -uo pipefail
+    tmp=$(mktemp -d) || exit 20
+    trap 'rm -rf "$tmp"' EXIT
+    cd "$tmp" || exit 21
+    git init -q . && git config user.email t@t.t && git config user.name t || exit 22
+    . "$SCAN_LIB"
+    # 1) a high-confidence token in an ordinary file MUST be flagged (rc 1).
+    printf 'aws_key = "AKIA1234567890ABCDEF"\n' > config.py
+    git add config.py
+    secret_scan_staged >/dev/null 2>&1; src=$?
+    [ "$src" -eq 1 ] || exit 11
+    # 2) a clean staged file MUST pass (rc 0).
+    git reset -q
+    printf 'x = 1\n' > ok.py
+    git add ok.py
+    secret_scan_staged >/dev/null 2>&1; src=$?
+    [ "$src" -eq 0 ] || exit 12
+    exit 0
+  )
+  rc=$?
+  case "$rc" in
+    0)  printf '  ✓ secret-scan blocks a planted AWS key and passes a clean file\n' ;;
+    11) printf '  ✗ secret-scan did NOT flag a planted AWS key\n'; FAILS=$((FAILS+1)) ;;
+    12) printf '  ✗ secret-scan false-positived on a clean file\n'; FAILS=$((FAILS+1)) ;;
+    *)  printf '  ✗ secret-scan test harness errored (rc=%d)\n' "$rc"; FAILS=$((FAILS+1)) ;;
+  esac
+else
+  printf '  ✗ missing .claude/hooks/_secret-scan.sh (shared secret-scan lib)\n'; FAILS=$((FAILS+1))
+fi
+
+echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All hook smoke tests passed."; exit 0
 else echo "$FAILS hook test(s) failed."; exit 1; fi

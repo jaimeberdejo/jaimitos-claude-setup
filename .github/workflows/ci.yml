@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  scaffold-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Shell syntax — scaffold scripts, hooks, and shared libs
+        working-directory: lean-stack
+        run: |
+          set -e
+          for f in scripts/*.sh .claude/hooks/*.sh; do
+            echo "bash -n $f"
+            bash -n "$f"
+          done
+
+      - name: Shell syntax — installer & smoke test
+        run: |
+          set -e
+          bash -n install.sh
+          bash -n .github/scripts/install-smoke.sh
+
+      - name: settings.json is valid JSON
+        working-directory: lean-stack
+        run: jq empty .claude/settings.json
+
+      - name: Install smoke test (clean target, idempotency, no tool-doc pollution)
+        run: |
+          git config --global user.email ci@example.com
+          git config --global user.name ci
+          bash .github/scripts/install-smoke.sh

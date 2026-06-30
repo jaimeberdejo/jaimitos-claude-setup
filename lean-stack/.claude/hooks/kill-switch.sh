@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # PreToolUse hook — emergency stop for autonomous loops.
 # `touch AGENT_STOP` in the repo root and Claude refuses all further tool calls.
-# Your seatbelt for /goal and ralph-style runs.
+# Your seatbelt for autopilot / autonomous (ralph-style) runs.
 
 set -uo pipefail
 cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || cd .

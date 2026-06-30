@@ -1,6 +1,3 @@
-# Build artifacts (the source folders are authoritative; regenerate zips if needed)
-*.zip
-
 # OS / editor
 .DS_Store
 *.swp

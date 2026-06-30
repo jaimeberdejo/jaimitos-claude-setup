@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# install-smoke.sh — prove install.sh produces a CLEAN target install:
+#   - tool meta-docs (GUIDE/LOOP-ENGINEERING/README) are NOT copied
+#   - SCAFFOLD.md IS copied (and never lands as the target's README.md)
+#   - a pre-existing target README.md is never clobbered
+#   - the CI workflow is absent by default, present with --with-ci
+#   - re-running is idempotent (skips existing files; .gitignore block not duplicated)
+#   - scaffold .gitignore rules are merged into a pre-existing target .gitignore
+#   - the installed tree passes its own hook smoke tests (scaffold at git root)
+#
+# Lives at repo-root .github/scripts/ so it is NEVER part of the shipped scaffold.
+# Run: bash .github/scripts/install-smoke.sh
+set -uo pipefail
+
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"   # …/.github/scripts/../.. = repo root
+FAILS=0
+ok()  { printf '  ✓ %s\n' "$1"; }
+bad() { printf '  ✗ %s\n' "$1"; FAILS=$((FAILS+1)); }
+
+TMP="$(mktemp -d)" || { echo "install-smoke: mktemp failed" >&2; exit 2; }
+trap 'rm -rf "$TMP"' EXIT
+cd "$TMP" || exit 2
+git init -q . && git config user.email t@t.t && git config user.name t
+
+echo "install smoke test (target: $TMP)"
+echo ""
+
+# Pre-existing project files we must not damage.
+printf '# My Project\nhand-written README, must survive\n' > README.md
+printf 'node_modules/\n' > .gitignore
+README_BEFORE="$(cat README.md)"
+
+bash "$REPO/install.sh" . >/dev/null 2>&1 || bad "install.sh exited non-zero"
+
+# Tool meta-docs must be absent.
+for d in GUIDE.md LOOP-ENGINEERING.md; do
+  [ -e "$d" ] && bad "tool-doc $d was copied (should be excluded)" || ok "$d not copied"
+done
+# SCAFFOLD.md present.
+[ -f SCAFFOLD.md ] && ok "SCAFFOLD.md copied" || bad "SCAFFOLD.md missing"
+# Pre-existing README untouched, and no scaffold content leaked into it.
+[ "$(cat README.md)" = "$README_BEFORE" ] && ok "existing README.md untouched" || bad "README.md was modified/clobbered"
+grep -q "Lean Stack — the scaffold" README.md && bad "scaffold README content landed in target README.md" || ok "no scaffold content in target README.md"
+# CI absent by default.
+[ -e .github/workflows/lean-stack-ci.yml ] && bad "CI copied without --with-ci" || ok "CI absent by default"
+# Core scaffold + shared libs present.
+for f in CLAUDE.md .claude/settings.json scripts/autopilot.sh \
+         .claude/hooks/_secret-scan.sh .claude/hooks/_high-stakes.sh; do
+  [ -f "$f" ] && ok "installed $f" || bad "missing $f"
+done
+# Skills installed per-project.
+[ -d .claude/skills/roadmap ] && ok "skills installed (.claude/skills/roadmap)" || bad "skills not installed"
+# .gitignore merged, pre-existing rule preserved.
+grep -q "lean-stack control/secret ignores" .gitignore && ok ".gitignore merge block added" || bad ".gitignore not merged"
+grep -qx "node_modules/" .gitignore && ok "pre-existing .gitignore rule preserved" || bad "pre-existing .gitignore rule lost"
+
+# Idempotent re-run.
+OUT2="$(bash "$REPO/install.sh" . 2>&1)" || bad "re-run exited non-zero"
+printf '%s' "$OUT2" | grep -q "skip (exists)" && ok "re-run skips existing files (idempotent)" || bad "re-run did not skip existing files"
+[ "$(grep -c "lean-stack control/secret ignores" .gitignore)" -eq 1 ] && ok ".gitignore block not duplicated on re-run" || bad ".gitignore merge block duplicated"
+
+# --with-ci adds the workflow (named lean-stack-ci.yml, not ci.yml).
+bash "$REPO/install.sh" . --with-ci >/dev/null 2>&1 || bad "--with-ci run exited non-zero"
+[ -f .github/workflows/lean-stack-ci.yml ] && ok "--with-ci installs lean-stack-ci.yml" || bad "--with-ci did not install CI"
+
+# The installed tree (scaffold at git root) passes its own hook smoke tests.
+if ( cd "$TMP" && bash scripts/test-hooks.sh ) >/dev/null 2>&1; then
+  ok "installed tree passes scripts/test-hooks.sh"
+else
+  bad "installed tree FAILED scripts/test-hooks.sh"
+fi
+
+echo ""
+if [ "$FAILS" -eq 0 ]; then echo "install smoke test: PASS"; exit 0
+else echo "install smoke test: $FAILS failure(s)"; exit 1; fi

@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 # PostToolUse hook (matcher: Write|Edit|MultiEdit)
-# Auto-formats and lints the file Claude just touched. Deterministic, runs
-# outside the context window, ~zero token cost. This is your "verify" discipline
-# without asking Claude to remember anything.
+# Auto-FORMATS the file Claude just touched (whitespace/style only). Deterministic,
+# runs outside the context window, ~zero token cost.
+#
+# Deliberately format-only: it does NOT run lint --fix. Autofixers (ruff check --fix,
+# eslint --fix) can change semantics silently (prune imports, drop "unused" vars) —
+# the kind of invisible mutation this stack warns against. Run lint --fix yourself,
+# deliberately, where you can see the diff.
 #
 # Best-effort: if a formatter isn't installed it is skipped silently — formatting
 # should never block or error a turn.
@@ -17,16 +21,14 @@ FILE=$(jq -r '.tool_input.file_path // .tool_input.path // empty' 2>/dev/null)
 
 case "$FILE" in
   *.py)
-    if command -v ruff >/dev/null 2>&1; then
-      ruff format "$FILE" >/dev/null 2>&1 || true
-      ruff check --fix "$FILE" >/dev/null 2>&1 || true
-    fi
+    # Format only — no `ruff check --fix` (that rewrites code, not just whitespace).
+    command -v ruff >/dev/null 2>&1 && ruff format "$FILE" >/dev/null 2>&1 || true
     ;;
   *.ts|*.tsx|*.js|*.jsx)
-    # Use the project-local binaries via npx; --no-install means we only run them
-    # if the project actually depends on them (no surprise global mutations).
+    # Use the project-local prettier via npx; --no-install means we only run it
+    # if the project actually depends on it (no surprise global mutations).
+    # No `eslint --fix` — formatting only, no silent semantic rewrites.
     npx --no-install prettier --write "$FILE" >/dev/null 2>&1 || true
-    npx --no-install eslint --fix "$FILE" >/dev/null 2>&1 || true
     ;;
 esac
 exit 0

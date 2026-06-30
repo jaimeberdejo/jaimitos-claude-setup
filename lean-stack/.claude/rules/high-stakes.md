@@ -2,12 +2,17 @@
 description: Extra care for high-stakes or hard-to-reverse code — auth, data migrations, anything that moves money or can't be cleanly undone.
 paths:
   - "**/auth/**"
-  - "**/migrations/**"
   - "**/payments/**"
   - "**/billing/**"
+  - "**/transactions/**"
+  - "**/migrations/**"
+  - "**/compliance/**"
+  - "**/suitability/**"
+  - "**/secrets/**"
   - "**/*migration*"
   - "**/*money*"
   - "**/*payment*"
+  - "**/*credential*"
 ---
 
 # High-stakes code
@@ -22,6 +27,12 @@ constraints in CLAUDE.md as well.
 Edit the `paths:` above to match wherever YOUR irreversible/consequential code lives —
 auth, schema migrations, billing, deletion paths, external-effect calls, anything where
 a bug costs more than a re-run.
+
+**The real enforcement lives in `.claude/hooks/_high-stakes.sh`** (`HIGH_STAKES_RE`):
+`scripts/autopilot.sh` sources it and REFUSES to auto-tick/commit/push a phase whose
+diff touches these paths — it stops for supervised review instead. The `paths:` list
+above mirrors that regex; if you change one, change the other so the advisory rule and
+the enforced gate stay in sync.
 
 - **No autopilot here.** This is human-on-the-loop work: a loop may *surface* a diff,
   but a human approves it before it lands. Keep `permission_mode: default`.

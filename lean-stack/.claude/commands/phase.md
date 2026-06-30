@@ -5,11 +5,18 @@ Run the next unchecked phase of docs/ROADMAP.md, autonomously:
    work — do not skip past them.
 1. Read docs/STATE.md and docs/ROADMAP.md. Pick the first phase with unchecked items.
 2. Record the phase base (so the grader can diff the whole phase) and the phase
-   heading (so the orchestrator knows which items to tick on PASS):
-   - `git rev-parse HEAD > .claude/.phase-base`
-   - Write the EXACT roadmap heading line for this phase (e.g. `## Phase 2 — Eval harness`)
-     to `.claude/.phase-ready`, verbatim, no extra text.
-   (Create .claude/ if needed.)
+   heading (so the orchestrator knows which items to tick on PASS). Create .claude/
+   if needed, then:
+   - Determine THIS phase's exact roadmap heading line (e.g. `## Phase 2 — Eval harness`).
+   - **Phase base — set it ONLY when starting a NEW phase, preserve it on a retry.**
+     If `.claude/.phase-base` already exists AND `.claude/.phase-ready` contains this
+     exact same heading, you are RE-RUNNING the same phase after a NEEDS_WORK — leave
+     `.claude/.phase-base` untouched (it must keep pointing at the phase's true start, so
+     the grader diffs the whole phase and the criteria-integrity check still sees any
+     weakening). Only when there is no `.phase-base`, or `.phase-ready` names a DIFFERENT
+     heading (a genuinely new phase), run `git rev-parse HEAD > .claude/.phase-base`.
+   - Write the EXACT heading line to `.claude/.phase-ready`, verbatim, no extra text
+     (do this in both cases — it is cheap and idempotent for the same phase).
 3. **Research (only if the phase needs it).** If the phase uses an unfamiliar API, library,
    or pattern, or touches code you haven't read, do a brief research pass FIRST: read the
    relevant existing code, and consult docs (context7 / web) if available. Capture the

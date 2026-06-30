@@ -31,7 +31,7 @@ if [ -f docs/ARCHITECTURE.md ]; then
   # Print just the overview + entry points, not the whole map, to stay lean.
   # `cat | sed | head` keeps SIGPIPE contained to a subshell so it can't abort us.
   { sed -n '1,/^## Module map/p' docs/ARCHITECTURE.md | head -40; } 2>/dev/null || true
-  echo "(run /mapme to regenerate the full map)"
+  echo "(run the mapme skill to regenerate the full map)"
 fi
 
 if [ -f docs/ROADMAP.md ]; then

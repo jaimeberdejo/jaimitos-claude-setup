@@ -4,6 +4,62 @@ All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/); this project
 uses [Semantic Versioning](https://semver.org/).
 
+## [1.0.2] — 2026-06-30
+
+Enforcement-hardening pass: closes the gap between what the docs promised and what the code
+actually enforces, fixes a real runtime crash, and stops the installer polluting target repos.
+Driven by an independent multi-auditor review. No breaking changes to the manual workflow; the
+headless loop's defaults changed (worktree isolation is now ON by default).
+
+### Added — real enforcement
+- **Shared guard libraries** `.claude/hooks/_secret-scan.sh` and `_high-stakes.sh`, sourced by
+  both `commit-on-stop.sh` and `scripts/autopilot.sh` so the same guards run everywhere.
+- **Content-aware secret scan:** beyond filename matching, high-confidence token regexes (AWS
+  `AKIA`, PEM private-key blocks, `sk-`/`ghp_`/`xox*`) over the staged diff. `commit-on-stop`
+  refuses to commit on a hit; `autopilot.sh` scans before its post-PASS commit and before any
+  `--pr` push (the builder's per-task commits don't pass the Stop hook, so the push is gated too).
+- **High-stakes gate in `autopilot.sh`:** a graded phase whose diff touches auth/money/migrations/
+  etc. is **never auto-ticked/committed/pushed** — the loop stops for supervised review. The
+  `paths:` in `high-stakes.md` and `HIGH_STAKES_RE` in `_high-stakes.sh` are kept in sync.
+- **Evaluator-change cleanup (real independence):** `autopilot.sh` snapshots the tree before
+  grading and **discards any file change the evaluator makes** before ticking — so a grader can't
+  edit code into passing. Ambiguous/dirty pre-grade state → STOP, never tick.
+- **`--no-worktree`, `--max-minutes` validation**, anchored numeric arg parsing (malformed counts
+  like `5x`/`3-` are rejected, not silently ignored), and a `STEER.md` mirror into the worktree.
+- **Root CI** `.github/workflows/ci.yml` + `.github/scripts/install-smoke.sh`: shell-syntax,
+  `settings.json` validation, `install.sh` lint, and an install smoke test (no tool-doc pollution,
+  no README clobber, idempotency, `.gitignore` merge). `test-hooks.sh` gained a secret-scan test;
+  `doctor.sh` now flags any `<...>` placeholder and checks the shared libs.
+
+### Changed — safer defaults
+- **Worktree isolation is the DEFAULT** for `scripts/autopilot.sh`; opt out with `--no-worktree`
+  (which runs in-place and warns loudly).
+- **`format-on-edit.sh` is format-only** — dropped `ruff check --fix` / `eslint --fix`, which can
+  silently change code semantics.
+- **Installer no longer flattens toolkit docs** (GUIDE/LOOP-ENGINEERING/README) into targets. The
+  scaffold's note ships as `SCAFFOLD.md` (can't clobber your README). CI is opt-in via `--with-ci`
+  and ships as `lean-stack-ci.yml`.
+- **Evaluator stderr → `autopilot.log`** (was `/dev/null`); the loop prints a log tail on an empty
+  grade before stopping.
+
+### Fixed
+- **Final-phase crash:** removed `grep -c … || echo 0` in `tick_phase` (it produced `"0\n0"` and
+  crashed the integer compare on the last phase). `grep -c` already prints a count.
+- **`.phase-base` overwrite on retry:** `/phase` now preserves the phase base across NEEDS_WORK
+  retries (only resets it for a genuinely new phase), so the evaluator's whole-phase diff and
+  criteria-integrity check stay honest.
+
+### Changed — docs & honesty
+- Added an **"Enforcement reality"** section (GUIDE) — deterministic vs advisory layers; the
+  `Bash(...)` denies are documented as a best-effort speed-bump, not containment; the real
+  boundary for unattended runs is a sandbox/no-creds container.
+- **Single-sourced** the hooks table (→ GUIDE), the skills catalog (→ `skills/README.md` /
+  `OWNERSHIP.md`), and the guardrails theory (→ `LOOP-ENGINEERING.md`); other docs now point to them.
+- Relabeled the **fabricated native `/goal` command** in `LOOP-ENGINEERING.md` as aspirational/
+  unverified (hedged like `ENABLE_TOOL_SEARCH`). Standardized skill-vs-`/command` naming
+  (`mapme` etc. are skills). Fixed `docs/STATE.md`'s next-action and reconciled both `.gitignore`s
+  (added `!.env.example`/`!.env.sample`; dropped the stale `*.zip` rule).
+
 ## [1.0.1] — 2026-06-30
 
 Hardening and documentation-consistency pass. No new features; safer defaults and

@@ -40,14 +40,25 @@ Don't ask me between tasks."
 - **Cons:** one context window — it rots as it fills; relies on Claude *choosing* to run tests (advisory, ~80% reliable); no independent grader.
 - **Use for:** a handful of small, related tasks in one sitting.
 
-### Architecture 2 — `/goal` (built-in, supported)
-Claude Code's native goal command. You give a **verifiable completion condition**; after each turn a separate fast model (Haiku) judges met/not-met and feeds the reason back until satisfied or you hit a turn cap.
+### Architecture 2 — a transcript-judged goal loop (⚠ `/goal` is NOT a verified native command)
+The pattern: you give a **verifiable completion condition**; after each turn a separate fast
+model judges met/not-met from the transcript and feeds the reason back until satisfied or you
+hit a turn cap.
+
+> ⚠ **Reality check.** This guide previously presented `/goal …` as a built-in Claude Code
+> command. **It is not a verified native command** — treat the `/goal` syntax below as
+> *aspirational/illustrative* (same caveat as `ENABLE_TOOL_SEARCH` elsewhere). Confirm against
+> the current Claude Code docs before relying on any such command; if it doesn't exist in your
+> version, get this behavior from Architecture 3 (a Stop hook) or Architecture 4 (`autopilot.sh`),
+> both of which DO exist in this scaffold.
+
 ```
-/goal all pytest tests in tests/ pass and ruff reports no errors, or stop after 25 turns
+# illustrative only — verify the command exists in your Claude Code before using it:
+goal: all pytest tests in tests/ pass and ruff reports no errors, or stop after 25 turns
 ```
-- **Pros:** official, low eval cost, survives resume.
-- **Critical limit:** the evaluator **can't run tools** — it only reads what Claude surfaced in the transcript. So the condition must be something Claude's own output *demonstrates*. "Tests pass" works only if Claude actually ran them and printed the result. Pair with a real verifier (Architecture 4) for anything you can't eyeball in the transcript.
-- **Use for:** mechanical, self-evident goals in one session (formatting sweeps, making a known-failing suite green).
+- **Pros (of the pattern):** low eval cost, survives resume.
+- **Critical limit:** the transcript judge **can't run tools** — it only reads what Claude surfaced in the transcript. So the condition must be something Claude's own output *demonstrates*. "Tests pass" works only if Claude actually ran them and printed the result. Pair with a real verifier (Architecture 4) for anything you can't eyeball in the transcript.
+- **Use for:** mechanical, self-evident goals in one session (formatting sweeps, making a known-failing suite green) — via a Stop hook or autopilot, not a presumed native `/goal`.
 
 ### Architecture 3 — Stop-hook loop (Ralph-style, one context)
 A `Stop` hook that exits non-zero forces Claude to continue instead of ending the turn. This is what the official `ralph-wiggum` plugin uses. Runs until a completion sentinel appears or max-iterations trips.
@@ -182,7 +193,7 @@ Then merge or PR. Never let a loop push to main directly; review the branch.
 | Burned the budget overnight | Open-ended stopping condition | Bound it: max-iters + budget cap + queue-empty check |
 | Same failing edit repeated | No retry bound; thrashing | Cap fix attempts (3); on fail, write findings + stop |
 | Marked a broken build "done" | Builder graded itself | Independent fresh-context evaluator, default-FAIL |
-| `/goal` thinks it's done but isn't | Evaluator can't run tools, judged the transcript | Make the condition transcript-evident, or use arch 4 |
+| Transcript-judged loop thinks it's done but isn't | Judge can't run tools, judged the transcript | Make the condition transcript-evident, or use arch 4 |
 | Touched files it shouldn't | No blast-radius limit | Constrain paths; run in a worktree; review diff |
 | Can't tell what it did | Weak handoff notes | Stronger STATE.md + commit-per-step + autopilot.log |
 | Loop won't stop | Stop hook re-triggering | Check `stop_hook_active` guard (already in commit-on-stop.sh) |
@@ -221,7 +232,7 @@ The rule, compressed: **automate the typing, never the judgment.** A loop is fan
 
 ```
 ARCHITECTURES   1 in-context prompt   (tiny, one sitting)
-                2 /goal               (mechanical, transcript-evident)
+                2 transcript-judged   (mechanical, transcript-evident; `/goal` NOT a verified native cmd)
                 3 stop-hook / ralph   (medium, one context)
                 4 fresh-context script (long, robust — autopilot.sh)   ← default for real autonomy
 

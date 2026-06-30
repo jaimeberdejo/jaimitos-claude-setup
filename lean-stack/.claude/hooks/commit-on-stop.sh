@@ -34,29 +34,21 @@ git status --porcelain 2>/dev/null | cut -c4- > .claude/.last-changed 2>/dev/nul
 COUNT=$(printf '%s\n' "$DIRTY" | grep -c . )
 git add -A 2>/dev/null
 
-# Secret guard: never auto-commit credentials. Scan STAGED paths against a deny
-# set; if anything matches, unstage everything and skip the commit entirely.
-SECRETS_FOUND=""
-while IFS= read -r staged; do
-  [ -z "$staged" ] && continue
-  base="${staged##*/}"
-  case "$staged" in
-    secrets/*|*/secrets/*) SECRETS_FOUND="$SECRETS_FOUND $staged"; continue ;;
-  esac
-  case "$base" in
-    *.env|.env|.env.*|*.pem|*.key|*.p12|*.pfx|*.jks|credentials*.json|\
-    id_rsa|id_ed25519|id_ecdsa|id_dsa|*.tfstate|*.tfvars|.envrc|.netrc|.git-credentials)
-      SECRETS_FOUND="$SECRETS_FOUND $staged" ;;
-  esac
-done < <(git diff --cached --name-only 2>/dev/null)
-
-if [ -n "$SECRETS_FOUND" ]; then
-  git reset -q 2>/dev/null
-  echo "⛔ SECRET DETECTED — auto-commit ABORTED. Nothing was committed."
-  echo "   The following staged path(s) look like secrets:"
-  for f in $SECRETS_FOUND; do echo "     - $f"; done
-  echo "   Handle these manually: remove them, add to .gitignore, or commit deliberately."
-  exit 0
+# Secret guard (SHARED with autopilot.sh via _secret-scan.sh): never auto-commit
+# credentials. Scans the STAGED set by filename AND content; on any hit (or if the
+# scan can't run — fail closed), unstage everything and skip the commit.
+SCAN_LIB=".claude/hooks/_secret-scan.sh"
+if [ -f "$SCAN_LIB" ]; then
+  # shellcheck disable=SC1090
+  . "$SCAN_LIB"
+  FINDINGS=$(secret_scan_staged); SCAN_RC=$?
+  if [ "$SCAN_RC" -ne 0 ]; then
+    git reset -q 2>/dev/null
+    echo "⛔ SECRET GUARD — auto-commit ABORTED. Nothing was committed."
+    printf '%s\n' "$FINDINGS"
+    echo "   Handle manually: remove the file/line, add to .gitignore, or commit deliberately."
+    exit 0
+  fi
 fi
 
 if git commit -m "checkpoint: $COUNT file(s) @ $(date '+%Y-%m-%d %H:%M')" >/dev/null 2>&1; then

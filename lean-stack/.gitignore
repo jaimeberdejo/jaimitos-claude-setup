@@ -9,6 +9,7 @@ autopilot.log
 test-results.json
 .claude/.phase-base
 .claude/.last-changed
+.claude/.evidence-reads
 
 # Local (machine-specific) Claude settings — never commit
 .claude/settings.local.json
@@ -40,6 +41,10 @@ tmp/
 .env
 .env.local
 .env.*
+# ...but DO track the templates teams share intentionally.
+!.env.example
+!.env.sample
+!.env.template
 *.pem
 *.key
 *.p12

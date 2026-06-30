@@ -21,7 +21,7 @@ if [ -f .claude/.last-changed ]; then
 fi
 # Fall back to live working-tree changes (manual sessions, or if checkpoint skipped).
 if [ -z "$CHANGED" ]; then
-  CHANGED=$(git diff --name-only HEAD 2>/dev/null; git status --porcelain 2>/dev/null | cut -c4-)
+  CHANGED=$( { git diff --name-only HEAD 2>/dev/null; git status --porcelain 2>/dev/null | cut -c4-; } | sort -u)
 fi
 # Last resort: files in the most recent commit (the checkpoint we just made).
 if [ -z "$CHANGED" ]; then

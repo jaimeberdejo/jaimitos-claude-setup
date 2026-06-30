@@ -45,6 +45,11 @@ echo "Hook files present:"
 for h in session-start steer kill-switch format-on-edit test-gate commit-on-stop ownership-nudge; do
   [ -f ".claude/hooks/$h.sh" ] && ok ".claude/hooks/$h.sh" || bad "missing .claude/hooks/$h.sh"
 done
+# Shared guard libraries — sourced by commit-on-stop.sh and autopilot.sh. If absent,
+# the secret-scan and high-stakes gates silently disable, so treat as hard failures.
+for lib in _secret-scan _high-stakes; do
+  [ -f ".claude/hooks/$lib.sh" ] && ok ".claude/hooks/$lib.sh (shared guard lib)" || bad "missing .claude/hooks/$lib.sh (secret/high-stakes gate disabled without it)"
+done
 echo ""
 
 echo "settings.json:"
@@ -72,10 +77,14 @@ echo ""
 
 echo "CLAUDE.md placeholders:"
 if [ -f CLAUDE.md ]; then
-  if grep -qE '<.*\|.*>' CLAUDE.md; then
-    warn "un-substituted placeholder commands in CLAUDE.md (e.g. '<pytest -q  |  npm test>') — fill them in with your real commands."
+  # Any unresolved <...> token is a placeholder, not just the piped command form —
+  # catches '<NAME>', '<pytest -q | npm test>', etc. Report the offending lines.
+  PH_LINES=$(grep -nE '<[^>]+>' CLAUDE.md 2>/dev/null)
+  if [ -n "$PH_LINES" ]; then
+    warn "un-substituted <...> placeholder(s) in CLAUDE.md — fill them in with your real values:"
+    printf '%s\n' "$PH_LINES" | sed 's/^/      /'
   else
-    ok "no placeholder commands left in CLAUDE.md"
+    ok "no <...> placeholders left in CLAUDE.md"
   fi
 fi
 echo ""

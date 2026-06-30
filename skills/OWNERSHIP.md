@@ -17,7 +17,7 @@ of ownership. teach-back and quizme make you produce the explanation; that's wha
 
 ## Wiring (already done in the lean-stack scaffold)
 - session-start hook loads the ARCHITECTURE.md overview each session.
-- Stop hook (ownership-nudge.sh) reminds you to ADR decisions, run teach-back, and /mapme after code changes.
+- Stop hook (ownership-nudge.sh) reminds you to ADR decisions, run teach-back, and run the mapme skill after code changes.
 - CLAUDE.md has an Ownership section pointing at the workflow.
 
 ## Install (if using standalone)

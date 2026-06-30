@@ -5,10 +5,16 @@
 # or do it by hand. This script never asks a model to do anything.
 #
 # Usage:
-#   bash install.sh [TARGET_DIR] [--force] [--global-skills]
+#   bash install.sh [TARGET_DIR] [--force] [--global-skills] [--with-ci]
 #     TARGET_DIR       where to install (default: current directory)
 #     --force          overwrite existing scaffold files (default: skip files that exist)
 #     --global-skills  also install the skills into ~/.claude/skills (in addition to project)
+#     --with-ci        also copy the CI workflow (.github/workflows/lean-stack-ci.yml).
+#                      Off by default — most projects already have their own CI.
+#
+# Tool meta-docs (GUIDE.md, LOOP-ENGINEERING.md, README.md) are NEVER copied into a
+# target — they document the toolkit, not your project, and would just pollute it.
+# The scaffold's own note ships as SCAFFOLD.md (so it can't become/clobber your README).
 #
 # Idempotent: re-running is safe. Without --force it skips any file that already exists,
 # so it never clobbers a CLAUDE.md you've customized.
@@ -23,10 +29,12 @@ SKILLS_SRC="$SRC/skills"
 TARGET="."
 FORCE=0
 GLOBAL_SKILLS=0
+WITH_CI=0
 for arg in "$@"; do
   case "$arg" in
     --force)         FORCE=1 ;;
     --global-skills) GLOBAL_SKILLS=1 ;;
+    --with-ci)       WITH_CI=1 ;;
     -*)              echo "install: unknown flag '$arg'" >&2; exit 2 ;;
     *)               TARGET="$arg" ;;
   esac
@@ -53,9 +61,17 @@ copy_file() {
   COPIED=$((COPIED+1))
 }
 
-# 1. Scaffold files (everything under lean-stack/, including dotfiles like .github, .gitignore).
+# 1. Scaffold files (everything under lean-stack/, including dotfiles like .gitignore).
+#    EXCLUSIONS: tool meta-docs (GUIDE/LOOP-ENGINEERING/README/SCAFFOLD-source) are never
+#    flattened into a target except SCAFFOLD.md; the CI workflow is opt-in (--with-ci).
 while IFS= read -r srcfile; do
   rel="${srcfile#"$SCAFFOLD"/}"
+  case "$rel" in
+    GUIDE.md|LOOP-ENGINEERING.md|README.md)
+      continue ;;                                  # toolkit docs — don't pollute the target
+    .github/*)
+      [ "$WITH_CI" -eq 1 ] || continue ;;          # CI is opt-in
+  esac
   copy_file "$rel" "$srcfile"
 done < <(find "$SCAFFOLD" -type f)
 
@@ -108,6 +124,7 @@ chmod +x "$TARGET"/.claude/hooks/*.sh "$TARGET"/scripts/*.sh 2>/dev/null || true
 
 echo ""
 echo "install: copied $COPIED file(s), skipped $SKIPPED."
+[ "$WITH_CI" -eq 0 ] && echo "install: CI workflow NOT copied (re-run with --with-ci to add lean-stack-ci.yml)."
 echo ""
 echo "Next:"
 echo "  1. Edit CLAUDE.md placeholders (your test/lint/run commands) — or run the"

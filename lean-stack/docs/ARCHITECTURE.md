@@ -4,7 +4,7 @@
 > It rots otherwise. One page max.
 
 ## Overview
-<one paragraph: what the system does, top down — fill via /mapme>
+<one paragraph: what the system does, top down — fill via the mapme skill>
 
 ## Entry points
 <where execution starts, with file:line>
