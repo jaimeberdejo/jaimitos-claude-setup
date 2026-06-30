@@ -44,6 +44,13 @@ if [ "$is_eval" = 1 ]; then
     empty)       printf '' ;;
     garble)      echo "looks good to me, ship it" ;;
     needs_work)  echo "NEEDS_WORK: missing tests" ;;
+    needs_then_pass)
+      # NEEDS_WORK on the first grade, PASS thereafter — counter lives OUTSIDE the repo so
+      # cleanup_eval_changes (which discards files the grader creates) can't reset it.
+      cf="${EVAL_COUNT_FILE:-/tmp/lean_eval_count}"
+      n=$(cat "$cf" 2>/dev/null || echo 0); n=$((n+1)); echo "$n" > "$cf"
+      if [ "$n" -ge 2 ]; then echo "PASS"; else echo "NEEDS_WORK: needs a second pass"; fi
+      ;;
   esac
   exit 0
 fi
@@ -155,6 +162,18 @@ mkrepo r8; BUILDER_MODE=clean EVAL_MODE=needs_work; export BUILDER_MODE EVAL_MOD
 ticked "$REPO" && fail "NEEDS_WORK ticked the roadmap" || pass "NEEDS_WORK never ticks"
 [ -f "$REPO/NEXT_FINDINGS.md" ] && pass "NEEDS_WORK writes NEXT_FINDINGS.md" || fail "NEXT_FINDINGS.md not written"
 grep -q "same phase failed" "$WORK/out" && pass "repeated NEEDS_WORK hits the thrash cap and stops" || fail "thrash cap did not trigger"
+
+# 9 — NEEDS_WORK then PASS: the resolved finding is ARCHIVED to docs/FAILURES.md (not just
+#     deleted), the phase ticks, and NEXT_FINDINGS.md is cleared.
+mkrepo r9; rm -f "$WORK/ec9"
+BUILDER_MODE=clean EVAL_MODE=needs_then_pass EVAL_COUNT_FILE="$WORK/ec9"
+export BUILDER_MODE EVAL_MODE EVAL_COUNT_FILE
+run "$REPO" 2 --no-worktree --allow-dirty >/dev/null
+unset EVAL_COUNT_FILE
+ticked "$REPO" && pass "needs_then_pass eventually ticks" || fail "needs_then_pass never ticked"
+{ [ -f "$REPO/docs/FAILURES.md" ] && grep -q "second pass" "$REPO/docs/FAILURES.md"; } \
+  && pass "resolved finding archived to docs/FAILURES.md" || fail "failure not archived to FAILURES.md"
+[ ! -f "$REPO/NEXT_FINDINGS.md" ] && pass "NEXT_FINDINGS.md cleared after archive" || fail "NEXT_FINDINGS.md not cleared"
 
 echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All autopilot gate tests passed."; exit 0

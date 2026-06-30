@@ -66,9 +66,11 @@ md5of()   { md5 -q "$1" 2>/dev/null || md5sum "$1" 2>/dev/null | cut -d' ' -f1; 
 
 echo "tick gate tests"; echo ""
 
-# 1 — PASS grade + fresh passed:true → ticks.
+# 1 — PASS grade + fresh passed:true → ticks AND updates the STATE machine block.
 mkrepo t1; good_grade t1; good_evidence t1; rc=$(runtick "$REPO")
 { [ "$rc" = 0 ] && ticked "$REPO"; } && pass "PASS + fresh green evidence → ticks" || fail "did not tick on valid evidence (rc=$rc)"
+{ grep -q "lean:auto:begin" "$REPO/docs/STATE.md" && grep -q "Last ticked" "$REPO/docs/STATE.md"; } \
+  && pass "successful tick writes the STATE machine block" || fail "STATE machine block not written on tick"
 
 # 2 — passed:false → refuses, roadmap unchanged, NEXT_FINDINGS written.
 mkrepo t2; good_grade t2; set_evidence t2 "{\"passed\":false,\"run_id\":\"$HEAD\"}"
@@ -115,6 +117,10 @@ before=$(md5of "$REPO/docs/ROADMAP.md"); rc=$(runtick "$REPO")
 mkrepo t9 auth/login.py 'def login(): return True'; good_grade t9; good_evidence t9; rc=$(runtick "$REPO")
 { [ "$rc" = 3 ] && ! ticked "$REPO" && [ ! -f "$REPO/NEXT_FINDINGS.md" ]; } \
   && pass "high-stakes path → exit 3 supervised, not ticked" || fail "high-stakes path mishandled (rc=$rc)"
+
+# 9b — high-stakes CONTENT in a benignly-named path → exit 3, not ticked.
+mkrepo t9b src/utils.py 'cursor.execute("DROP TABLE users")'; good_grade t9b; good_evidence t9b; rc=$(runtick "$REPO")
+{ [ "$rc" = 3 ] && ! ticked "$REPO"; } && pass "high-stakes content (DROP TABLE in benign path) → exit 3" || fail "content high-stakes mishandled (rc=$rc)"
 
 # 10 — already-ticked phase (no open item) → refuses.
 mkrepo t10; good_grade t10; good_evidence t10

@@ -297,16 +297,26 @@ for i in $(seq 1 "$MAX_ITER"); do
 
       # Route through the SINGLE completion gate. tick.sh verifies the evidence (grade + fresh
       # green tests bound to HEAD), secret-scans the whole phase diff, blocks high-stakes paths,
-      # and only then flips the checkbox — the SAME gate /wrap uses. It reads its inputs from the
-      # filesystem and committed history, so nothing needs staging beforehand; we stage + commit
-      # the resulting roadmap (and, in 2B, STATE) change only AFTER it succeeds.
+      # updates the STATE machine block, and only then flips the checkbox — the SAME gate /wrap
+      # uses. It reads its inputs from the filesystem and committed history, so nothing needs
+      # staging beforehand; we stage + commit the resulting roadmap/STATE change only on success.
+      PHASE_HEADING=$(cat .claude/.phase-ready 2>/dev/null || echo "phase")   # tick.sh consumes .phase-ready
       bash scripts/tick.sh 2>&1 | tee -a autopilot.log
       TICK_RC="${PIPESTATUS[0]}"
       case "$TICK_RC" in
         0)
+          # Persist the resolved failure trail (don't just delete it): a phase that needed work
+          # before passing leaves a record in docs/FAILURES.md so recurring blockers are visible.
+          if [ -f NEXT_FINDINGS.md ]; then
+            {
+              echo ""
+              echo "## ${PHASE_HEADING#\#\# } — resolved $(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo unknown)"
+              cat NEXT_FINDINGS.md
+            } >> docs/FAILURES.md
+            rm -f NEXT_FINDINGS.md
+          fi
           git add -A 2>/dev/null
           git commit -m "autopilot: phase passed independent grade (iteration $i)" >/dev/null 2>&1 || true
-          rm -f NEXT_FINDINGS.md
           SAME_PHASE_FAILS=0; PREV_OPEN_SIGNATURE=""
           ;;
         3)
