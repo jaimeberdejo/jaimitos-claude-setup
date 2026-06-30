@@ -6,7 +6,4 @@ Close out this session:
    unchecked and say so.
 3. If any real architectural decision was made, append a 4-line ADR to a new file
    in docs/decisions/ (format: id, date, decision, why).
-4. If EVERY phase in docs/ROADMAP.md is now `- [x]`, say so and point me to
-   GUIDE.md → "Finishing a roadmap (start the next batch)" — don't archive or
-   start a new roadmap yourself; that's a deliberate human step.
 Keep all of it terse. Then tell me it's safe to /clear.
