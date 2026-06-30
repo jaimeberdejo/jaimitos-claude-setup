@@ -31,10 +31,20 @@ If you genuinely can't tell, ask — don't invent commands.
 Replace the `<...>` placeholders in `CLAUDE.md` with the real Test / Typecheck / Lint /
 Run commands, and `<NAME>` with the project name. Keep CLAUDE.md lean (under ~200 lines).
 
-## Step 4 — Point the high-stakes rule at real paths
-Edit `.claude/rules/high-stakes.md` `paths:` to match THIS project's sensitive directories
-(auth, migrations, payments, deletes, external-effect code). Remove the placeholder globs
-that don't exist here. If the project has no high-stakes surface, say so and leave a minimal rule.
+## Step 4 — Point the high-stakes gate at real paths (BOTH the enforced regex and the rule)
+The high-stakes gate has two pieces and you MUST update the enforced one:
+
+1. **`.claude/hooks/_high-stakes.sh` → `HIGH_STAKES_RE`** — this is what `scripts/autopilot.sh`
+   actually enforces (it refuses to tick/commit/push, and never pushes, a phase whose diff
+   touches a matching path). Edit this regex to THIS project's sensitive paths. **If you only
+   edit the rule file below and not this regex, the enforced gate stays at its shipped default
+   and silently won't fire for your real directories.**
+2. **`.claude/rules/high-stakes.md` `paths:`** — the human-readable mirror. Update it to match,
+   and remove placeholder globs that don't exist here.
+
+Keep the two in sync. If the project genuinely has no high-stakes surface, say so and leave a
+minimal regex/rule. After editing, `scripts/doctor.sh` will confirm the regex is no longer the
+shipped default.
 
 ## Step 5 — Stub the spec and verify
 - If `docs/SPEC.md` is still the template, offer to run the grilling/`roadmap` flow to fill it.

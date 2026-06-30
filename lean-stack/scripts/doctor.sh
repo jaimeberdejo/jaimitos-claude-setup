@@ -42,6 +42,19 @@ done
 [ -f .claude/rules/high-stakes.md ] && ok ".claude/rules/high-stakes.md" || bad "missing .claude/rules/high-stakes.md"
 echo ""
 
+echo "High-stakes gate customization:"
+HS_LIB=".claude/hooks/_high-stakes.sh"
+if [ -f "$HS_LIB" ]; then
+  HS_CUR=$(grep -E '^HIGH_STAKES_RE=' "$HS_LIB" 2>/dev/null)
+  if [ -f .claude/.high-stakes-default ] && [ "$HS_CUR" = "$(cat .claude/.high-stakes-default 2>/dev/null)" ]; then
+    warn "HIGH_STAKES_RE is still the shipped default — edit it in $HS_LIB to match THIS project's"
+    warn "  sensitive paths. It's the ENFORCED gate; editing only rules/high-stakes.md does nothing."
+  else
+    ok "HIGH_STAKES_RE customized (no longer the shipped default)"
+  fi
+fi
+echo ""
+
 echo "Hook files present:"
 for h in session-start steer kill-switch format-on-edit test-gate commit-on-stop ownership-nudge; do
   [ -f ".claude/hooks/$h.sh" ] && ok ".claude/hooks/$h.sh" || bad "missing .claude/hooks/$h.sh"
