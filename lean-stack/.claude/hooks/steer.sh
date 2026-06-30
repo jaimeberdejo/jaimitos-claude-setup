@@ -14,7 +14,8 @@ cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || cd .
 # there's nothing to steer (the overwhelmingly common case).
 [ -f STEER.md ] || exit 0
 
-INPUT=$(cat 2>/dev/null || echo '{}')
+# Read once; don't block on a TTY / missing pipe (consistent with the other hooks).
+if [ -t 0 ]; then INPUT='{}'; else INPUT=$(cat 2>/dev/null || echo '{}'); fi
 EVENT=$(printf '%s' "$INPUT" | jq -r '.hook_event_name // "UserPromptSubmit"' 2>/dev/null)
 
 STEER_TEXT="=== OPERATOR STEERING (act on this now) ===

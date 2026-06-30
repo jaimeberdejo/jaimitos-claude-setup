@@ -19,11 +19,11 @@ research fan-out**, so you keep full visibility and a 1-experienced-dev token bu
 ## Quickstart
 
 ```bash
-git clone https://github.com/jaimeberdejo/my-claude-code-setup.git
+git clone https://github.com/jaimeberdejo/my-claude-code-setup.git ~/my-claude-code-setup
 cd /path/to/your-project
-bash /path/to/my-claude-code-setup/install.sh .   # drops the scaffold + skills in
-git init                                           # if not a repo yet
-bash scripts/doctor.sh                             # health check
+git init                                           # first, so the post-install doctor is clean
+bash ~/my-claude-code-setup/install.sh .           # drops the scaffold + skills in (auto-runs doctor)
+# then: fill CLAUDE.md placeholders + point HIGH_STAKES_RE in .claude/lib/_high-stakes.sh at your paths
 ```
 
 Then: edit `CLAUDE.md` (your test/lint/run commands) → point `HIGH_STAKES_RE` in

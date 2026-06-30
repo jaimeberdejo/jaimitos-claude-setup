@@ -107,7 +107,7 @@ Hardening and documentation-consistency pass. No new features; safer defaults an
 accurate docs.
 
 ### Changed — safety
-- **Kill-switch fails closed:** `AGENT_STOP` blocks even if the hook itself errors.
+- **Kill-switch:** `AGENT_STOP` blocks the next tool call (exit 2), including when `CLAUDE_PROJECT_DIR` is unset.
 - **Secret-leak prevention:** `commit-on-stop` won't stage/commit secret-bearing files;
   broadened the `permissions.deny` set and `.gitignore` coverage for `.env*`/keys/credentials.
 - **Anchored verdict parsing:** the evaluator's PASS/FAIL is matched strictly — an

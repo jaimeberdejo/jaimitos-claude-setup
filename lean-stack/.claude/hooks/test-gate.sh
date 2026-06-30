@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Stop hook — deterministic test gate. Makes "TDD always" enforceable instead of
-# advisory. Runs the project's test suite, writes evidence to test-results.json
+# Stop hook — deterministic GREEN-SUITE gate (enforces "tests pass before the turn ends",
+# NOT test-first ordering — that stays advisory in CLAUDE.md). Was "TDD" but that overclaimed.
+# Runs the project's test suite, writes evidence to test-results.json
 # (which the evaluator reads), and — in block mode — refuses to let the turn end
 # while tests are red.
 #

@@ -169,7 +169,9 @@ Manual mode = you drive each arrow. Autopilot mode = a loop drives the bracket. 
 5. **Execute, TDD.** Per task: failing test first → minimal code → green; commit each. Stop after 3 red attempts.
 6. **Verify.** The `evaluator` subagent self-checks (fresh context, no edit tools, default-FAIL).
 
-**The builder never ticks the roadmap.** Ticking is gated on an *independent* grade:
+**The builder never self-ticks on its own say-so.** Ticking is gated on an *independent* grade
+(in the headless script the **script** is the sole ticker; in-session, the builder session ticks
+only after the independent evaluator returns PASS):
 - under `autopilot.sh`, a separate `claude --agent evaluator` process grades, and the **script** ticks on PASS;
 - under `/autopilot`, the `evaluator` **subagent** (fresh context) is the gate;
 - in manual mode, you tick via `/wrap` after seeing the evaluator pass.
@@ -262,6 +264,47 @@ touch AGENT_STOP     # halt at next tool call   ·   rm AGENT_STOP   # resume
 
 ---
 
+## Part 5b — Roadmap lifecycle (adding phases & starting the next batch)
+
+The loop is **checkbox-driven, not index-driven** — nothing reasons about phase numbers.
+`autopilot.sh` just greps for any `- [ ]` line, `/phase` picks the *first* phase with unchecked
+items, and `tick_phase` flips `- [ ]`→`- [x]` under the heading recorded in `.claude/.phase-ready`.
+So adding or reordering work is a first-class, low-risk operation.
+
+### Adding phases mid-project
+Edit `docs/ROADMAP.md` and drop in one or more blocks in the **same shape**:
+```md
+## Phase N — <goal>
+- [ ] task
+Done when: <observable, checkable condition>
+Mode: <loopable | supervised>
+```
+- **Position = execution order.** Topmost open phase runs next: append at the bottom to run
+  after current work, or insert above remaining phases to jump the queue.
+- **Two things must be right:** every phase needs a `Done when:` line (it's what the evaluator
+  grades against), and each `## ` heading must be **unique and verbatim** (`tick_phase` matches
+  the exact heading line). Phase *numbers* are cosmetic — renumbering on insert is optional.
+- **Don't edit `ROADMAP.md` while `autopilot.sh` is actively looping** (it rewrites the file each
+  tick — racy). `touch AGENT_STOP`, edit, `rm AGENT_STOP`. To redirect the *current* phase without
+  adding entries, write `STEER.md` instead.
+- Count caps still apply (`autopilot.sh 3` stops after 3; use `all` to drain new phases). A newly
+  added high-stakes phase auto-trips the supervised-stop gate at PASS time — safe to queue.
+
+### Finishing a roadmap (start the next batch / a new milestone)
+When every phase is `- [x]`, there's nothing left to loop. To start a fresh batch:
+```bash
+mkdir -p docs/archive
+git mv docs/ROADMAP.md docs/archive/ROADMAP-v1.md   # keep the history
+# write a fresh docs/ROADMAP.md for the next batch (or re-run the `roadmap` skill on an updated SPEC)
+# reset docs/STATE.md's "Now / Next" to the first new phase
+# optional: bump VERSION + git tag to mark the milestone
+```
+This is a **convention, not a command** — archiving is one `git mv` and "is the roadmap done?" is
+a glance, so it stays out of the enforced (and tested/secured) surface. `/wrap` nudges you toward
+it when it notices a fully-ticked roadmap, but never archives or starts a new roadmap on its own.
+
+---
+
 ## Part 6 — Autonomy in depth
 
 | Mode | Command | Context | Independent grade | Use for |
@@ -304,7 +347,8 @@ for supervised review. Keep the `paths:` in `high-stakes.md` and `HIGH_STAKES_RE
 ### B — Wiring TDD so it's never skipped
 The `test-gate.sh` hook (wired first in `Stop`) can make *"a green suite is required to end a
 turn"* deterministic in **block** mode — it does NOT verify test-first ordering (that stays
-advisory in CLAUDE.md), and the default is `warn` (records evidence, doesn't block). Opt-in:
+advisory in CLAUDE.md). The hook's own default is `off`; the headless `autopilot.sh` raises it
+to `warn` (records evidence, doesn't block). Opt-in:
 ```bash
 export LEAN_TEST_GATE=warn     # run suite each turn, write test-results.json, warn on red
 export LEAN_TEST_GATE=block    # exit 2 on red — you can't end a turn with failing tests

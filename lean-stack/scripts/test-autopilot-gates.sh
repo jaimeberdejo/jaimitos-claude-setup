@@ -123,6 +123,12 @@ grep -qE "commit range contains a secret|NOT pushing" "$WORK/out" && pass "push 
 grep -q "STUB-GH-INVOKED" "$WORK/out" && fail "gh invoked despite secret" || pass "no gh / no push on secret range"
 [ "$rc" = 1 ] && pass "secret push-gate exits non-zero" || fail "secret push-gate exit was $rc (want 1)"
 
+# 8 — NEEDS_WORK never ticks, writes NEXT_FINDINGS.md, and repeated NEEDS_WORK hits the thrash cap.
+mkrepo r8; BUILDER_MODE=clean EVAL_MODE=needs_work; export BUILDER_MODE EVAL_MODE; run "$REPO" 3 --no-worktree --allow-dirty >/dev/null
+ticked "$REPO" && fail "NEEDS_WORK ticked the roadmap" || pass "NEEDS_WORK never ticks"
+[ -f "$REPO/NEXT_FINDINGS.md" ] && pass "NEEDS_WORK writes NEXT_FINDINGS.md" || fail "NEXT_FINDINGS.md not written"
+grep -q "same phase failed" "$WORK/out" && pass "repeated NEEDS_WORK hits the thrash cap and stops" || fail "thrash cap did not trigger"
+
 echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All autopilot gate tests passed."; exit 0
 else echo "$FAILS gate test(s) FAILED."; echo "--- last run output ---"; tail -n 25 "$WORK/out" 2>/dev/null; exit 1; fi
