@@ -1,0 +1,26 @@
+# Build artifacts (the source folders are authoritative; regenerate zips if needed)
+*.zip
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Local Claude state / control files (should never be committed from a working copy)
+**/.claude/.last-changed
+**/.claude/.phase-base
+**/.claude/.phase-ready
+**/.claude/.evidence-reads
+**/.claude/settings.local.json
+**/AGENT_STOP
+**/STEER.md
+**/NEXT_FINDINGS.md
+**/autopilot.log
+**/test-results.json
+
+# Language cruft (in case anyone builds the practice project in-tree)
+__pycache__/
+*.pyc
+.venv/
+node_modules/

@@ -1,0 +1,41 @@
+# Autonomy control/scratch files
+AGENT_STOP
+STEER.md
+NEXT_FINDINGS.md
+autopilot.log
+
+# Evidence/contract + internal hook state (regenerated each run)
+test-results.json
+.claude/.evidence-reads
+.claude/.phase-base
+.claude/.last-changed
+
+# Local (machine-specific) Claude settings — never commit
+.claude/settings.local.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage/
+htmlcov/
+
+# Node
+node_modules/
+.next/
+dist/
+build/
+.turbo/
+
+# Logs / OS / editor cruft
+*.log
+.DS_Store
+tmp/
+
+# Env
+.env
+.env.local
