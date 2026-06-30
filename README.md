@@ -16,6 +16,27 @@ research fan-out**, so you keep full visibility and a 1-experienced-dev token bu
 
 ---
 
+## Quickstart
+
+```bash
+git clone https://github.com/jaimeberdejo/my-claude-code-setup.git
+cd /path/to/your-project
+bash /path/to/my-claude-code-setup/install.sh .   # drops the scaffold + skills in
+git init                                           # if not a repo yet
+bash scripts/doctor.sh                             # health check
+```
+
+Then: edit `CLAUDE.md` (your test/lint/run commands) → point `HIGH_STAKES_RE` in
+`.claude/hooks/_high-stakes.sh` at your sensitive paths → write `docs/SPEC.md` → run the
+`roadmap` skill → build with `/phase`. New to it all? Work through `PRACTICE-PROJECT.md` first.
+
+> **Two parts, how they relate:** the **`lean-stack/` scaffold** (hooks, commands, docs layout,
+> autopilot) and the **`skills/` pack** (10 portable skills). Skills work standalone, but several
+> (`roadmap`, `ship-check`, `adr`, …) assume the scaffold's `docs/` layout — install both for the
+> full experience.
+
+---
+
 ## Repository layout
 
 ```
@@ -189,8 +210,16 @@ preflight (use sparingly — it removes a safety check); `--max-minutes N` adds 
 verifiable signal · bounded stop · bounded retries (3-strike thrash cap) · blast-radius
 limit · **independent verifier as the sole roadmap-ticker** · evaluator-change cleanup ·
 **high-stakes gate** (auth/money/migrations → supervised stop, never auto-ticked) ·
-secret-scan before commit/push · kill-switch · budget cap. The builder *never* marks its own
-work done — a fresh-context, no-edit-tools evaluator always gates the tick.
+secret-scan before commit/push · kill-switch · budget cap.
+
+**Which guarantees are deterministic depends on the mode.** The *headless* `scripts/autopilot.sh`
+is the only mode where the script is the **sole roadmap-ticker**: it snapshots and discards the
+evaluator's changes, runs the secret-scan before every commit, and the high-stakes gate refuses to
+tick/commit and **never pushes** that branch (even with `--pr`). In the *watchable* `/autopilot`
+and *manual* `/phase`+`/wrap` modes the same independent evaluator grades the work, but the builder
+*session* performs the tick — so there the "independent grader" is real and the "sole-ticker /
+discard / high-stakes-no-push" enforcement is advisory (you are the loop). Use the headless script
+when you want the deterministic guarantees; use the in-session modes when you're watching.
 
 ---
 
@@ -208,9 +237,14 @@ model to comply.
 - The `Read(...)` denies are a **real boundary**. The `Bash(...)` denies are a **best-effort
   speed-bump** (bypassable via `less`, `source`, `python -c …`), not containment — the real shell
   boundary is a sandbox/no-creds container + `permission_mode: default` for sensitive work.
-- High-stakes code (auth/migrations/money/deletes/external effects): supervised only, smallest
-  phases, audit trail. The `high-stakes.md` rule advises it **and** `autopilot.sh`'s high-stakes
-  gate enforces it (a graded phase touching those paths is never auto-ticked/committed/pushed).
+- High-stakes code (auth/authentication/oauth, migrations, money/payments/refunds, deletes,
+  external effects like deploy/email/webhook): supervised only, smallest phases, audit trail. The
+  `high-stakes.md` rule advises it, and the **headless** `autopilot.sh` high-stakes gate enforces it
+  — a graded phase whose diff touches those paths is never auto-ticked/committed, and the branch is
+  **never pushed, even with `--pr`** (it stays local for review). The enforced match list is
+  `HIGH_STAKES_RE` in `_high-stakes.sh`; **customize it per project** (run `doctor.sh` — it warns if
+  it's still the shipped default). The in-session `/autopilot` and `/phase` modes do **not** apply
+  this gate programmatically; keep high-stakes work out of those loops.
 
 ---
 

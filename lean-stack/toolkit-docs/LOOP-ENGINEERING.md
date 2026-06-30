@@ -106,7 +106,7 @@ Constrain what the loop can touch, run, and reach:
 - **Worktree:** run long loops in a `git worktree` so a bad run can't corrupt your main checkout.
 
 ### 5. An independent verifier (not the builder)
-The agent that grades completion must not be the agent that did the work. Three properties make the `evaluator` *much harder to fool* (not impossible — nothing is): **fresh context** (it didn't watch the build, so it can't be primed), **no Write/Edit tools** (it can't "fix" things into passing), and a **default-FAIL contract** (every criterion starts false; evidence is required to flip it). This is the single most important guardrail against hallucinated "done." Note the layering in autopilot: `/phase` runs an in-session evaluator subagent and only ticks the roadmap on its PASS; the script then runs a **second, separate-process** evaluator as defense-in-depth — if that one returns NEEDS_WORK, the loop stops for you to review rather than charging ahead.
+The agent that grades completion must not be the agent that did the work. Three properties make the `evaluator` *much harder to fool* (not impossible — nothing is): **fresh context** (it didn't watch the build, so it can't be primed), **no Write/Edit tools** (it can't "fix" things into passing), and a **default-FAIL contract** (every criterion starts false; evidence is required to flip it). This is the single most important guardrail against hallucinated "done." Note the layering: `/phase` runs the `evaluator` subagent as a **self-check** but never ticks the roadmap itself — ticking is `/wrap`'s job (manual) or the script's (headless). The headless `autopilot.sh` then runs a **second, separate-process** evaluator as the deterministic gate and is the sole ticker; if that one returns NEEDS_WORK, the loop stops for you to review rather than charging ahead.
 
 ### Plus: the kill-switch and the budget backstop
 - `touch AGENT_STOP` blocks the *next* tool call and every one after (the PreToolUse hook fires before each tool use). It can't claw back a tool call already in flight, but it stops the loop dead within one step. Your seatbelt.
@@ -121,7 +121,7 @@ In architecture 4, each iteration is amnesiac — fresh context, no memory of th
 | File | Role in the loop | Who writes it |
 |---|---|---|
 | `docs/STATE.md` | "where we are + next action" — read first each iteration | `/wrap`, Stop hook |
-| `docs/ROADMAP.md` | the work queue; `- [ ]` items are what's left | `/phase` ticks on PASS |
+| `docs/ROADMAP.md` | the work queue; `- [ ]` items are what's left | `/wrap` or `autopilot.sh` tick on an independent PASS (never `/phase`) |
 | `NEXT_FINDINGS.md` | the previous evaluator's NEEDS_WORK notes | the loop script |
 | git history | the actual work + the undo stack | commit-on-stop hook |
 

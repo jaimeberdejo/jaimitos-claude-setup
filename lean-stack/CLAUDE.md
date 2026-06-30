@@ -27,9 +27,13 @@
 - docs/decisions/  = ADRs (one file each)
 
 ## Autonomy
-- `/phase` runs one roadmap phase end-to-end with self-verification.
+- `/phase` runs one roadmap phase end-to-end with self-verification (it does NOT tick the
+  roadmap — `/wrap` or the script does that).
 - `/autopilot N` loops N phases IN THIS SESSION (watchable). `scripts/autopilot.sh N`
-  loops headless in fresh processes (overnight). Both tick only on an independent evaluator PASS.
+  loops headless in fresh processes (overnight). Both gate ticking on an independent evaluator
+  PASS, but only the **headless script** is a deterministic sole-ticker (it discards evaluator
+  changes, secret-scans before commit, and the high-stakes gate never pushes). In-session, the
+  builder session does the tick on the evaluator's PASS — the grader is independent, the tick is not.
 - The `evaluator` subagent grades completion independently — never mark a phase
   done on the builder's say-so alone.
 - `touch AGENT_STOP` halts everything. Write STEER.md to redirect a running loop.

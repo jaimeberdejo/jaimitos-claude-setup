@@ -3,10 +3,8 @@
 > Part of **[my-claude-code-setup](../README.md)** — see the repo-root README for the full
 > picture and how these pair with the lean-stack scaffold.
 
-**6 workflow skills** are documented here (roadmap, adr, ship-check, scope-guard,
-explain-diff, unstick). The full `skills/` pack also ships **3 ownership skills**
-(teach-back, mapme, quizme — see [OWNERSHIP.md](OWNERSHIP.md)) and **`setup-lean-stack`**,
-the installer skill — which is why the repo-root README counts **10 skills** in total.
+This is the **complete index of all 10 skills** — 6 workflow + 3 ownership + the installer
+meta-skill. (The ownership three also have a deeper writeup in [OWNERSHIP.md](OWNERSHIP.md).)
 
 These are single-file each, no external dependencies. They encode workflows the base model
 doesn't reliably do unprompted. They're largely portable and stack-agnostic — they read
@@ -14,14 +12,18 @@ your commands from CLAUDE.md/README rather than hardcoding a stack — but note 
 below: several assume the lean-stack `docs/` layout (SPEC/ROADMAP/STATE), so they're
 scaffold-aware, not fully stack-neutral.
 
-| Skill | Fires when you... | What it does |
-|---|---|---|
-| **roadmap** | have a spec, need phases | Turns docs/SPEC.md into docs/ROADMAP.md — an adaptive number of phases (recommends few ~3–4 / medium ~5–7 / many ~8–12+; never hardcodes a count), each with a measurable "Done when:" and a loopable/supervised tag |
-| **adr** | make a real decision | Writes a terse 4-line ADR to docs/decisions/ |
-| **ship-check** | are about to commit/PR | Runs the project's tests/lint/typecheck + scans for debug leftovers, secrets, missing docs. Verdict: READY / NOT READY (report-only; can't edit) |
-| **scope-guard** | finish a change | Flags out-of-scope edits, drive-by refactors, unexpected deletions. Verdict: IN SCOPE / SCOPE CREEP (report-only; can't edit) |
-| **explain-diff** | want a self-review | Summarizes what changed and, mainly, where it might be wrong (risks, assumptions, untested paths) (report-only; can't edit) |
-| **unstick** | are going in circles | Stops the thrash: restates the goal, names the shared failing assumption, proposes fresh hypotheses + the cheapest next test |
+| Skill | Category | Fires when you... | What it does |
+|---|---|---|---|
+| **roadmap** | workflow | have a spec, need phases | Turns docs/SPEC.md into docs/ROADMAP.md — an adaptive number of phases (recommends few ~3–4 / medium ~5–7 / many ~8–12+; never hardcodes a count), each with a measurable "Done when:" and an advisory loopable/supervised tag |
+| **adr** | workflow | make a real decision | Writes a terse 4-line ADR to docs/decisions/ |
+| **ship-check** | workflow | are about to commit/PR | Runs the project's tests/lint/typecheck + scans for debug leftovers, secrets, missing docs. Verdict: READY / NOT READY (report-only; can't edit) |
+| **scope-guard** | workflow | finish a change | Flags out-of-scope edits, drive-by refactors, unexpected deletions. Verdict: IN SCOPE / SCOPE CREEP (report-only; can't edit) |
+| **explain-diff** | workflow | want a self-review | Summarizes what changed and, mainly, where it might be wrong (risks, assumptions, untested paths) (report-only; can't edit) |
+| **unstick** | workflow | are going in circles | Stops the thrash: restates the goal, names the shared failing assumption, proposes fresh hypotheses + the cheapest next test |
+| **teach-back** | ownership | finish a non-trivial phase | Claude explains what it built and quizzes you; gaps go to docs/STATE.md "Ownership gaps" (see OWNERSHIP.md) |
+| **mapme** | ownership | made big structural changes | Refreshes docs/ARCHITECTURE.md from the actual code (see OWNERSHIP.md) |
+| **quizme** | ownership | want to test understanding | Cold-opens a quiz on the codebase to measure how well you know it (see OWNERSHIP.md) |
+| **setup-lean-stack** | installer | scaffold a new repo | Runs install.sh then fills CLAUDE.md commands + high-stakes paths. **Global/installer-only** — not copied into per-project `.claude/skills/` |
 
 ## Design principles
 - **Report-only where it matters.** The three review skills (ship-check, scope-guard,
@@ -35,15 +37,24 @@ scaffold-aware, not fully stack-neutral.
 - **Small.** One file each — low context cost, easy to read and adapt. Edit them; they're yours.
 
 ## Install
-Per-project (committed with the repo, travels with the code):
+**Easiest — the repo installer** copies all 9 portable skills per-project (and
+`setup-lean-stack` only with `--global-skills`):
+```bash
+bash /path/to/my-claude-code-setup/install.sh .                 # per-project skills
+bash /path/to/my-claude-code-setup/install.sh . --global-skills # also into ~/.claude/skills
+```
+**By hand** — the workflow + ownership skills (everything except the installer one):
 ```bash
 mkdir -p .claude/skills
-cp -r roadmap adr ship-check scope-guard explain-diff unstick .claude/skills/
+cp -r roadmap adr ship-check scope-guard explain-diff unstick teach-back mapme quizme .claude/skills/
 ```
-Or globally for all projects, in your user-level skills directory:
-```bash
-cp -r roadmap adr ship-check scope-guard explain-diff unstick ~/.claude/skills/
-```
+(Swap `.claude/skills` for `~/.claude/skills` to install globally for all projects.)
+
+## Troubleshooting
+| Symptom | Fix |
+|---|---|
+| A skill didn't auto-trigger | Invoke it by name (e.g. `ship-check`), or use a phrase from its `description:`. Auto-trigger is best-effort, not guaranteed. |
+| Skill errors "can't find docs/SPEC.md" | You're using a scaffold-aware skill (roadmap/ownership) without the lean-stack `docs/` layout. Install the scaffold (`install.sh`) or adjust the skill's paths. |
 
 ## Use
 They auto-trigger on the phrases in each skill's description, or invoke by name:

@@ -50,24 +50,28 @@ Given the 20-item fixture set in tests/fixtures/items.json, the suggested price 
 Run the **`roadmap`** skill on that spec. It will recommend a granularity — for this scope,
 ~4 fine phases — and write them with `Done when:` lines and loopable/supervised tags, e.g.:
 ```md
-## Phase 1 — Pricing core         (Mode: loopable)
+## Phase 1 — Pricing core
 - [ ] ItemFeatures + PriceSuggestion dataclasses
 - [ ] suggest_price() with base-by-category + brand/condition/era multipliers
 - [ ] Unit tests for each multiplier + an end-to-end example
 Done when: pytest passes and suggest_price() returns a Decimal + confidence for a sample item.
+Mode: loopable
 
-## Phase 2 — Evaluation harness    (Mode: loopable)
+## Phase 2 — Evaluation harness
 - [ ] tests/fixtures/items.json (20 labelled items)
 - [ ] eval test asserting ≥15/20 within ±20% of good_price
 Done when: the eval test runs and reports the hit rate.
+Mode: loopable
 
-## Phase 3 — Interfaces            (Mode: supervised — touches I/O)
+## Phase 3 — Interfaces
 - [ ] CLI entrypoint + POST /price endpoint + TestClient test
 Done when: curl to /price returns a valid suggestion and the CLI works.
+Mode: supervised   # touches I/O
 
-## Phase 4 — Hardening             (Mode: loopable)
+## Phase 4 — Hardening
 - [ ] input validation + 422; README with the eval hit rate; tune multipliers to pass the eval
 Done when: full suite green, eval criterion met, README written.
+Mode: loopable
 ```
 
 ## Build it across four sessions

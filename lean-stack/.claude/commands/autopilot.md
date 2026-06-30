@@ -41,5 +41,8 @@ Loop, for each phase, until your count target is met OR docs/ROADMAP.md has no `
    small caps here; reach for the script for anything long.
 
 At the end, summarize: phases completed, phases remaining, and the single next action.
-Do not push to a remote. Never run this mode on high-stakes phases — those are
-`supervised` per the roadmap and the .claude/rules/high-stakes.md rule.
+Do not push to a remote. **Never run this mode on high-stakes phases.** Unlike the headless
+`scripts/autopilot.sh`, this in-session loop has NO programmatic high-stakes gate, evaluator-
+change discard, or secret-scan-before-commit — you (the watcher) are those guardrails here.
+High-stakes work is `supervised` per the roadmap and the .claude/rules/high-stakes.md rule;
+for any unattended high-stakes run, there is no safe mode — do it by hand.
