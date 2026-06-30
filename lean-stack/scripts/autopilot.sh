@@ -43,6 +43,7 @@ UNBOUNDED=0
 ALLOW_DIRTY=0
 USE_WORKTREE=1         # isolation is the DEFAULT; --no-worktree opts out
 OPEN_PR=0
+HS_BLOCKED=0          # set to 1 if a high-stakes phase tripped the gate (never push it)
 MAX_MINUTES=0          # 0 = no wall-clock ceiling
 WANT_MAX_MINUTES=0     # set when the previous token was --max-minutes
 for arg in "$@"; do
@@ -190,6 +191,14 @@ cleanup_eval_changes() {
     echo "autopilot: tracked tree was dirty before grading — can't isolate evaluator changes (ambiguous). STOPPING." >&2
     return 1
   fi
+  # The grader must not influence the ticked tree. If it COMMITTED (HEAD moved), that's a
+  # contract violation: undo the commit(s) and STOP — never tick a tree the grader altered.
+  local now_head; now_head=$(git rev-parse HEAD 2>/dev/null)
+  if [ -n "$PRE_GRADE_HEAD" ] && [ "$now_head" != "$PRE_GRADE_HEAD" ]; then
+    git reset -q --hard "$PRE_GRADE_HEAD" 2>/dev/null || true
+    echo "autopilot: evaluator COMMITTED during grading (HEAD moved $PRE_GRADE_HEAD → $now_head) — reverted and STOPPING (grader must not alter the tree)." >&2
+    return 1
+  fi
   git reset -q --hard HEAD 2>/dev/null || true      # revert any tracked edits (tree was clean → safe)
   local post new
   post=$(git ls-files --others --exclude-standard 2>/dev/null | sort)
@@ -243,8 +252,11 @@ for i in $(seq 1 "$MAX_ITER"); do
 
   # Snapshot the tree BEFORE grading so we can discard whatever the evaluator changes.
   # PRE_SNAP empty ⇔ tracked tree clean (git stash create stashes only tracked work).
+  # PRE_GRADE_HEAD lets us detect (and undo) a COMMIT the evaluator makes — git reset
+  # --hard HEAD only reverts working-tree edits, not commits the grader sneaks in.
   PRE_UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null | sort)
   PRE_SNAP=$(git stash create 2>/dev/null)
+  PRE_GRADE_HEAD=$(git rev-parse HEAD 2>/dev/null)
 
   # Independent grader: separate process, runs AS the evaluator (its system prompt +
   # no-edit-tools restriction). This is the sole gate for ticking.
@@ -294,7 +306,8 @@ for i in $(seq 1 "$MAX_ITER"); do
         BASE=$(cat .claude/.phase-base 2>/dev/null)
         CHANGED=$(git diff --name-only "${BASE:-HEAD~1}..HEAD" 2>/dev/null)
         if HS=$(high_stakes_match "$CHANGED"); then
-          echo "autopilot: ⛔ HIGH-STAKES paths changed this phase — finish it SUPERVISED. Not ticking/committing/pushing:" | tee -a autopilot.log
+          HS_BLOCKED=1   # finish block must NOT push this branch, even with --pr
+          echo "autopilot: ⛔ HIGH-STAKES paths changed this phase — finish it SUPERVISED. Not ticking/committing; branch stays LOCAL (no push even with --pr):" | tee -a autopilot.log
           printf '%s\n' "$HS" | sed 's/^/    /' | tee -a autopilot.log
           break
         fi
@@ -329,7 +342,15 @@ for i in $(seq 1 "$MAX_ITER"); do
 done
 
 # ----------------------------- finish / PR -----------------------------
-if [ "$USE_WORKTREE" -eq 1 ] && [ "$OPEN_PR" -eq 1 ]; then
+if [ "$HS_BLOCKED" -eq 1 ]; then
+  # A high-stakes phase tripped the gate. The builder's per-task commits are already
+  # in this branch, but high-stakes work is human-on-the-loop: it is NEVER auto-pushed,
+  # even with --pr. Leave the branch local for supervised review.
+  echo "autopilot: high-stakes phase reached — branch $BRANCH stays LOCAL for supervised review (not pushed)." | tee -a autopilot.log
+  if [ "$USE_WORKTREE" -eq 1 ]; then
+    echo "autopilot: review it in $PWD, then merge or 'git worktree remove' when finished."
+  fi
+elif [ "$USE_WORKTREE" -eq 1 ] && [ "$OPEN_PR" -eq 1 ]; then
   # Push-gate: the builder's per-task commits never passed through the Stop-hook
   # secret guard, so scan the WHOLE range before anything reaches the remote.
   if type -t secret_scan_diff >/dev/null 2>&1; then
