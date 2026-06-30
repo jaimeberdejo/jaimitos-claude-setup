@@ -10,12 +10,18 @@ paths:
   - "**/*payment*"
 ---
 
-# High-stakes code (loaded only when these paths are touched)
+# High-stakes code
+
+This is a native `.claude/rules/` file. **Path-scoped (`paths:`) triggering is
+currently unreliable in Claude Code** — known bugs mean it can load globally
+regardless of the `paths:` filter, or fail to load even on matching files. So do
+NOT rely on the `paths:` filter for enforcement. For GUARANTEED enforcement, either
+remove the `paths:` filter (the rule will then always load) or keep these same
+constraints in CLAUDE.md as well.
 
 Edit the `paths:` above to match wherever YOUR irreversible/consequential code lives —
 auth, schema migrations, billing, deletion paths, external-effect calls, anything where
-a bug costs more than a re-run. This rule is path-scoped and re-injected on compaction,
-so it stays in force while you work in these files.
+a bug costs more than a re-run.
 
 - **No autopilot here.** This is human-on-the-loop work: a loop may *surface* a diff,
   but a human approves it before it lands. Keep `permission_mode: default`.

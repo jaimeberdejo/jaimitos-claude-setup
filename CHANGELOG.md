@@ -4,6 +4,35 @@ All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/); this project
 uses [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] — 2026-06-30
+
+Hardening and documentation-consistency pass. No new features; safer defaults and
+accurate docs.
+
+### Changed — safety
+- **Kill-switch fails closed:** `AGENT_STOP` blocks even if the hook itself errors.
+- **Secret-leak prevention:** `commit-on-stop` won't stage/commit secret-bearing files;
+  broadened the `permissions.deny` set and `.gitignore` coverage for `.env*`/keys/credentials.
+- **Anchored verdict parsing:** the evaluator's PASS/FAIL is matched strictly — an
+  unrecognized verdict stops the loop instead of being guessed.
+- **Criteria immutability:** the builder can't edit the current phase's `Done when:`/heading.
+- **Test gate default-on in headless:** `autopilot.sh` runs with the test gate enabled.
+- **Worktree kill-switch:** `AGENT_STOP` is honored inside `--worktree` runs.
+
+### Fixed — install & health
+- `install.sh` merges (not clobbers) an existing `.gitignore`.
+- `doctor.sh` completeness: checks the hard dependencies (`git`, `jq`, `claude`) and reports
+  what's missing.
+
+### Changed — docs
+- Added **Prerequisites** and **Troubleshooting** sections to the root README.
+- Documented `autopilot.sh --allow-dirty`; marked `npx skills` / `openspec` as optional companions.
+- Removed the dangling `personal-skills.zip` reference (skills live in `skills/`).
+- Reconciled skill counts (6 workflow + 3 ownership + `setup-lean-stack`) and the roadmap
+  phase-count wording (adaptive few/medium/many, not a hardcoded range).
+- Softened the high-stakes "auto-loads" claim: path-scoped rule loading is unreliable, so the
+  same constraints are kept in `CLAUDE.md`.
+
 ## [1.0.0] — 2026-06-30
 
 First public release. A lean, project-neutral Claude Code operating system:

@@ -35,3 +35,9 @@ Constraints: touch src/, tests/, and docs/ freely. You MAY also touch project co
 manifests when the task genuinely needs it (package.json, pyproject.toml, lockfiles,
 migrations, *.example env files) — but call out any such change explicitly. Never touch
 unrelated files. Commit after each green task. Do not ask for confirmation between tasks.
+
+HARD RULE — do not move your own goalposts. While building the current phase you MUST NOT
+edit that phase's heading or its `Done when:` line in docs/ROADMAP.md, and you must not
+weaken, reword, or delete any of its acceptance criteria. You are graded against that exact
+standard; altering it is a false PASS. You MAY append NEW phases or add notes elsewhere in
+the roadmap, but never alter the criteria you are being graded on.

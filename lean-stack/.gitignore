@@ -3,10 +3,10 @@ AGENT_STOP
 STEER.md
 NEXT_FINDINGS.md
 autopilot.log
+.claude/.phase-ready
 
 # Evidence/contract + internal hook state (regenerated each run)
 test-results.json
-.claude/.evidence-reads
 .claude/.phase-base
 .claude/.last-changed
 
@@ -36,6 +36,22 @@ build/
 .DS_Store
 tmp/
 
-# Env
+# Env / secrets — never commit credentials
 .env
 .env.local
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+credentials*.json
+id_rsa
+id_ed25519
+id_ecdsa
+id_dsa
+secrets/
+*.tfstate
+*.tfvars
+.envrc
+.netrc

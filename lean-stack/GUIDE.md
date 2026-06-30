@@ -126,6 +126,11 @@ bash scripts/doctor.sh         # tooling, scaffold, settings, hooks — must be 
 bash scripts/test-hooks.sh     # smoke-test the hooks before trusting them
 ```
 
+> **Hit a snag?** See the **Troubleshooting** table in the
+> [repo-root README](../README.md#troubleshooting) — it pairs the common failures
+> (doctor ✗, hooks not firing, format-on-edit skipping, unrecognized evaluator verdict,
+> leftover worktrees) with one-line fixes.
+
 ---
 
 ## Part 3 — The core loop (memorize this)
@@ -250,7 +255,9 @@ sole roadmap-ticker** · `AGENT_STOP` kill-switch · budget cap. The builder *ne
 
 **Never loop:** auth, migrations against shared/prod data, money movement, irreversible
 deletes, external side effects, or anything whose correctness is a judgment call. The
-`high-stakes.md` rule auto-loads on those paths to reinforce supervised-only.
+`high-stakes.md` rule is meant to reinforce supervised-only on those paths — but
+path-scoped rule loading is currently unreliable in Claude Code, so the same constraints
+are also kept in `CLAUDE.md` (which loads every turn). Don't rely on the rule auto-loading.
 
 ---
 

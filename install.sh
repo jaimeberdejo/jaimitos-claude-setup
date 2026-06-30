@@ -76,6 +76,33 @@ if [ "$GLOBAL_SKILLS" -eq 1 ]; then
   done < <(find "$SKILLS_SRC" -mindepth 1 -maxdepth 1 -type d)
 fi
 
+# 3b. Merge scaffold .gitignore rules into a pre-existing target .gitignore.
+# The generic copy loop skips files that already exist, so a repo that already
+# has a .gitignore would never receive our control/secret ignore rules. Append
+# any missing lines under a marked, idempotent block.
+SCAFFOLD_GI="$SCAFFOLD/.gitignore"
+TARGET_GI="$TARGET/.gitignore"
+GI_MARK="# --- lean-stack control/secret ignores ---"
+if [ -f "$SCAFFOLD_GI" ] && [ -f "$TARGET_GI" ]; then
+  # Only act if our block isn't already present (idempotent on re-run).
+  if ! grep -qF "$GI_MARK" "$TARGET_GI"; then
+    MISSING=""
+    while IFS= read -r line; do
+      # Skip blank lines and comments from the scaffold.
+      case "$line" in ""|\#*) continue ;; esac
+      # Append only rules the target doesn't already have (exact-line match).
+      grep -qxF "$line" "$TARGET_GI" || MISSING="$MISSING$line"$'\n'
+    done < "$SCAFFOLD_GI"
+    if [ -n "$MISSING" ]; then
+      {
+        printf '\n%s\n' "$GI_MARK"
+        printf '%s' "$MISSING"
+      } >> "$TARGET_GI"
+      echo "  merged missing .gitignore rules into existing $TARGET_GI"
+    fi
+  fi
+fi
+
 # 4. Make hooks/scripts executable.
 chmod +x "$TARGET"/.claude/hooks/*.sh "$TARGET"/scripts/*.sh 2>/dev/null || true
 

@@ -33,6 +33,20 @@ done
 [ -d docs/plans ] && ok "docs/plans/ exists" || warn "docs/plans/ missing (/phase writes here)"
 echo ""
 
+echo "Agents, commands, rules:"
+[ -f .claude/agents/evaluator.md ] && ok ".claude/agents/evaluator.md" || bad "missing .claude/agents/evaluator.md (independent grader)"
+for c in resume wrap phase autopilot; do
+  [ -f ".claude/commands/$c.md" ] && ok ".claude/commands/$c.md" || bad "missing .claude/commands/$c.md"
+done
+[ -f .claude/rules/high-stakes.md ] && ok ".claude/rules/high-stakes.md" || bad "missing .claude/rules/high-stakes.md"
+echo ""
+
+echo "Hook files present:"
+for h in session-start steer kill-switch format-on-edit test-gate commit-on-stop ownership-nudge; do
+  [ -f ".claude/hooks/$h.sh" ] && ok ".claude/hooks/$h.sh" || bad "missing .claude/hooks/$h.sh"
+done
+echo ""
+
 echo "settings.json:"
 if [ -f .claude/settings.json ]; then
   jq empty .claude/settings.json >/dev/null 2>&1 && ok "valid JSON" || bad "settings.json is not valid JSON"
@@ -54,6 +68,16 @@ for h in .claude/hooks/*.sh scripts/*.sh; do
   [ -f "$h" ] || continue
   bash -n "$h" 2>/dev/null && ok "$h parses" || bad "$h has a syntax error"
 done
+echo ""
+
+echo "CLAUDE.md placeholders:"
+if [ -f CLAUDE.md ]; then
+  if grep -qE '<.*\|.*>' CLAUDE.md; then
+    warn "un-substituted placeholder commands in CLAUDE.md (e.g. '<pytest -q  |  npm test>') — fill them in with your real commands."
+  else
+    ok "no placeholder commands left in CLAUDE.md"
+  fi
+fi
 echo ""
 
 if [ "$PROBLEMS" -eq 0 ]; then

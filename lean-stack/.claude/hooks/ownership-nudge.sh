@@ -32,7 +32,7 @@ if printf '%s\n' "$CHANGED" | grep -qE '\.(py|ts|tsx|js|jsx|go|rs)$'; then
   echo "↳ ownership check:"
   echo "  • Decision made? run the adr skill to record it (with the alternative you rejected)."
   echo "  • Understand what was built? run teach-back before /wrap."
-  echo "  • Big change? run /mapme to refresh docs/ARCHITECTURE.md."
+  echo "  • Big change? run the mapme skill to refresh docs/ARCHITECTURE.md."
 fi
 
 # Clean up the breadcrumb so a later no-op Stop doesn't re-nudge stale changes.

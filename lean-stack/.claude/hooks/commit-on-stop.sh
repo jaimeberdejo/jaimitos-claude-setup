@@ -33,6 +33,32 @@ git status --porcelain 2>/dev/null | cut -c4- > .claude/.last-changed 2>/dev/nul
 
 COUNT=$(printf '%s\n' "$DIRTY" | grep -c . )
 git add -A 2>/dev/null
+
+# Secret guard: never auto-commit credentials. Scan STAGED paths against a deny
+# set; if anything matches, unstage everything and skip the commit entirely.
+SECRETS_FOUND=""
+while IFS= read -r staged; do
+  [ -z "$staged" ] && continue
+  base="${staged##*/}"
+  case "$staged" in
+    secrets/*|*/secrets/*) SECRETS_FOUND="$SECRETS_FOUND $staged"; continue ;;
+  esac
+  case "$base" in
+    *.env|.env|.env.*|*.pem|*.key|*.p12|*.pfx|*.jks|credentials*.json|\
+    id_rsa|id_ed25519|id_ecdsa|id_dsa|*.tfstate|*.tfvars|.envrc|.netrc|.git-credentials)
+      SECRETS_FOUND="$SECRETS_FOUND $staged" ;;
+  esac
+done < <(git diff --cached --name-only 2>/dev/null)
+
+if [ -n "$SECRETS_FOUND" ]; then
+  git reset -q 2>/dev/null
+  echo "⛔ SECRET DETECTED — auto-commit ABORTED. Nothing was committed."
+  echo "   The following staged path(s) look like secrets:"
+  for f in $SECRETS_FOUND; do echo "     - $f"; done
+  echo "   Handle these manually: remove them, add to .gitignore, or commit deliberately."
+  exit 0
+fi
+
 if git commit -m "checkpoint: $COUNT file(s) @ $(date '+%Y-%m-%d %H:%M')" >/dev/null 2>&1; then
   echo "✓ checkpointed $COUNT file(s). Run /wrap to update docs/STATE.md + tick docs/ROADMAP.md before /clear."
 else

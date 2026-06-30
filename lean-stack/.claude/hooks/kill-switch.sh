@@ -4,7 +4,7 @@
 # Your seatbelt for /goal and ralph-style runs.
 
 set -uo pipefail
-cd "$CLAUDE_PROJECT_DIR" 2>/dev/null || cd .
+cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || cd .
 
 if [ -f AGENT_STOP ]; then
   # Exit code 2 on PreToolUse blocks the tool call and feeds stderr back to Claude.

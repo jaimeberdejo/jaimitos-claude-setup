@@ -43,6 +43,22 @@ else
 fi
 rm -f AGENT_STOP
 
+# Verify kill-switch FAILS CLOSED even when CLAUDE_PROJECT_DIR is unset.
+# Under `set -u`, an unset var must NOT abort the hook before the AGENT_STOP check.
+(
+  unset CLAUDE_PROJECT_DIR
+  touch AGENT_STOP
+  printf '%s' '{"hook_event_name":"PreToolUse"}' | bash .claude/hooks/kill-switch.sh >/dev/null 2>&1
+  rc=$?
+  rm -f AGENT_STOP
+  exit "$rc"
+)
+if [ "$?" -eq 2 ]; then
+  printf '  ✓ kill-switch fails closed (exit 2) when CLAUDE_PROJECT_DIR unset\n'
+else
+  printf '  ✗ kill-switch did NOT fail closed with CLAUDE_PROJECT_DIR unset\n'; FAILS=$((FAILS+1))
+fi
+
 echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All hook smoke tests passed."; exit 0
 else echo "$FAILS hook test(s) failed."; exit 1; fi
