@@ -54,3 +54,4 @@ jobs:
           bash scripts/test-tick.sh
           bash scripts/test-docs-invariants.sh
           bash scripts/test-close-milestone.sh
+          bash scripts/test-doctor.sh

@@ -2,14 +2,28 @@
 # doctor.sh — one-command health check for the lean-stack setup.
 # Verifies the things autopilot.sh and the hooks silently depend on.
 # Exit 0 = healthy, exit 1 = problems found.
+#
+# --fix applies SAFE, LOCAL, IDEMPOTENT repairs only: chmod +x hooks/scripts, create the
+# docs/plans dir, create docs/FAILURES.md. It does NOT restore missing libs/hooks/scaffold
+# (that needs ./install.sh --force) and never touches the high-stakes fingerprint.
 
 set -uo pipefail
 cd "$(git rev-parse --show-toplevel 2>/dev/null || echo .)" || exit 1
 
 PROBLEMS=0
-ok()   { printf '  ✓ %s\n' "$1"; }
-bad()  { printf '  ✗ %s\n' "$1"; PROBLEMS=$((PROBLEMS+1)); }
-warn() { printf '  ! %s\n' "$1"; }
+ok()    { printf '  ✓ %s\n' "$1"; }
+bad()   { printf '  ✗ %s\n' "$1"; PROBLEMS=$((PROBLEMS+1)); }
+warn()  { printf '  ! %s\n' "$1"; }
+fixed() { printf '  ⚙ fixed: %s\n' "$1"; }
+
+FIX=0
+for a in "$@"; do
+  case "$a" in
+    --fix) FIX=1 ;;
+    -h|--help) echo "usage: doctor.sh [--fix]   (--fix applies safe, local, idempotent repairs)"; exit 0 ;;
+    *) echo "doctor: unknown argument '$a' (try --fix)" >&2; exit 2 ;;
+  esac
+done
 
 echo "lean-stack doctor"
 [ -f .claude/.lean-stack-version ] && echo "lean-stack version: $(cat .claude/.lean-stack-version)"
@@ -31,7 +45,14 @@ echo "Scaffold files:"
 for f in .claude/settings.json docs/SPEC.md docs/ROADMAP.md docs/STATE.md CLAUDE.md scripts/autopilot.sh; do
   [ -f "$f" ] && ok "$f" || bad "missing $f"
 done
-[ -d docs/plans ] && ok "docs/plans/ exists" || warn "docs/plans/ missing (/phase writes here)"
+if [ -d docs/plans ]; then ok "docs/plans/ exists"
+elif [ "$FIX" -eq 1 ]; then mkdir -p docs/plans && fixed "created docs/plans/"
+else warn "docs/plans/ missing (/phase writes here)"; fi
+if [ -f docs/FAILURES.md ]; then ok "docs/FAILURES.md exists"
+elif [ "$FIX" -eq 1 ]; then
+  printf '# Failure history\n\n_Resolved evaluator findings, appended by scripts/autopilot.sh on PASS._\n' > docs/FAILURES.md \
+    && fixed "created docs/FAILURES.md"
+else warn "docs/FAILURES.md missing (created on the first resolved finding, or run --fix)"; fi
 echo ""
 
 echo "Agents, commands, rules:"
@@ -99,7 +120,9 @@ echo "Hooks executable:"
 # Libraries under .claude/lib/ are SOURCED, not executed — they don't need the exec bit.
 for h in .claude/hooks/*.sh scripts/*.sh; do
   [ -f "$h" ] || continue
-  if [ -x "$h" ]; then ok "$h"; else bad "$h not executable (run: chmod +x $h)"; fi
+  if [ -x "$h" ]; then ok "$h"
+  elif [ "$FIX" -eq 1 ]; then chmod +x "$h" && fixed "chmod +x $h"
+  else bad "$h not executable (run: chmod +x $h)"; fi
 done
 echo ""
 
@@ -127,6 +150,7 @@ echo ""
 
 if [ "$PROBLEMS" -ne 0 ]; then
   echo "$PROBLEMS problem(s) found. Fix the ✗ items above before an unattended run."
+  [ "$FIX" -eq 1 ] && echo "(--fix repairs chmod/dirs only — it can't restore missing libs/hooks/scaffold; run ./install.sh --force for those.)"
   exit 1
 elif [ "${UNCONFIGURED:-0}" = 1 ] || [ "${HS_DEFAULT:-0}" = 1 ]; then
   # Installed correctly but not yet customized — do NOT imply it's ready to run unattended.
