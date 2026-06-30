@@ -53,3 +53,4 @@ jobs:
           bash scripts/test-autopilot-gates.sh
           bash scripts/test-tick.sh
           bash scripts/test-docs-invariants.sh
+          bash scripts/test-close-milestone.sh

@@ -35,20 +35,22 @@ exact heading. So this is mechanical and low-risk. Pick the matching mode.
 
 ## Mode B — Finish a roadmap → start the next batch / new milestone
 Use when every phase is `- [x]` (or the user wants to close the current scope and expand).
-1. Confirm the roadmap is complete (`grep -c '\- \[ \]' docs/ROADMAP.md` → 0). If open items
-   remain, say so and ask whether to proceed anyway.
-2. Archive, preserving history:
+Closure is **gated by a script** — you do NOT archive by hand, and there is no "proceed anyway":
+1. Run the gate:
    ```bash
-   mkdir -p docs/archive
-   git mv docs/ROADMAP.md docs/archive/ROADMAP-<version-or-YYYYMMDD>.md
+   bash scripts/close-milestone.sh        # or: --name <label> to set the archive suffix
    ```
-   Name it after the current `VERSION`/tag if the project uses one, else the date.
-3. Create a fresh `docs/ROADMAP.md` for the next scope — either:
-   - re-run the **`roadmap`** skill on an updated `docs/SPEC.md` (preferred when scope changed), or
-   - hand-write the new phases in the same shape as Mode A.
-4. Reset `docs/STATE.md`'s "Now / Next" to point at the first new phase; note the milestone change.
-5. Optional: bump `VERSION` and `git tag` to mark the milestone.
-6. Commit. Summarize: what was archived, what the next batch contains, the single next action.
+   It REFUSES (exit 1, with the reason) if any `- [ ]` item is still open, if `NEXT_FINDINGS.md`
+   exists (an unresolved evaluator finding), or if the roadmap has no phases. If it refuses,
+   resolve the listed items first — do not work around it. On success it `git mv`s
+   `docs/ROADMAP.md` → `docs/archive/ROADMAP-<label>.md` (label = `--name`, else a `VERSION`
+   file, else the latest git tag, else the date), writes a fresh empty `docs/ROADMAP.md`, and
+   resets the `docs/STATE.md` auto-block.
+2. Author the next scope into the fresh `docs/ROADMAP.md` — either re-run the **`roadmap`** skill
+   on an updated `docs/SPEC.md` (preferred when scope changed), or hand-write phases as in Mode A.
+3. Update the prose "## Now / ## Next action" in `docs/STATE.md` to point at the first new phase.
+4. Optional: bump `VERSION` and `git tag` to mark the milestone.
+5. Commit. Summarize: what was archived, what the next batch contains, the single next action.
 
 ## Guardrails
 - Mechanical edits only — you are not redesigning the project, just maintaining the work queue.
