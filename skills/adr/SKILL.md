@@ -10,8 +10,9 @@ this for trivial or reversible choices (variable names, formatting) — only for
 decisions where someone later would ask "why was it done this way?"
 
 ## Steps
-1. Find the next ADR number: list docs/decisions/, take the highest ADR-NNN and add 1.
-   (If the folder is empty, start at ADR-001.)
+1. Get the next ADR number deterministically: `NNN=$(bash scripts/next-adr.sh)` (it returns the
+   next zero-padded number, e.g. `004`, and errors on a collision). Fall back to "highest existing
+   ADR-NNN + 1, or 001 if empty" only if the script is unavailable.
 2. Write a new file `docs/decisions/ADR-<NNN>-<kebab-title>.md` with EXACTLY this shape:
 
    ```

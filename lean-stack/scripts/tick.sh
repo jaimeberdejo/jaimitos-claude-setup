@@ -141,6 +141,19 @@ if command -v high_stakes_content_match >/dev/null 2>&1; then
   fi
 fi
 
+# Mode: supervised — the author flagged this phase as human-on-the-loop. Enforce it (the tag
+# used to be advisory/unparsed): refuse to auto-tick, same supervised exit as a high-stakes hit.
+PHASE_MODE=$(awk -v ph="$heading" '
+  $0==ph {inphase=1; next}
+  /^## / && inphase {inphase=0}
+  inphase && /^[[:space:]]*Mode:/ {print tolower($0); exit}
+' "$ROADMAP")
+case "$PHASE_MODE" in
+  *supervised*)
+    echo "tick: ⛔ phase is marked 'Mode: supervised' — human review required, NOT auto-ticking." >&2
+    exit 3 ;;
+esac
+
 # --- 6. target phase still has an open item ---
 open_in_phase=$(awk -v ph="$heading" '
   $0==ph {inphase=1; next}

@@ -1,9 +1,9 @@
 # my-claude-code-setup
 
-A lean, **project-neutral operating system for Claude Code**: auto-maintained docs,
-deterministic hooks, an independent grader, two autonomous loops (one you can watch, one
-for overnight), path-scoped rules, and a pack of portable skills — at a fraction of the
-token cost of heavyweight planning frameworks.
+A lean, **project-neutral operating system for Claude Code**: an evidence-gated, auto-ticked
+roadmap with auto-written state, deterministic hooks, an independent grader, two autonomous
+loops (one you can watch, one for overnight), path-scoped rules, and a pack of portable
+skills — at a fraction of the token cost of heavyweight planning frameworks.
 
 It reproduces what big multi-agent frameworks automate — spec, roadmap, persistent state,
 decision log, phase execution, independent verification — with **one context at a time, no

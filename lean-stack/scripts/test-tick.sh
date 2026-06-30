@@ -123,6 +123,10 @@ mkrepo t9 auth/login.py 'def login(): return True'; good_grade t9; good_evidence
 mkrepo t9b src/utils.py 'cursor.execute("DROP TABLE users")'; good_grade t9b; good_evidence t9b; rc=$(runtick "$REPO")
 { [ "$rc" = 3 ] && ! ticked "$REPO"; } && pass "high-stakes content (DROP TABLE in benign path) → exit 3" || fail "content high-stakes mishandled (rc=$rc)"
 
+# 9c — a phase marked "Mode: supervised" → exit 3 (enforced), not ticked.
+mkrepo t9c; printf 'Mode: supervised\n' >> "$REPO/docs/ROADMAP.md"; good_grade t9c; good_evidence t9c; rc=$(runtick "$REPO")
+{ [ "$rc" = 3 ] && ! ticked "$REPO"; } && pass "Mode: supervised → exit 3 (tag enforced, not auto-ticked)" || fail "Mode:supervised not enforced (rc=$rc)"
+
 # 10 — already-ticked phase (no open item) → refuses.
 mkrepo t10; good_grade t10; good_evidence t10
 sed_i() { perl -i -pe 's/- \[ \] do the work/- [x] do the work/' "$1"; }
