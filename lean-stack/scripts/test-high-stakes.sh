@@ -4,7 +4,7 @@
 # used to miss authentication/, oauth/, delete, email, deploy, refund, webhook).
 
 set -uo pipefail
-LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/.claude/hooks/_high-stakes.sh"
+LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/.claude/lib/_high-stakes.sh"
 [ -f "$LIB" ] || { echo "test: cannot find _high-stakes.sh at $LIB" >&2; exit 1; }
 # shellcheck disable=SC1090
 . "$LIB"

@@ -7,7 +7,7 @@
 # Run from the repo root: bash scripts/test-hooks.sh
 
 set -uo pipefail
-cd "$(git rev-parse --show-toplevel 2>/dev/null || echo .)"
+cd "$(git rev-parse --show-toplevel 2>/dev/null || echo .)" || exit 1
 export CLAUDE_PROJECT_DIR="$PWD"
 
 FAILS=0
@@ -63,7 +63,7 @@ echo ""
 # Verify the SHARED secret-scan library blocks a planted credential and does NOT
 # false-positive on a clean file. Runs in an ISOLATED temp git repo so we never
 # stage a secret into this repo.
-SCAN_LIB="$PWD/.claude/hooks/_secret-scan.sh"
+SCAN_LIB="$PWD/.claude/lib/_secret-scan.sh"
 if [ -f "$SCAN_LIB" ]; then
   (
     set -uo pipefail
@@ -93,7 +93,7 @@ if [ -f "$SCAN_LIB" ]; then
     *)  printf '  ✗ secret-scan test harness errored (rc=%d)\n' "$rc"; FAILS=$((FAILS+1)) ;;
   esac
 else
-  printf '  ✗ missing .claude/hooks/_secret-scan.sh (shared secret-scan lib)\n'; FAILS=$((FAILS+1))
+  printf '  ✗ missing .claude/lib/_secret-scan.sh (shared secret-scan lib)\n'; FAILS=$((FAILS+1))
 fi
 
 echo ""

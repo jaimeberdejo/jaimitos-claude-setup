@@ -5,7 +5,7 @@
 # a legitimate commit, so the no-false-positive cases matter as much as the catches).
 
 set -uo pipefail
-LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/.claude/hooks/_secret-scan.sh"
+LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/.claude/lib/_secret-scan.sh"
 [ -f "$LIB" ] || { echo "test: cannot find _secret-scan.sh at $LIB" >&2; exit 1; }
 command -v git >/dev/null 2>&1 || { echo "test: git required"; exit 1; }
 # shellcheck disable=SC1090
@@ -13,7 +13,7 @@ command -v git >/dev/null 2>&1 || { echo "test: git required"; exit 1; }
 
 WORK="$(mktemp -d 2>/dev/null || mktemp -d -t secretscan)"
 trap 'rm -rf "$WORK"' EXIT
-cd "$WORK"
+cd "$WORK" || exit 1
 git init -q && git config user.email t@t.t && git config user.name t
 # An initial commit so `git reset` (used between fixtures to clear the index) resolves
 # HEAD — without it, reset fails and staged files leak from one case into the next.

@@ -15,7 +15,9 @@ set -uo pipefail
 cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || cd .
 
 # Claude Code passes hook input as JSON on stdin; pull the edited file path.
-FILE=$(jq -r '.tool_input.file_path // .tool_input.path // empty' 2>/dev/null)
+# Read once; don't block on a TTY / missing pipe.
+if [ -t 0 ]; then INPUT='{}'; else INPUT=$(cat 2>/dev/null || echo '{}'); fi
+FILE=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // .tool_input.path // empty' 2>/dev/null)
 [ -z "${FILE:-}" ] && exit 0
 [ ! -f "$FILE" ] && exit 0
 

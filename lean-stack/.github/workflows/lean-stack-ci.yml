@@ -20,7 +20,7 @@ jobs:
       - name: Shell syntax (bash -n) on all scripts
         run: |
           fail=0
-          for f in .claude/hooks/*.sh scripts/*.sh; do
+          for f in .claude/hooks/*.sh .claude/lib/*.sh scripts/*.sh; do
             [ -f "$f" ] || continue
             if bash -n "$f"; then echo "ok: $f"; else echo "SYNTAX ERROR: $f"; fail=1; fi
           done
@@ -29,15 +29,17 @@ jobs:
       - name: settings.json is valid JSON with deny rules
         run: |
           jq empty .claude/settings.json
-          jq -e '.permissions.deny | length > 0' .claude/settings.json >/dev/null \
-            && echo "permissions.deny present" \
-            || { echo "missing permissions.deny"; exit 1; }
+          if jq -e '.permissions.deny | length > 0' .claude/settings.json >/dev/null; then
+            echo "permissions.deny present"
+          else
+            echo "missing permissions.deny"; exit 1
+          fi
 
       - name: shellcheck (advisory)
         continue-on-error: true
         run: |
           sudo apt-get update -qq && sudo apt-get install -y shellcheck
-          shellcheck -S warning .claude/hooks/*.sh scripts/*.sh || true
+          shellcheck -S warning .claude/hooks/*.sh .claude/lib/*.sh scripts/*.sh || true
 
       - name: Hook smoke tests
         run: |

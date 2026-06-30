@@ -81,7 +81,7 @@ done
 # to hard-fail on failing/missing tests, or `off` to disable the gate entirely.
 export LEAN_TEST_GATE="${LEAN_TEST_GATE:-warn}"
 
-cd "$(git rev-parse --show-toplevel 2>/dev/null || echo .)"
+cd "$(git rev-parse --show-toplevel 2>/dev/null || echo .)" || exit 1
 
 # Original repo root, captured BEFORE any --worktree cd. Operators are told to
 # `touch AGENT_STOP` (or write STEER.md) in their original checkout, so the loop's
@@ -133,15 +133,15 @@ chmod +x .claude/hooks/*.sh scripts/*.sh 2>/dev/null || true
 # Source the SHARED guard libraries now that the final working dir is set. These
 # are installed into every project; if absent we warn LOUDLY (the matching gate is
 # then disabled — better to know than to silently skip a safety check).
-if [ -f .claude/hooks/_secret-scan.sh ]; then
-  . .claude/hooks/_secret-scan.sh 2>/dev/null || true
+if [ -f .claude/lib/_secret-scan.sh ]; then
+  . .claude/lib/_secret-scan.sh 2>/dev/null || true
 else
-  echo "autopilot: WARNING — .claude/hooks/_secret-scan.sh not found; commit/push secret-gate DISABLED." >&2
+  echo "autopilot: WARNING — .claude/lib/_secret-scan.sh not found; commit/push secret-gate DISABLED." >&2
 fi
-if [ -f .claude/hooks/_high-stakes.sh ]; then
-  . .claude/hooks/_high-stakes.sh 2>/dev/null || true
+if [ -f .claude/lib/_high-stakes.sh ]; then
+  . .claude/lib/_high-stakes.sh 2>/dev/null || true
 else
-  echo "autopilot: WARNING — .claude/hooks/_high-stakes.sh not found; high-stakes gate DISABLED." >&2
+  echo "autopilot: WARNING — .claude/lib/_high-stakes.sh not found; high-stakes gate DISABLED." >&2
 fi
 
 if [ "$UNBOUNDED" -eq 1 ]; then

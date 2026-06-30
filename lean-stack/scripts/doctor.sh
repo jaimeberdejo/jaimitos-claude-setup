@@ -4,7 +4,7 @@
 # Exit 0 = healthy, exit 1 = problems found.
 
 set -uo pipefail
-cd "$(git rev-parse --show-toplevel 2>/dev/null || echo .)"
+cd "$(git rev-parse --show-toplevel 2>/dev/null || echo .)" || exit 1
 
 PROBLEMS=0
 ok()   { printf '  ✓ %s\n' "$1"; }
@@ -43,7 +43,7 @@ done
 echo ""
 
 echo "High-stakes gate customization:"
-HS_LIB=".claude/hooks/_high-stakes.sh"
+HS_LIB=".claude/lib/_high-stakes.sh"
 if [ -f "$HS_LIB" ]; then
   HS_CUR=$(grep -E '^HIGH_STAKES_RE=' "$HS_LIB" 2>/dev/null)
   if [ -f .claude/.high-stakes-default ] && [ "$HS_CUR" = "$(cat .claude/.high-stakes-default 2>/dev/null)" ]; then
@@ -59,10 +59,12 @@ echo "Hook files present:"
 for h in session-start steer kill-switch format-on-edit test-gate commit-on-stop ownership-nudge; do
   [ -f ".claude/hooks/$h.sh" ] && ok ".claude/hooks/$h.sh" || bad "missing .claude/hooks/$h.sh"
 done
-# Shared guard libraries — sourced by commit-on-stop.sh and autopilot.sh. If absent,
-# the secret-scan and high-stakes gates silently disable, so treat as hard failures.
+echo ""
+echo "Shared guard libraries (.claude/lib/):"
+# Sourced by commit-on-stop.sh and autopilot.sh. If absent, the secret-scan and
+# high-stakes gates silently disable, so treat as hard failures.
 for lib in _secret-scan _high-stakes; do
-  [ -f ".claude/hooks/$lib.sh" ] && ok ".claude/hooks/$lib.sh (shared guard lib)" || bad "missing .claude/hooks/$lib.sh (secret/high-stakes gate disabled without it)"
+  [ -f ".claude/lib/$lib.sh" ] && ok ".claude/lib/$lib.sh (shared guard lib)" || bad "missing .claude/lib/$lib.sh (secret/high-stakes gate disabled without it)"
 done
 echo ""
 
@@ -76,6 +78,7 @@ fi
 echo ""
 
 echo "Hooks executable:"
+# Libraries under .claude/lib/ are SOURCED, not executed — they don't need the exec bit.
 for h in .claude/hooks/*.sh scripts/*.sh; do
   [ -f "$h" ] || continue
   if [ -x "$h" ]; then ok "$h"; else bad "$h not executable (run: chmod +x $h)"; fi
@@ -83,7 +86,7 @@ done
 echo ""
 
 echo "Hook shell syntax:"
-for h in .claude/hooks/*.sh scripts/*.sh; do
+for h in .claude/hooks/*.sh .claude/lib/*.sh scripts/*.sh; do
   [ -f "$h" ] || continue
   bash -n "$h" 2>/dev/null && ok "$h parses" || bad "$h has a syntax error"
 done

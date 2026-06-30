@@ -22,8 +22,10 @@ cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || cd .
 MODE="${LEAN_TEST_GATE:-off}"
 [ "$MODE" = "off" ] && exit 0
 
+# Read the hook JSON once; don't block on a TTY / missing pipe.
+if [ -t 0 ]; then INPUT='{}'; else INPUT=$(cat 2>/dev/null || echo '{}'); fi
 # Avoid re-triggering ourselves if a previous block forced continuation.
-ACTIVE=$(jq -r '.stop_hook_active // false' 2>/dev/null)
+ACTIVE=$(printf '%s' "$INPUT" | jq -r '.stop_hook_active // false' 2>/dev/null)
 [ "$ACTIVE" = "true" ] && exit 0
 
 # --- resolve the test command ---

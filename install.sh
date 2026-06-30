@@ -138,8 +138,8 @@ mkdir -p "$TARGET/.claude" && printf '%s\n' "$VERSION" > "$TARGET/.claude/.lean-
 # 3d. Fingerprint the shipped HIGH_STAKES_RE so doctor.sh can warn when the ENFORCED gate
 # was never pointed at the project's real paths (editing only the advisory rule is the
 # common mistake that silently disables enforcement).
-if [ -f "$TARGET/.claude/hooks/_high-stakes.sh" ]; then
-  grep -E '^HIGH_STAKES_RE=' "$TARGET/.claude/hooks/_high-stakes.sh" > "$TARGET/.claude/.high-stakes-default" 2>/dev/null || true
+if [ -f "$TARGET/.claude/lib/_high-stakes.sh" ]; then
+  grep -E '^HIGH_STAKES_RE=' "$TARGET/.claude/lib/_high-stakes.sh" > "$TARGET/.claude/.high-stakes-default" 2>/dev/null || true
 fi
 
 # 4. Make hooks/scripts executable.

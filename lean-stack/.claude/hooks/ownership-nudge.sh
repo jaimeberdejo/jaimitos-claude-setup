@@ -11,7 +11,9 @@
 set -uo pipefail
 cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || cd .
 
-ACTIVE=$(jq -r '.stop_hook_active // false' 2>/dev/null)
+# Read the hook JSON once; don't block on a TTY / missing pipe.
+if [ -t 0 ]; then INPUT='{}'; else INPUT=$(cat 2>/dev/null || echo '{}'); fi
+ACTIVE=$(printf '%s' "$INPUT" | jq -r '.stop_hook_active // false' 2>/dev/null)
 [ "$ACTIVE" = "true" ] && exit 0
 
 # Gather the files that changed this turn, from any of three sources.

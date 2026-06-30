@@ -55,15 +55,17 @@ bash scripts/test-secret-scan.sh       # secret-scan filename + content regexes
 bash scripts/test-autopilot-gates.sh   # autopilot gate logic
 ```
 
-CI (`.github/workflows/ci.yml`) runs `bash -n` over all scaffold scripts/hooks, validates
-`settings.json`, lints the installer, and runs the install smoke test. The `test-*.sh`
-behavior scripts are not yet wired into CI — **run them locally** before you push, especially
-for any change to hooks, the secret-scan, the high-stakes gate, or `autopilot.sh`.
+CI (`.github/workflows/ci.yml`) runs `bash -n` + **`shellcheck`** + **`actionlint`** over all
+scaffold scripts/hooks/libs and the workflows, validates `settings.json`, runs the three
+behavioral guard tests (`test-high-stakes.sh`, `test-secret-scan.sh`, `test-autopilot-gates.sh`),
+and runs the install smoke test. **Run them locally before you push** anyway — especially for any
+change to hooks, the secret-scan, the high-stakes gate, or `autopilot.sh`.
 
 ## Shell style
 
-- Keep shell **POSIX-careful** and pass **`shellcheck`** clean (`shellcheck lean-stack/scripts/*.sh
-  lean-stack/.claude/hooks/*.sh install.sh`). Quote expansions, prefer `[ ]` tests, fail closed.
+- Keep shell **POSIX-careful** and pass **`shellcheck -S warning`** clean (`shellcheck -S warning
+  -e SC1090,SC1091 install.sh lean-stack/scripts/*.sh lean-stack/.claude/hooks/*.sh
+  lean-stack/.claude/lib/*.sh`). Quote expansions, prefer `[ ]` tests, fail closed.
 - Hooks and guards must **fail closed**: when in doubt, block/stop rather than wave a run
   through. That's the whole point of the deterministic layer.
 

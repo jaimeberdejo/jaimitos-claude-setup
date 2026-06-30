@@ -10,8 +10,8 @@
 #     1  = secrets found (caller MUST NOT commit/push)
 #     2  = could not scan (not a git repo / git error) — treat as fail-closed
 #
-# Sourcing this file only defines the function; running it directly is a harmless
-# no-op (so it's safe under the hooks/*.sh glob used by CI/doctor/test-hooks).
+# This is a LIBRARY under .claude/lib/ (not a hook). Sourcing it only defines the
+# functions; running it directly is a harmless no-op.
 
 # --- filename patterns (basename or path) that are always secrets ---
 # Kept in sync with .gitignore and settings.json permissions.deny.
@@ -27,7 +27,7 @@ _secret_basename_match() {
     secrets/*|*/secrets/*) return 0 ;;
   esac
   case "$base" in
-    *.env|.env|.env.*|*.pem|*.key|*.p12|*.pfx|*.jks|credentials*.json|\
+    *.env|.env.*|*.pem|*.key|*.p12|*.pfx|*.jks|credentials*.json|\
     id_rsa|id_ed25519|id_ecdsa|id_dsa|*.tfstate|*.tfvars|.envrc|.netrc|.git-credentials)
       return 0 ;;
   esac

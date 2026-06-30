@@ -11,8 +11,14 @@
 set -uo pipefail
 cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || cd .
 
+# Opt out of auto-checkpointing (e.g. for interactive sessions where you curate commits).
+[ "${LEAN_CHECKPOINT:-on}" = "off" ] && exit 0
+
+# Read the hook JSON once. Don't block waiting for EOF if invoked with a TTY / no pipe.
+if [ -t 0 ]; then INPUT='{}'; else INPUT=$(cat 2>/dev/null || echo '{}'); fi
+
 # Guard against infinite loops: if this Stop hook itself triggered the turn, bail.
-ACTIVE=$(jq -r '.stop_hook_active // false' 2>/dev/null)
+ACTIVE=$(printf '%s' "$INPUT" | jq -r '.stop_hook_active // false' 2>/dev/null)
 [ "$ACTIVE" = "true" ] && exit 0
 
 # Not a git repo? Nothing to checkpoint.
@@ -40,7 +46,7 @@ git add -A 2>/dev/null
 # content; on any hit — OR if the scan can't run / the lib is missing — fail CLOSED:
 # unstage and skip the commit rather than committing unscanned.
 # NOTE: this is not a full secret scanner; review diffs for novel secret formats.
-SCAN_LIB=".claude/hooks/_secret-scan.sh"
+SCAN_LIB=".claude/lib/_secret-scan.sh"
 if [ ! -f "$SCAN_LIB" ]; then
   git reset -q 2>/dev/null
   echo "⛔ SECRET GUARD — $SCAN_LIB missing; cannot scan. Auto-commit SKIPPED (fail-closed)."

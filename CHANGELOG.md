@@ -4,6 +4,47 @@ All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/); this project
 uses [Semantic Versioning](https://semver.org/).
 
+## [1.0.3] — 2026-06-30
+
+Second enforcement-hardening pass, driven by a multi-agent audit. Closes the remaining gaps
+between the safety *claims* and the code that backs them, broadens the guards, and makes the
+docs honest about which guarantees apply to which run mode. No breaking changes.
+
+### Fixed — safety enforcement
+- **High-stakes phases are no longer pushed by `--pr`.** Previously the high-stakes gate `break`d
+  before ticking, but the builder's per-task commits were already in the branch and the finish
+  block still ran `git push` + `gh pr create`. Now a high-stakes trip sets a flag and the branch
+  **stays local even with `--pr`**. Guarded by a new behavioral test (`test-autopilot-gates.sh`).
+- **Evaluator commits are now discarded too.** `cleanup_eval_changes` did `git reset --hard HEAD`
+  (working-tree only); it now also detects a commit the evaluator made (HEAD moved during grading),
+  reverts to the pre-grade HEAD, and STOPs.
+- **Broadened high-stakes detection.** `HIGH_STAKES_RE` now matches `authentication/`, `oauth/`,
+  `login`, `wallet`, `kyc`, `ledger`, and `delete`/`email`/`deploy`/`refund`/`webhook` — categories
+  the docs named but the old regex missed. Regression-tested (`test-high-stakes.sh`).
+- **Broadened secret scan.** Adds Stripe (`sk_live_`/`rk_live_`), Google (`AIza…`), and
+  URL-embedded `user:password` credentials; `commit-on-stop` now fails **closed** if the scan lib
+  is missing. The "never commits credentials" claim is scoped to "the shapes it recognizes."
+  Regression-tested (`test-secret-scan.sh`).
+
+### Changed
+- **Honest, mode-scoped claims.** README/CLAUDE.md/LOOP-ENGINEERING now state that the deterministic
+  sole-ticker / eval-discard / secret-scan / high-stakes-no-push guarantees hold in the **headless**
+  `scripts/autopilot.sh`; the in-session `/autopilot` and `/wrap` have an independent grader but an
+  advisory tick. Fixed the `/phase` "ticks on PASS" contradiction.
+- **`Mode:` tag documented as advisory** (autopilot.sh does not parse it; the enforced control is
+  the high-stakes path gate).
+- **Ship-by-directory installer.** Toolkit docs moved to `lean-stack/toolkit-docs/` and excluded by
+  directory (not a hardcoded filename list); `setup-lean-stack` is no longer copied per-project;
+  `cp` failures now fail the install; installed version is stamped for `doctor.sh`.
+- **Customization safety.** `setup-lean-stack` now edits the *enforced* `HIGH_STAKES_RE`, and
+  `doctor.sh` warns when it's still the shipped default.
+- **Shared libs moved** `.claude/hooks/_*.sh` → `.claude/lib/`; hooks read stdin without blocking on
+  a TTY; `commit-on-stop` gained a `LEAN_CHECKPOINT=off` opt-out.
+
+### Added
+- `SECURITY.md`, `CONTRIBUTING.md`, a README Quickstart, a complete 10-skill index.
+- CI now runs **shellcheck + actionlint** and the three behavioral guard tests.
+
 ## [1.0.2] — 2026-06-30
 
 Enforcement-hardening pass: closes the gap between what the docs promised and what the code

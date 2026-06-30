@@ -13,8 +13,8 @@ set -uo pipefail
 # Resolve the scaffold root (this script lives in <scaffold>/scripts/).
 SCAFFOLD="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 AUTOPILOT="$SCAFFOLD/scripts/autopilot.sh"
-HS_LIB="$SCAFFOLD/.claude/hooks/_high-stakes.sh"
-SS_LIB="$SCAFFOLD/.claude/hooks/_secret-scan.sh"
+HS_LIB="$SCAFFOLD/.claude/lib/_high-stakes.sh"
+SS_LIB="$SCAFFOLD/.claude/lib/_secret-scan.sh"
 
 FAILS=0
 pass() { printf '  ✓ %s\n' "$1"; }
@@ -30,10 +30,10 @@ cleanup() { rm -rf "$WORK" 2>/dev/null; git worktree prune 2>/dev/null; }
 trap cleanup EXIT
 
 REPO="$WORK/proj"
-mkdir -p "$REPO/.claude/hooks" "$REPO/scripts" "$REPO/docs"
+mkdir -p "$REPO/.claude/lib" "$REPO/scripts" "$REPO/docs"
 cp "$AUTOPILOT" "$REPO/scripts/autopilot.sh"
-cp "$HS_LIB" "$REPO/.claude/hooks/_high-stakes.sh"
-cp "$SS_LIB" "$REPO/.claude/hooks/_secret-scan.sh"
+cp "$HS_LIB" "$REPO/.claude/lib/_high-stakes.sh"
+cp "$SS_LIB" "$REPO/.claude/lib/_secret-scan.sh"
 printf '{ "permissions": { "deny": ["Read(.env)"] } }\n' > "$REPO/.claude/settings.json"
 printf '## Phase 1 — Login\n\n- [ ] Build the login flow\n' > "$REPO/docs/ROADMAP.md"
 printf 'next: build login\n' > "$REPO/docs/STATE.md"

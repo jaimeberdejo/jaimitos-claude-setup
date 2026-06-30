@@ -9,7 +9,7 @@
 # and silently drop everything after it. We want best-effort, print-what-we-can.
 
 set -uo pipefail
-cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || cd "$(git rev-parse --show-toplevel 2>/dev/null || echo .)"
+cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || cd "$(git rev-parse --show-toplevel 2>/dev/null || echo .)" || exit 0
 
 echo "=== PROJECT STATE (auto-injected) ==="
 
