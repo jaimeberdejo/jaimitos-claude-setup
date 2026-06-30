@@ -60,7 +60,7 @@ grep -qx "node_modules/" .gitignore && ok "pre-existing .gitignore rule preserve
 
 # Idempotent re-run.
 OUT2="$(bash "$REPO/install.sh" . 2>&1)" || bad "re-run exited non-zero"
-printf '%s' "$OUT2" | grep -q "skip (exists)" && ok "re-run skips existing files (idempotent)" || bad "re-run did not skip existing files"
+case "$OUT2" in *"skip (exists)"*) ok "re-run skips existing files (idempotent)" ;; *) bad "re-run did not skip existing files" ;; esac
 [ "$(grep -c "lean-stack control/secret ignores" .gitignore)" -eq 1 ] && ok ".gitignore block not duplicated on re-run" || bad ".gitignore merge block duplicated"
 
 # --with-ci adds the workflow (named lean-stack-ci.yml, not ci.yml).

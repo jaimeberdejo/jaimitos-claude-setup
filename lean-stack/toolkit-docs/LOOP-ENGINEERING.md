@@ -251,4 +251,4 @@ ONE LINE        Automate the typing, never the judgment.
 ---
 
 ### The loop engineer's creed
-A loop is only as trustworthy as its weakest guardrail. Give it a signal it can't fake, a stop it can't outrun, a grader it can't fool, a blast radius it can't exceed, and a switch you can always reach — then let it work while you sleep. Everything else is tuning.
+A loop is only as trustworthy as its weakest guardrail. Give it a signal it can't fake, a stop it can't outrun past the one call already in flight, a grader it can't fool, a blast radius it can't exceed, and a switch you can always reach — then let it work while you sleep. Everything else is tuning.

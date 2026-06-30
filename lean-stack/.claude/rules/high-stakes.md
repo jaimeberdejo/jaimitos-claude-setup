@@ -28,7 +28,7 @@ Edit the `paths:` above to match wherever YOUR irreversible/consequential code l
 auth, schema migrations, billing, deletion paths, external-effect calls, anything where
 a bug costs more than a re-run.
 
-**The single source of truth for enforcement is `.claude/hooks/_high-stakes.sh`**
+**The single source of truth for enforcement is `.claude/lib/_high-stakes.sh`**
 (`HIGH_STAKES_RE`): `scripts/autopilot.sh` sources it and REFUSES to auto-tick/commit/push
 a phase whose diff touches those paths — it stops for supervised review (and never pushes,
 even with `--pr`). The `paths:` globs above are a **human-readable mirror** of that regex,

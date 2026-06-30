@@ -37,7 +37,10 @@ fi
 if [ -f docs/ROADMAP.md ]; then
   echo ""
   echo "--- Open roadmap items ---"
-  grep -n "\- \[ \]" docs/ROADMAP.md 2>/dev/null | head -20 || echo "(none — roadmap complete or empty)"
+  # Capture first (head closing the pipe would SIGPIPE grep and, with a trailing `|| echo`,
+  # spuriously print "(none)" right after listing items). Decide from the captured text.
+  OPEN_ITEMS=$(grep -n "\- \[ \]" docs/ROADMAP.md 2>/dev/null | head -20)
+  if [ -n "$OPEN_ITEMS" ]; then printf '%s\n' "$OPEN_ITEMS"; else echo "(none — roadmap complete or empty)"; fi
 fi
 
 echo ""

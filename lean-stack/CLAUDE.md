@@ -36,7 +36,8 @@
   builder session does the tick on the evaluator's PASS — the grader is independent, the tick is not.
 - The `evaluator` subagent grades completion independently — never mark a phase
   done on the builder's say-so alone.
-- `touch AGENT_STOP` halts everything. Write STEER.md to redirect a running loop.
+- `touch AGENT_STOP` halts the loop at the next tool call (it can't claw back a call already
+  in flight). Write STEER.md to redirect a running loop.
 
 ## Ownership (understand what gets built)
 - Before /wrap on a non-trivial phase, run `teach-back` — Claude explains it and

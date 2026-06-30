@@ -39,19 +39,40 @@ echo "secret-scan fixture tests"
 echo ""
 echo "Must be caught:"
 want_secret "Stripe live key"      "f_stripe.py" 'STRIPE="sk_live_51HxxxxxxxxxxxxxxxxxxYz"'
+want_secret "Stripe webhook secret" "f_whsec.py" 'WH=whsec_AbCdEfGhIjKlMnOpQrStUvWx'
 want_secret "Google API key"       "f_g.py"      'KEY = "AIzaSyA1234567890abcdefghijklmnopqrstuv"'
 want_secret "DB URL with password" "f_db.py"     'DATABASE_URL="postgres://admin:Hunter2@db.prod/app"'
 want_secret "AWS access key id"    "f_aws.txt"   'AKIAIOSFODNN7EXAMPLE'
-want_secret "OpenAI key"           "f_oai.py"    'OPENAI="sk-abcdefghijklmnopqrstuvwxyz0123"'
-want_secret "secret filename"      ".env"        'X=1'
+want_secret "AWS 40-char secret"   "f_awssec.py" 'aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY'
+want_secret "AWS secret (UPPER)"   "f_awsu.py"   'AWS_SECRET_ACCESS_KEY="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"'
+want_secret "OpenAI legacy key"    "f_oai.py"    'OPENAI="sk-abcdefghijklmnopqrstuvwxyz0123"'
+want_secret "OpenAI project key"   "f_oaip.py"   'OPENAI=sk-proj-abcdefghijklmnopqrstuvwxyz1234567890'
+want_secret "JWT"                  "f_jwt.txt"   'Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0In0.dozjgNryP4J3jVmNHl0w5N'
+want_secret "GitHub fine PAT"      "f_ghpat.py"  'GH=github_pat_11ABCDEFG0aBcDeFgHiJ_KLmnOpQrStUvWxYz0123456789AbCdEfGhIj'
+want_secret "GitLab PAT"           "f_glpat.py"  'GITLAB_TOKEN=glpat-AbCdEfGhIjKlMnOpQrSt'
+want_secret "npm token"            "f_npm.txt"   '_authToken=npm_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789'
+want_secret "SendGrid key"         "f_sg.py"     'SG_KEY=SG.AbCdEfGhIjKlMnOp.AbCdEfGhIjKlMnOpQrStUvWxYz0123456789ABCDEFG'
+want_secret "Azure AccountKey"     "f_az.txt"    'conn=AccountKey=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOP1234567890ab==;x'
+want_secret "Mailgun key"          "f_mg.py"     'MAILGUN=key-0123456789abcdef0123456789abcdef'
+want_secret "PGP private key block" "f_pgp.asc"  '-----BEGIN PGP PRIVATE KEY BLOCK-----'
+want_secret "RSA PEM (multiline)"  "f_pem.txt"   'x\n-----BEGIN RSA PRIVATE KEY-----\nMIIabc\n-----END RSA PRIVATE KEY-----\n'
+want_secret "secret filename .env" ".env"        'X=1'
+want_secret ".npmrc filename"      ".npmrc"      '//r/:_authToken=abc'
 
 echo ""
-echo "Must stay clean:"
+echo "Must stay clean (false hit would block a legitimate commit):"
 want_clean  "plain https URL"      "f_url.py"    'API = "https://api.example.com/v1/users"'
 want_clean  "localhost with port"  "f_lh.py"     'DEV = "http://localhost:3000/health"'
 want_clean  "credential-less SSH"  "f_ssh.txt"   'git@github.com:org/repo.git'
 want_clean  ".env.example template" ".env.example" 'STRIPE=sk_live_xxx_placeholder_here'
 want_clean  "ordinary code"        "f_ok.py"     'def add(a, b): return a + b'
+want_clean  "word ending in ask-"  "f_ask.py"    'x = "ask-permissionsdialogcontrollerxyzabc"'
+want_clean  "risk- prefix token"   "f_risk.py"   'risk_assessmentframeworkmoduleloaderxyz = 1'
+want_clean  "task-proj- not a key" "f_tp.py"     'x = "task-proj-mypipelinetokenidentifier1234"'
+want_clean  "prose key-value"      "f_kv.md"     'These are key-value pairs in the config.'
+want_clean  "git SHA"              "f_sha.txt"   'commit a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0'
+want_clean  "uuid"                 "f_uuid.py"   'id = "550e8400-e29b-41d4-a716-446655440000"'
+want_clean  "css class sk-"        "f_css.js"    'cls = "sk-loading-spinner-wrapper-large-variant"'
 
 echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All secret-scan fixture tests passed."; exit 0

@@ -112,7 +112,9 @@ accurate docs.
   broadened the `permissions.deny` set and `.gitignore` coverage for `.env*`/keys/credentials.
 - **Anchored verdict parsing:** the evaluator's PASS/FAIL is matched strictly — an
   unrecognized verdict stops the loop instead of being guessed.
-- **Criteria immutability:** the builder can't edit the current phase's `Done when:`/heading.
+- **Criteria immutability:** the builder is instructed not to edit the current phase's
+  `Done when:`/heading, and the evaluator grades against a `.phase-base` snapshot so weakening
+  the live criteria is detected, not rewarded (advisory + detection, not a hard block).
 - **Test gate default-on in headless:** `autopilot.sh` runs with the test gate enabled.
 - **Worktree kill-switch:** `AGENT_STOP` is honored inside `--worktree` runs.
 

@@ -30,7 +30,7 @@ if [ -z "$CHANGED" ]; then
   CHANGED=$(git show --name-only --pretty=format: HEAD 2>/dev/null)
 fi
 
-if printf '%s\n' "$CHANGED" | grep -qE '\.(py|ts|tsx|js|jsx|go|rs)$'; then
+if grep -qE '\.(py|ts|tsx|js|jsx|go|rs)$' <<<"$CHANGED"; then
   echo "↳ ownership check:"
   echo "  • Decision made? run the adr skill to record it (with the alternative you rejected)."
   echo "  • Understand what was built? run teach-back before /wrap."

@@ -9,16 +9,24 @@
 # whether this file is sourced under bash or zsh. Edit HIGH_STAKES_RE to match
 # YOUR project's sensitive paths.
 #
-# Segment keywords match as a path segment ((^|/)kw(/|$)) — `auth[a-z]*` covers
-# auth/authentication/authorization. The loose substrings (delete/email/deploy/…)
+# Segment keywords match as a path SEGMENT, bounded by `/`, a filename separator
+# (`.`/`_`/`-`), or end — so they fire on directories AND single-file modules alike
+# (`auth/x`, `auth.py`, `session-store.ts`). `auth[a-z0-9_-]*` covers auth / authn /
+# authentication / oauth2 / auth-service. The loose substrings (delete/email/deploy/…)
 # match ANYWHERE in the path. The gate fails SAFE when over-broad (a false hit just
 # forces supervised review), so this list is intentionally generous — better to stop
 # on a benign `discharge.py` than to miss a real `refund` path. Edit it for YOUR repo.
-HIGH_STAKES_RE='(^|/)(auth[a-z]*|oauth|login|sessions?|accounts?|payments|billing|transactions|migrations|compliance|suitability|secrets|kyc|wallet|ledger)(/|$)|migration|money|payment|credential|delete|deletion|destroy|email|deploy|refund|withdraw|charge|webhook'
+HIGH_STAKES_RE='(^|/)(oauth[0-9]*|auth[a-z0-9_-]*|login|sessions?|accounts?|payments?|billing|transactions?|compliance|suitability|secrets?|kyc|wallet|ledger)([/._-]|$)|migrat|money|payment|credential|delete|deletion|destroy|email|deploy|refund|withdraw|charge|webhook'
 
 # high_stakes_match <newline-separated-paths>
 #   Echoes the matching paths; returns 0 if any matched, 1 if none.
+#   FAILS SAFE: if HIGH_STAKES_RE is empty or unset (a customization slip), treat EVERY
+#   path as high-stakes rather than silently matching nothing (which would fail OPEN).
 high_stakes_match() {
+  if [ -z "${HIGH_STAKES_RE:-}" ]; then
+    echo "high-stakes: HIGH_STAKES_RE is empty/unset — failing SAFE (treating all paths as high-stakes)." >&2
+    printf '%s\n' "$1"; return 0
+  fi
   local matched
   matched=$(printf '%s\n' "$1" | grep -Ei "$HIGH_STAKES_RE" 2>/dev/null)
   if [ -n "$matched" ]; then printf '%s\n' "$matched"; return 0; fi

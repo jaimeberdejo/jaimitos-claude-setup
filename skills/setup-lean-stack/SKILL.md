@@ -34,7 +34,7 @@ Run commands, and `<NAME>` with the project name. Keep CLAUDE.md lean (under ~20
 ## Step 4 — Point the high-stakes gate at real paths (BOTH the enforced regex and the rule)
 The high-stakes gate has two pieces and you MUST update the enforced one:
 
-1. **`.claude/hooks/_high-stakes.sh` → `HIGH_STAKES_RE`** — this is what `scripts/autopilot.sh`
+1. **`.claude/lib/_high-stakes.sh` → `HIGH_STAKES_RE`** — this is what `scripts/autopilot.sh`
    actually enforces (it refuses to tick/commit/push, and never pushes, a phase whose diff
    touches a matching path). Edit this regex to THIS project's sensitive paths. **If you only
    edit the rule file below and not this regex, the enforced gate stays at its shipped default

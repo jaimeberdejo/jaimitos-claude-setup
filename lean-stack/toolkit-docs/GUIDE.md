@@ -46,14 +46,15 @@ your-repo/
     │   └── evaluator.md           # independent grader (default-FAIL, no edit tools)
     ├── rules/
     │   └── high-stakes.md         # path-scoped: extra care for auth/migrations/money/etc.
-    └── hooks/                     # 7 deterministic shell hooks (see Part 4) + 2 shared libs
-        ├── session-start.sh       # re-injects STATE+ROADMAP+findings+git log into context
-        ├── steer.sh               # STEER.md injects mid-run guidance (JSON additionalContext)
-        ├── kill-switch.sh         # AGENT_STOP blocks the next tool call onward
-        ├── format-on-edit.sh      # auto FORMAT (whitespace/style) after every edit — no lint --fix
-        ├── test-gate.sh           # opt-in deterministic test gate (LEAN_TEST_GATE)
-        ├── commit-on-stop.sh      # honest git checkpoint each turn (secret-scans before committing)
-        ├── ownership-nudge.sh     # reminds you to ADR / teach-back / run the mapme skill after changes
+    ├── hooks/                     # 7 deterministic shell hooks (see Part 4)
+    │   ├── session-start.sh       # re-injects STATE+ROADMAP+findings+git log into context
+    │   ├── steer.sh               # STEER.md injects mid-run guidance (JSON additionalContext)
+    │   ├── kill-switch.sh         # AGENT_STOP blocks the next tool call onward
+    │   ├── format-on-edit.sh      # auto FORMAT (whitespace/style) after every edit — no lint --fix
+    │   ├── test-gate.sh           # opt-in deterministic test gate (LEAN_TEST_GATE)
+    │   ├── commit-on-stop.sh      # honest git checkpoint each turn (secret-scans before committing)
+    │   └── ownership-nudge.sh     # reminds you to ADR / teach-back / run the mapme skill after changes
+    └── lib/                       # 2 SOURCED libraries (not event hooks)
         ├── _secret-scan.sh        # SHARED lib: filename+content secret scan (commit-on-stop + autopilot)
         └── _high-stakes.sh        # SHARED lib: high-stakes path list/matcher (autopilot's supervised-gate)
 ```
@@ -173,7 +174,7 @@ Manual mode = you drive each arrow. Autopilot mode = a loop drives the bracket. 
 - under `/autopilot`, the `evaluator` **subagent** (fresh context) is the gate;
 - in manual mode, you tick via `/wrap` after seeing the evaluator pass.
 
-### The seven hooks (deterministic enforcement)
+### The seven hooks (deterministic shell — three enforce, four assist; see Enforcement reality)
 | Hook | Fires | Does |
 |---|---|---|
 | `session-start.sh` | start/resume/clear/compact | Re-injects STATE + open roadmap + `NEXT_FINDINGS` + architecture overview + recent commits. |
@@ -301,7 +302,9 @@ for supervised review. Keep the `paths:` in `high-stakes.md` and `HIGH_STAKES_RE
 5. `/phase` → review the diff → `/wrap` → `/clear`. Repeat per phase.
 
 ### B — Wiring TDD so it's never skipped
-The `test-gate.sh` hook (wired first in `Stop`) makes "TDD always" deterministic. Opt-in:
+The `test-gate.sh` hook (wired first in `Stop`) can make *"a green suite is required to end a
+turn"* deterministic in **block** mode — it does NOT verify test-first ordering (that stays
+advisory in CLAUDE.md), and the default is `warn` (records evidence, doesn't block). Opt-in:
 ```bash
 export LEAN_TEST_GATE=warn     # run suite each turn, write test-results.json, warn on red
 export LEAN_TEST_GATE=block    # exit 2 on red — you can't end a turn with failing tests

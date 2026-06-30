@@ -46,7 +46,10 @@ echo "High-stakes gate customization:"
 HS_LIB=".claude/lib/_high-stakes.sh"
 if [ -f "$HS_LIB" ]; then
   HS_CUR=$(grep -E '^HIGH_STAKES_RE=' "$HS_LIB" 2>/dev/null)
-  if [ -f .claude/.high-stakes-default ] && [ "$HS_CUR" = "$(cat .claude/.high-stakes-default 2>/dev/null)" ]; then
+  if [ ! -f .claude/.high-stakes-default ]; then
+    warn "cannot verify high-stakes customization — fingerprint .claude/.high-stakes-default missing"
+    warn "  (re-run install.sh to create it). Confirm HIGH_STAKES_RE in $HS_LIB matches your paths."
+  elif [ "$HS_CUR" = "$(cat .claude/.high-stakes-default 2>/dev/null)" ]; then
     warn "HIGH_STAKES_RE is still the shipped default — edit it in $HS_LIB to match THIS project's"
     warn "  sensitive paths. It's the ENFORCED gate; editing only rules/high-stakes.md does nothing."
   else

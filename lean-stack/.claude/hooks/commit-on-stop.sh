@@ -31,14 +31,17 @@ if [ -z "$DIRTY" ]; then
   exit 0
 fi
 
-# Record which files changed BEFORE committing, so ownership-nudge (next Stop
-# hook) can still see them — after the commit the working tree is clean.
-# cut -c4- takes the path field (porcelain is "XY <path>"); survives spaces & renames
-# where awk '{print $2}' would mangle them.
-git status --porcelain 2>/dev/null | cut -c4- > .claude/.last-changed 2>/dev/null || true
+# Capture which files changed (for the success breadcrumb), so ownership-nudge (next
+# Stop hook) can see them — after the commit the working tree is clean. We write the
+# breadcrumb only AFTER a successful commit (below), so a secret-abort can't leave a
+# stale breadcrumb pointing at an uncommitted file. cut -c4- takes the path field
+# (porcelain is "XY <path>"); survives spaces & renames where awk '{print $2}' would mangle.
+CHANGED=$(git status --porcelain 2>/dev/null | cut -c4-)
 
-COUNT=$(printf '%s\n' "$DIRTY" | grep -c . )
 git add -A 2>/dev/null
+# Count the ACTUAL staged files (after add), not porcelain lines — git collapses an
+# untracked directory into one "?? dir/" line, which would under-report the count.
+COUNT=$(git diff --cached --name-only --no-renames 2>/dev/null | grep -c .)
 
 # Secret guard (SHARED with autopilot.sh via _secret-scan.sh): block auto-committing the
 # common credential shapes it recognizes (AWS/Stripe/Google/GitHub/Slack/OpenAI tokens,
@@ -65,6 +68,9 @@ if [ "$SCAN_RC" -ne 0 ]; then
 fi
 
 if git commit -m "checkpoint: $COUNT file(s) @ $(date '+%Y-%m-%d %H:%M')" >/dev/null 2>&1; then
+  # Drop the breadcrumb ONLY now that the commit succeeded — so a secret-abort or a
+  # failed commit never leaves a stale .last-changed pointing at uncommitted files.
+  printf '%s\n' "$CHANGED" > .claude/.last-changed 2>/dev/null || true
   echo "✓ checkpointed $COUNT file(s). Run /wrap to update docs/STATE.md + tick docs/ROADMAP.md before /clear."
 else
   echo "⚠ nothing committed (commit failed or nothing staged). Check 'git status'."

@@ -27,8 +27,9 @@ _secret_basename_match() {
     secrets/*|*/secrets/*) return 0 ;;
   esac
   case "$base" in
-    *.env|.env.*|*.pem|*.key|*.p12|*.pfx|*.jks|credentials*.json|\
-    id_rsa|id_ed25519|id_ecdsa|id_dsa|*.tfstate|*.tfvars|.envrc|.netrc|.git-credentials)
+    *.env|.env.*|*.pem|*.key|*.p8|*.p12|*.pfx|*.jks|credentials*.json|\
+    id_rsa|id_ed25519|id_ecdsa|id_dsa|*.tfstate|*.tfvars|.envrc|.netrc|.git-credentials|\
+    .npmrc|*.npmrc|.pypirc)
       return 0 ;;
   esac
   return 1
@@ -41,7 +42,7 @@ _secret_basename_match() {
 # user:password (postgres://user:pass@host). The URL rule requires BOTH a non-empty user
 # and password before '@', so bare URLs (https://host, redis://:@h) do NOT trip it.
 # Still NOT a full scanner (use gitleaks/trufflehog for that) — a strong commit-time default.
-_SECRET_CONTENT_RE='AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|sk-[A-Za-z0-9]{20,}|sk_live_[A-Za-z0-9]{16,}|rk_live_[A-Za-z0-9]{16,}|gh[pousr]_[A-Za-z0-9]{30,}|xox[baprs]-[A-Za-z0-9-]{10,}|AIza[0-9A-Za-z_-]{35}|[a-zA-Z][a-zA-Z0-9+.-]*://[^/[:space:]:@]+:[^/[:space:]:@]+@'
+_SECRET_CONTENT_RE='AKIA[0-9A-Z]{16}|(aws_secret_access_key|AWS_SECRET_ACCESS_KEY)[^A-Za-z0-9]{1,8}[A-Za-z0-9/+]{40}|-----BEGIN [A-Z ]*PRIVATE KEY[A-Z ]*-----|(^|[^A-Za-z0-9])sk-(proj|svcacct|admin|None)-[A-Za-z0-9_-]{20,}|(^|[^A-Za-z0-9])sk-[A-Za-z0-9]{20,}|sk_live_[A-Za-z0-9]{16,}|rk_live_[A-Za-z0-9]{16,}|whsec_[A-Za-z0-9]{16,}|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{50,}|glpat-[A-Za-z0-9_-]{16,}|npm_[A-Za-z0-9]{30,}|SG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}|key-[0-9a-f]{32}|ey[A-Za-z0-9_-]{8,}\.ey[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}|xox[baprs]-[A-Za-z0-9-]{10,}|AIza[0-9A-Za-z_-]{35}|AccountKey=[A-Za-z0-9/+]{40,}|[a-zA-Z][a-zA-Z0-9+.-]*://[^/[:space:]:@]+:[^/[:space:]:@]+@'
 
 # _secret_content_hits <git-diff-args...>: emit up to 10 ADDED lines (leading '+'
 # stripped) that contain a high-confidence secret token. Shared by both scanners so the

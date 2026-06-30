@@ -15,14 +15,18 @@ should_ignore()  { if high_stakes_match "$1" >/dev/null; then printf '  ✗ FALS
 
 echo "high-stakes detection tests"
 echo ""
-echo "Documented categories (must match):"
+echo "Documented categories — directory form (must match):"
 for p in \
   "src/auth/session.py" \
   "src/authentication/login.py" \
   "src/authorization/rbac.py" \
   "app/oauth/callback.ts" \
+  "app/oauth2/callback.ts" \
+  "services/auth-service/x.go" \
+  "services/auth_service/x.go" \
   "services/login/handler.go" \
   "db/migrations/004_drop_users.sql" \
+  "prisma/migrate/x.sql" \
   "payments/charge.py" \
   "billing/invoice.rb" \
   "lib/user_delete.py" \
@@ -34,18 +38,39 @@ for p in \
   "integrations/stripe_webhook.py" \
   "compliance/suitability_check.py" \
   "secrets/loader.py" \
+  "secret/key.py" \
+  "transaction/ledger.py" \
   "core/money_utils.py"
 do should_match "$p"; done
 
 echo ""
-echo "Benign paths (must NOT match):"
+echo "Documented categories — SINGLE-FILE module form (must match; regression for the .ext anchor):"
+for p in \
+  "src/auth.py" "app/oauth.ts" "services/login.go" "core/session.rb" \
+  "models/account.py" "billing.py" "wallet.py" "ledger.py" "kyc.py" \
+  "compliance.py" "suitability.py" "transactions.py" "session-store.ts"
+do should_match "$p"; done
+
+echo ""
+echo "Benign paths (must NOT match — keep the widened anchor tight):"
 for p in \
   "src/utils/strings.py" \
   "tests/test_parser.py" \
   "components/Button.tsx" \
   "docs/README.md" \
-  "lib/http_client.go"
+  "lib/http_client.go" \
+  "accounting/reports.py" \
+  "src/accountant.py" \
+  "src/healthcheck.py"
 do should_ignore "$p"; done
+
+echo ""
+echo "Fail-safe: an empty/unset HIGH_STAKES_RE must treat ALL paths as high-stakes (never fail open):"
+(
+  unset HIGH_STAKES_RE
+  if high_stakes_match "any/ordinary/path.py" >/dev/null 2>&1; then printf '  ✓ unset regex fails SAFE (matches)\n'
+  else printf '  ✗ unset regex FAILED OPEN (matched nothing)\n'; exit 1; fi
+) || FAILS=$((FAILS+1))
 
 echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All high-stakes detection tests passed."; exit 0

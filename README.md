@@ -27,7 +27,7 @@ bash scripts/doctor.sh                             # health check
 ```
 
 Then: edit `CLAUDE.md` (your test/lint/run commands) → point `HIGH_STAKES_RE` in
-`.claude/hooks/_high-stakes.sh` at your sensitive paths → write `docs/SPEC.md` → run the
+`.claude/lib/_high-stakes.sh` at your sensitive paths → write `docs/SPEC.md` → run the
 `roadmap` skill → build with `/phase`. New to it all? Work through `PRACTICE-PROJECT.md` first.
 
 > **Two parts, how they relate:** the **`lean-stack/` scaffold** (hooks, commands, docs layout,
@@ -165,10 +165,10 @@ You drive each arrow manually for stakes that warrant it, or hand the bracket to
 
 | File | Role |
 |---|---|
-| `agents/evaluator.md` | Independent grader — fresh context, **no edit tools**, default-FAIL contract. Grades only; never ticks. The sole gate on "done." |
+| `agents/evaluator.md` | Independent grader — fresh context, **no edit tools**, default-FAIL contract. Grades only; never ticks. The sole *programmatic* gate on "done" in the headless loop. |
 | `rules/high-stakes.md` | Native `.claude/rules/` file scoped to auth/migrations/money/etc. paths. Path-scoped loading is currently unreliable in Claude Code, so the **same constraints are also kept in `CLAUDE.md`** (which loads every turn) — don't rely on the rule auto-loading. Point its `paths:` at *your* sensitive dirs. |
 
-## Hooks (deterministic enforcement)
+## Hooks (deterministic shell — not all enforce; see Enforcement reality)
 
 Seven deterministic shell hooks (session-start, steer, kill-switch, format-on-edit, test-gate,
 commit-on-stop, ownership-nudge) plus two sourced libraries (`_secret-scan.sh`,

@@ -268,7 +268,7 @@ for i in $(seq 1 "$MAX_ITER"); do
   VERDICT=$(claude --agent evaluator -p "Grade the phase just completed." \
                    --permission-mode acceptEdits 2>>autopilot.log)
 
-  if [ -z "${VERDICT// /}" ]; then
+  if [ -z "$(printf '%s' "$VERDICT" | tr -d '[:space:]')" ]; then
     echo "autopilot: evaluator returned no output — treating as FAILURE, stopping." | tee -a autopilot.log
     echo "autopilot: --- last 20 lines of autopilot.log (evaluator stderr) ---" >&2
     tail -n 20 autopilot.log 2>/dev/null >&2 || true
