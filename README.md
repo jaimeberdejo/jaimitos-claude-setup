@@ -22,10 +22,11 @@ research fan-out**, so you keep full visibility and a 1-experienced-dev token bu
 my-claude-code-setup/
 ├── README.md              ← you are here (the master guide)
 ├── install.sh             ← one-command installer (deterministic copy + doctor)
+├── PRACTICE-PROJECT.md    ← standalone hands-on tutorial (delete after you've learned the stack)
 ├── CHANGELOG.md · VERSION · LICENSE · .editorconfig
 ├── lean-stack/            ← the scaffold you drop into a repo
 │   ├── CLAUDE.md                    # lean constitution (edit placeholders per project)
-│   ├── GUIDE.md                     # the full manual + a hands-on practice project
+│   ├── GUIDE.md                     # the full manual
 │   ├── LOOP-ENGINEERING.md          # the theory of safe autonomous loops
 │   ├── README.md                    # scaffold quick-start
 │   ├── docs/                        # SPEC · ROADMAP · STATE · ARCHITECTURE · decisions/ · plans/
@@ -208,9 +209,11 @@ The builder *never* marks its own work done — a fresh-context, no-edit-tools e
 
 ## Where to read more
 
-- **`lean-stack/GUIDE.md`** — the full manual: setup, five worked use cases, tutorials, and a
-  hands-on practice project to learn the whole stack end-to-end.
-- **`lean-stack/LOOP-ENGINEERING.md`** — designing and running autonomous loops safely.
+- **`lean-stack/GUIDE.md`** — the full manual: install, the per-phase research→plan→execute→verify
+  cycle, five worked use cases, autonomy in depth, and step-by-step tutorials.
+- **`lean-stack/LOOP-ENGINEERING.md`** — designing and running autonomous loops safely (the theory).
+- **`PRACTICE-PROJECT.md`** — a standalone, throwaway tutorial to learn the whole stack hands-on,
+  then delete. Lives at the repo root so `install.sh` never copies it into your real projects.
 
 ## License
 

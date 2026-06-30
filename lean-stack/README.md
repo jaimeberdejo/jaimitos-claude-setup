@@ -6,7 +6,8 @@
 
 Complete scaffold + guides. Drop the contents into any repo.
 
-- **GUIDE.md** — start here. Setup, use cases, tutorials, the PrendaPricer mini-project.
+- **GUIDE.md** — start here. Install, the per-phase cycle, use cases, autonomy, tutorials.
+  (Hands-on practice project lives at the repo root: `PRACTICE-PROJECT.md`.)
 - **LOOP-ENGINEERING.md** — designing/running autonomous loops safely.
 - **CLAUDE.md** — lean constitution (edit placeholders). Includes Ownership section.
 - **.claude/** — hooks, commands (/resume /wrap /phase), evaluator subagent.

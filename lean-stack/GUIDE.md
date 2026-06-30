@@ -1,8 +1,9 @@
 # The Lean Stack: Complete Manual
 
 Everything you need to run the lightweight "operating system for Claude Code": a ready
-scaffold, a one-command installer, the per-phase cycle, worked use cases, step-by-step
-tutorials, and a hands-on practice project to learn the whole thing end-to-end.
+scaffold, a one-command installer, the per-phase cycle, worked use cases, and step-by-step
+tutorials. For a hands-on walkthrough, build the standalone
+[`PRACTICE-PROJECT.md`](../PRACTICE-PROJECT.md) (a throwaway you can delete afterward).
 
 This guide is part of **[my-claude-code-setup](../README.md)** (the repo-root README is the
 master map). Drop the `lean-stack/` folder's contents into any repo and you have the whole
@@ -289,85 +290,16 @@ from regressing.
 
 ---
 
-## Part 8 — The practice project (learn the whole stack)
+## Part 8 — Learn it hands-on (the practice project)
 
-A small, self-contained, **throwaway** project to learn on — not tied to anything real. A
-CLI + API that suggests a secondhand-marketplace listing price from an item description,
-~4 phases you can build in an evening. Low stakes (no money moves, fully reversible) so you
-can safely try the autopilot.
+The fastest way to internalize the stack is to build a small throwaway project on it,
+exercising every part — measurable spec, adaptive roadmap, TDD, the evaluator catching
+premature "done," and running a phase manually, watchable, and headless.
 
-### The spec (drop into `docs/SPEC.md`)
-```md
-# Spec: PrendaPricer
-
-## What & why
-A CLI + FastAPI service that suggests a listing price for a secondhand clothing item,
-given a structured description (category, brand tier, condition, era/style tags).
-
-## Success criterion (measurable)
-Given the 20-item fixture set in tests/fixtures/items.json, the suggested price is within
-±20% of the labelled "good_price" for at least 15 of 20 items.
-
-## In scope
-- Pure pricing function: features in → price + confidence out.
-- A rules+heuristics baseline (no ML in v1).
-- CLI (`prendapricer "item desc"`) and POST /price endpoint.
-
-## Non-goals
-- No scraping of live marketplace data in v1 (use the fixture set).
-- No image input, no persistence in v1.
-
-## Constraints
-- Python 3.12, FastAPI, pytest. Money as Decimal, never float.
-- Pricing logic must be a pure, unit-tested function.
-```
-
-### The roadmap
-Run the **`roadmap`** skill on that spec. It will recommend a granularity — for this scope,
-~4 fine phases (it builds them with `Done when:` lines and loopable/supervised tags). You'll get something like:
-```md
-## Phase 1 — Pricing core         (Mode: loopable)
-- [ ] ItemFeatures + PriceSuggestion dataclasses
-- [ ] suggest_price() with base-by-category + brand/condition/era multipliers
-- [ ] Unit tests for each multiplier + an end-to-end example
-Done when: pytest passes and suggest_price() returns a Decimal + confidence for a sample item.
-
-## Phase 2 — Evaluation harness    (Mode: loopable)
-- [ ] tests/fixtures/items.json (20 labelled items)
-- [ ] eval test asserting ≥15/20 within ±20% of good_price
-Done when: the eval test runs and reports the hit rate.
-
-## Phase 3 — Interfaces            (Mode: supervised — touches I/O)
-- [ ] CLI entrypoint + POST /price endpoint + TestClient test
-Done when: curl to /price returns a valid suggestion and the CLI works.
-
-## Phase 4 — Hardening             (Mode: loopable)
-- [ ] input validation + 422; README with the eval hit rate; tune multipliers to pass the eval
-Done when: full suite green, eval criterion met, README written.
-```
-
-### Build it across four sessions
-```
-Session 1 — scaffold + Phase 1 (manual, learn the rhythm)
-  /resume → plan → "implement phase 1, TDD" → @evaluator grade → /wrap → /clear
-
-Session 2 — Phase 2 watchable
-  /resume → /autopilot 1   (watch it build fixtures + the eval test) → /wrap → /clear
-
-Session 3 — Phase 3 supervised
-  /resume → /phase → curl the endpoint + run the CLI yourself → /wrap → /clear
-
-Session 4 — Phase 4 headless
-  bash scripts/autopilot.sh 2
-  # if it overfits: echo "Keep multipliers interpretable; don't overfit the fixtures." > STEER.md
-```
-At the end you have a working, tested, documented tool with a full git checkpoint history,
-ADRs, and a STATE.md you could hand to a stranger.
-
-### What you'll have learned
-Measurable success criteria · phase boundaries that each leave a working program · TDD as the
-loop's truth source · the evaluator catching premature "done" · running a phase watchable and
-headless · steering and stopping a loop.
+That walkthrough lives in its own standalone file: **[`PRACTICE-PROJECT.md`](../PRACTICE-PROJECT.md)**
+(at the repo root, deliberately *outside* `lean-stack/` so `install.sh` never copies it into
+your real projects). It's a self-contained tutorial you can **delete completely** once you've
+test-driven the setup — nothing here depends on it.
 
 ### Graduating to high-stakes work
 Apply the same stack to real work with one change for anything consequential: **drop autopilot

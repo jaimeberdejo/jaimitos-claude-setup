@@ -39,8 +39,10 @@ loops (watchable + headless), path-scoped rules, and a pack of portable skills.
   detected stack (the only part that needs intelligence).
 
 ### Added — docs
-- `README.md` (comprehensive entry), `lean-stack/GUIDE.md` (manual + practice project),
-  `lean-stack/LOOP-ENGINEERING.md` (autonomous-loop theory).
+- `README.md` (comprehensive entry), `lean-stack/GUIDE.md` (manual),
+  `lean-stack/LOOP-ENGINEERING.md` (autonomous-loop theory),
+  `PRACTICE-PROJECT.md` (standalone, deletable hands-on tutorial — kept out of `lean-stack/`
+  so `install.sh` never copies it into real projects).
 
 ### Security
 - Read-tool deny rules are a real boundary; Bash deny rules are documented as
