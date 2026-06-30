@@ -27,8 +27,7 @@ my-claude-code-setup/
 ├── lean-stack/            ← the scaffold you drop into a repo
 │   ├── CLAUDE.md                    # lean constitution (edit placeholders per project)   [installed]
 │   ├── SCAFFOLD.md                  # scaffold quick-start (ships as SCAFFOLD.md, never clobbers README) [installed]
-│   ├── GUIDE.md                     # the full manual                          [toolkit doc — NOT copied into targets]
-│   ├── LOOP-ENGINEERING.md          # the theory of safe autonomous loops      [toolkit doc — NOT copied into targets]
+│   ├── toolkit-docs/                # GUIDE.md · LOOP-ENGINEERING.md    [toolkit docs — excluded from installs BY DIRECTORY]
 │   ├── docs/                        # SPEC · ROADMAP · STATE · ARCHITECTURE · decisions/ · plans/
 │   ├── scripts/                     # autopilot.sh · doctor.sh · test-hooks.sh
 │   ├── .github/workflows/lean-stack-ci.yml   # OPT-IN CI (install.sh --with-ci)
@@ -41,9 +40,10 @@ my-claude-code-setup/
 └── skills/                ← 10 portable skills (9 workflow/ownership + setup-lean-stack)
 ```
 
-> The repo-root `README.md`, `GUIDE.md`, and `LOOP-ENGINEERING.md` document the **toolkit**, so
-> `install.sh` never copies them into your project (they'd just be noise). Only `SCAFFOLD.md` —
-> a short, clearly-named quick-start — ships alongside the working files.
+> The repo-root `README.md` and everything under `lean-stack/toolkit-docs/` (`GUIDE.md`,
+> `LOOP-ENGINEERING.md`) document the **toolkit**, so `install.sh` never copies them into your
+> project — exclusion is by directory, so adding a toolkit doc can't accidentally start shipping.
+> Only `SCAFFOLD.md` — a short, clearly-named quick-start — ships alongside the working files.
 
 There are **two parts**: the **`lean-stack/` scaffold** (drop its contents into any repo)
 and the **`skills/` pack** (copy any skill into `.claude/skills/` per-project, or
@@ -152,7 +152,7 @@ You drive each arrow manually for stakes that warrant it, or hand the bracket to
 Seven deterministic shell hooks (session-start, steer, kill-switch, format-on-edit, test-gate,
 commit-on-stop, ownership-nudge) plus two sourced libraries (`_secret-scan.sh`,
 `_high-stakes.sh`) shared by `commit-on-stop.sh` and `autopilot.sh`. **The full per-hook table
-lives in [`lean-stack/GUIDE.md`](lean-stack/GUIDE.md)** under "The seven hooks" (single source —
+lives in [`lean-stack/toolkit-docs/GUIDE.md`](lean-stack/toolkit-docs/GUIDE.md)** under "The seven hooks" (single source —
 kept there so it can't drift), alongside the **"Enforcement reality"** section on what enforces
 vs what merely advises.
 
@@ -185,7 +185,7 @@ your checkout; `--no-worktree` opts out (runs in-place, warned loudly). `--pr` o
 end and never touches main (secret-scanned before any push); `--allow-dirty` skips the clean-tree
 preflight (use sparingly — it removes a safety check); `--max-minutes N` adds a wall-clock ceiling.
 
-**The guardrails** (see `lean-stack/LOOP-ENGINEERING.md` for the full theory):
+**The guardrails** (see `lean-stack/toolkit-docs/LOOP-ENGINEERING.md` for the full theory):
 verifiable signal · bounded stop · bounded retries (3-strike thrash cap) · blast-radius
 limit · **independent verifier as the sole roadmap-ticker** · evaluator-change cleanup ·
 **high-stakes gate** (auth/money/migrations → supervised stop, never auto-ticked) ·
@@ -197,7 +197,7 @@ work done — a fresh-context, no-edit-tools evaluator always gates the tick.
 ## Security
 
 **Enforcement reality — know which tier you're trusting** (full version in
-[`GUIDE.md` → "Enforcement reality"](lean-stack/GUIDE.md#enforcement-reality-deterministic-layer-vs-advisory-layer)):
+[`GUIDE.md` → "Enforcement reality"](lean-stack/toolkit-docs/GUIDE.md#enforcement-reality-deterministic-layer-vs-advisory-layer)):
 the **deterministic** layer (shell hooks + `autopilot.sh` control flow — kill-switch, strict
 verdict parsing, secret-scan, high-stakes gate, evaluator-change cleanup) actually enforces and
 fails closed; the **advisory** layer (`CLAUDE.md`, `rules/`, the evaluator prompt) only asks a
@@ -240,9 +240,9 @@ model to comply.
 
 ## Where to read more
 
-- **`lean-stack/GUIDE.md`** — the full manual: install, the per-phase research→plan→execute→verify
+- **`lean-stack/toolkit-docs/GUIDE.md`** — the full manual: install, the per-phase research→plan→execute→verify
   cycle, five worked use cases, autonomy in depth, and step-by-step tutorials.
-- **`lean-stack/LOOP-ENGINEERING.md`** — designing and running autonomous loops safely (the theory).
+- **`lean-stack/toolkit-docs/LOOP-ENGINEERING.md`** — designing and running autonomous loops safely (the theory).
 - **`PRACTICE-PROJECT.md`** — a standalone, throwaway tutorial to learn the whole stack hands-on,
   then delete. Lives at the repo root so `install.sh` never copies it into your real projects.
 

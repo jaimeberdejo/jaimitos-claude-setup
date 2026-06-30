@@ -12,9 +12,10 @@
 #     --with-ci        also copy the CI workflow (.github/workflows/lean-stack-ci.yml).
 #                      Off by default — most projects already have their own CI.
 #
-# Tool meta-docs (GUIDE.md, LOOP-ENGINEERING.md, README.md) are NEVER copied into a
-# target — they document the toolkit, not your project, and would just pollute it.
-# The scaffold's own note ships as SCAFFOLD.md (so it can't become/clobber your README).
+# Tool meta-docs live under lean-stack/toolkit-docs/ and are NEVER copied into a target —
+# they document the toolkit, not your project. Exclusion is by DIRECTORY (not a hardcoded
+# filename list), so a new toolkit doc can't accidentally start shipping. The scaffold's own
+# note ships as SCAFFOLD.md (so it can't become/clobber your README).
 #
 # Idempotent: re-running is safe. Without --force it skips any file that already exists,
 # so it never clobbers a CLAUDE.md you've customized.
@@ -43,42 +44,54 @@ done
 [ -d "$SCAFFOLD" ]   || { echo "install: can't find lean-stack/ next to this script ($SCAFFOLD)" >&2; exit 1; }
 [ -d "$SKILLS_SRC" ] || { echo "install: can't find skills/ next to this script ($SKILLS_SRC)" >&2; exit 1; }
 mkdir -p "$TARGET" || { echo "install: can't create target '$TARGET'" >&2; exit 1; }
-TARGET="$(cd "$TARGET" && pwd)"
+TARGET="$(cd "$TARGET" && pwd)" || { echo "install: can't enter target '$TARGET'" >&2; exit 1; }
 
-echo "install: scaffold → $TARGET  (force=$FORCE)"
+VERSION="$(cat "$SRC/VERSION" 2>/dev/null || echo '?')"
+echo "install: lean-stack v$VERSION  →  $TARGET  (force=$FORCE)"
 
-COPIED=0; SKIPPED=0
+COPIED=0; SKIPPED=0; FAILED=0
 
 # Copy one file, honoring --force and creating parent dirs. Skips (and reports) if it
-# exists and --force is off.
+# exists and --force is off. A failed copy is reported and counted — never silently
+# treated as success (a partial install must not look clean).
 copy_file() {
   local rel="$1" srcfile="$2" dest="$TARGET/$1"
   if [ -e "$dest" ] && [ "$FORCE" -eq 0 ]; then
     echo "  skip (exists): $rel"; SKIPPED=$((SKIPPED+1)); return
   fi
   mkdir -p "$(dirname "$dest")"
-  cp "$srcfile" "$dest"
-  COPIED=$((COPIED+1))
+  if cp "$srcfile" "$dest"; then
+    COPIED=$((COPIED+1))
+  else
+    echo "  ✗ FAILED to copy: $rel" >&2; FAILED=$((FAILED+1))
+  fi
 }
 
 # 1. Scaffold files (everything under lean-stack/, including dotfiles like .gitignore).
-#    EXCLUSIONS: tool meta-docs (GUIDE/LOOP-ENGINEERING/README/SCAFFOLD-source) are never
-#    flattened into a target except SCAFFOLD.md; the CI workflow is opt-in (--with-ci).
+#    EXCLUSIONS (by DIRECTORY, so they can't silently drift):
+#      - toolkit-docs/*  : tool meta-docs (GUIDE/LOOP-ENGINEERING) — never shipped
+#      - .github/*       : CI workflow is opt-in (--with-ci)
+#      - editor/OS cruft : .DS_Store / *.swp never copied into a target
 while IFS= read -r srcfile; do
   rel="${srcfile#"$SCAFFOLD"/}"
   case "$rel" in
-    GUIDE.md|LOOP-ENGINEERING.md|README.md)
+    toolkit-docs/*)
       continue ;;                                  # toolkit docs — don't pollute the target
     .github/*)
       [ "$WITH_CI" -eq 1 ] || continue ;;          # CI is opt-in
+    *.DS_Store|*.swp)
+      continue ;;                                  # editor/OS cruft
   esac
   copy_file "$rel" "$srcfile"
 done < <(find "$SCAFFOLD" -type f)
 
 # 2. Skills → <target>/.claude/skills/<skill>/
+#    setup-lean-stack is the installer/meta skill — useless (and slightly misleading) once a
+#    project is set up, so it is NOT copied per-project; it installs only via --global-skills.
 while IFS= read -r srcfile; do
-  rel=".claude/skills/${srcfile#"$SKILLS_SRC"/}"
-  copy_file "$rel" "$srcfile"
+  skillrel="${srcfile#"$SKILLS_SRC"/}"
+  case "$skillrel" in setup-lean-stack/*) continue ;; esac
+  copy_file ".claude/skills/$skillrel" "$srcfile"
 done < <(find "$SKILLS_SRC" -mindepth 2 -type f)   # mindepth 2 = inside skill dirs; skips top-level README/OWNERSHIP
 
 # 3. Optional global skills install.
@@ -119,12 +132,19 @@ if [ -f "$SCAFFOLD_GI" ] && [ -f "$TARGET_GI" ]; then
   fi
 fi
 
+# 3c. Stamp the installed version so `doctor.sh` can report what's installed.
+mkdir -p "$TARGET/.claude" && printf '%s\n' "$VERSION" > "$TARGET/.claude/.lean-stack-version" 2>/dev/null || true
+
 # 4. Make hooks/scripts executable.
 chmod +x "$TARGET"/.claude/hooks/*.sh "$TARGET"/scripts/*.sh 2>/dev/null || true
 
 echo ""
-echo "install: copied $COPIED file(s), skipped $SKIPPED."
+echo "install: copied $COPIED file(s), skipped $SKIPPED, failed $FAILED."
 [ "$WITH_CI" -eq 0 ] && echo "install: CI workflow NOT copied (re-run with --with-ci to add lean-stack-ci.yml)."
+if [ "$FAILED" -gt 0 ]; then
+  echo "install: ⛔ $FAILED file(s) failed to copy — the install is INCOMPLETE. Fix the errors above and re-run." >&2
+  exit 1
+fi
 echo ""
 echo "Next:"
 echo "  1. Edit CLAUDE.md placeholders (your test/lint/run commands) — or run the"

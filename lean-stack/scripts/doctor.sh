@@ -12,6 +12,7 @@ bad()  { printf '  ✗ %s\n' "$1"; PROBLEMS=$((PROBLEMS+1)); }
 warn() { printf '  ! %s\n' "$1"; }
 
 echo "lean-stack doctor"
+[ -f .claude/.lean-stack-version ] && echo "lean-stack version: $(cat .claude/.lean-stack-version)"
 echo ""
 
 echo "Tooling:"

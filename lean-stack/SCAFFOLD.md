@@ -9,9 +9,9 @@ installed into this repo. The full tool documentation is **not** copied into you
 project (so it doesn't pollute it); read it on GitHub:
 
 - **GUIDE** — install, the per-phase cycle, use cases, autonomy, tutorials:
-  <https://github.com/jaimeberdejo/my-claude-code-setup/blob/master/lean-stack/GUIDE.md>
+  <https://github.com/jaimeberdejo/my-claude-code-setup/blob/master/lean-stack/toolkit-docs/GUIDE.md>
 - **LOOP-ENGINEERING** — designing/running autonomous loops safely:
-  <https://github.com/jaimeberdejo/my-claude-code-setup/blob/master/lean-stack/LOOP-ENGINEERING.md>
+  <https://github.com/jaimeberdejo/my-claude-code-setup/blob/master/lean-stack/toolkit-docs/LOOP-ENGINEERING.md>
 - **Repo root (master guide):** <https://github.com/jaimeberdejo/my-claude-code-setup>
 
 ## What got installed here

@@ -32,10 +32,11 @@ README_BEFORE="$(cat README.md)"
 
 bash "$REPO/install.sh" . >/dev/null 2>&1 || bad "install.sh exited non-zero"
 
-# Tool meta-docs must be absent.
-for d in GUIDE.md LOOP-ENGINEERING.md; do
+# Tool meta-docs must be absent — neither the files nor the toolkit-docs/ dir ship.
+for d in GUIDE.md LOOP-ENGINEERING.md toolkit-docs/GUIDE.md toolkit-docs/LOOP-ENGINEERING.md; do
   [ -e "$d" ] && bad "tool-doc $d was copied (should be excluded)" || ok "$d not copied"
 done
+[ -e toolkit-docs ] && bad "toolkit-docs/ dir was copied (should be excluded by directory)" || ok "toolkit-docs/ not copied"
 # SCAFFOLD.md present.
 [ -f SCAFFOLD.md ] && ok "SCAFFOLD.md copied" || bad "SCAFFOLD.md missing"
 # Pre-existing README untouched, and no scaffold content leaked into it.
@@ -48,8 +49,11 @@ for f in CLAUDE.md .claude/settings.json scripts/autopilot.sh \
          .claude/hooks/_secret-scan.sh .claude/hooks/_high-stakes.sh; do
   [ -f "$f" ] && ok "installed $f" || bad "missing $f"
 done
-# Skills installed per-project.
+# Skills installed per-project — but the installer/meta skill is NOT.
 [ -d .claude/skills/roadmap ] && ok "skills installed (.claude/skills/roadmap)" || bad "skills not installed"
+[ -e .claude/skills/setup-lean-stack ] && bad "setup-lean-stack copied per-project (should be --global-skills only)" || ok "setup-lean-stack not copied per-project"
+# Installed version is stamped for doctor.sh.
+[ -f .claude/.lean-stack-version ] && ok "version stamp written (.claude/.lean-stack-version)" || bad "version stamp missing"
 # .gitignore merged, pre-existing rule preserved.
 grep -q "lean-stack control/secret ignores" .gitignore && ok ".gitignore merge block added" || bad ".gitignore not merged"
 grep -qx "node_modules/" .gitignore && ok "pre-existing .gitignore rule preserved" || bad "pre-existing .gitignore rule lost"
