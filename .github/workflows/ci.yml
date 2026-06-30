@@ -47,7 +47,7 @@ jobs:
         working-directory: lean-stack
         run: jq empty .claude/settings.json
 
-      - name: Behavioral guard tests (high-stakes regex, secret-scan, autopilot gates)
+      - name: Behavioral guard tests (high-stakes, secret-scan, autopilot gates, checkpoint, hooks)
         working-directory: lean-stack
         run: |
           set -e
@@ -56,6 +56,7 @@ jobs:
           bash scripts/test-high-stakes.sh
           bash scripts/test-secret-scan.sh
           bash scripts/test-autopilot-gates.sh
+          bash scripts/test-checkpoint.sh
 
       - name: Install smoke test (clean target, idempotency, ship-by-directory)
         run: |

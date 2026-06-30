@@ -299,9 +299,12 @@ for i in $(seq 1 "$MAX_ITER"); do
       fi
       ;;
     PASS)
-      # (a) HIGH-STAKES gate: never auto-tick/commit/push a phase that touched auth,
-      #     money, migrations, deletes, … — finish those supervised. The diff is the
-      #     whole phase (.phase-base..HEAD), matched against the shared high-stakes list.
+      # (a) HIGH-STAKES gate: never auto-tick/commit/push a phase whose changed-file PATHS are
+      #     NAMED like high-stakes work (auth/ money/ migrations/ delete…). NOTE: this matches
+      #     path NAMES only — it is structurally blind to destructive CONTENT in a benignly-named
+      #     file (e.g. a `DROP TABLE` or float-money math in src/utils.py). Keep sensitive code in
+      #     sensibly-named paths; the gate is a backstop, not a content analyzer. Diff is the whole
+      #     phase (.phase-base..HEAD), matched against the shared high-stakes path list.
       if type -t high_stakes_match >/dev/null 2>&1; then
         BASE=$(cat .claude/.phase-base 2>/dev/null)
         CHANGED=$(git diff --name-only "${BASE:-HEAD~1}..HEAD" 2>/dev/null)

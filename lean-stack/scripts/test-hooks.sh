@@ -59,6 +59,26 @@ else
   printf '  ✗ kill-switch did NOT fail closed with CLAUDE_PROJECT_DIR unset\n'; FAILS=$((FAILS+1))
 fi
 
+# Harder case: env var unset AND invoked from a SUBDIRECTORY. The brake must still fire
+# (resolve the repo root via `git rev-parse --show-toplevel`), not fail open.
+mkdir -p .ks-subdir-test
+(
+  unset CLAUDE_PROJECT_DIR
+  touch AGENT_STOP
+  cd .ks-subdir-test || exit 99
+  printf '%s' '{"hook_event_name":"PreToolUse"}' | bash "$PWD/../.claude/hooks/kill-switch.sh" >/dev/null 2>&1
+  rc=$?
+  rm -f ../AGENT_STOP
+  exit "$rc"
+)
+ks_sub_rc=$?
+rmdir .ks-subdir-test 2>/dev/null || true
+if [ "$ks_sub_rc" -eq 2 ]; then
+  printf '  ✓ kill-switch fails closed from a subdir with CLAUDE_PROJECT_DIR unset\n'
+else
+  printf '  ✗ kill-switch FAILED OPEN from a subdir (rc=%s)\n' "$ks_sub_rc"; FAILS=$((FAILS+1))
+fi
+
 echo ""
 # Verify the SHARED secret-scan library blocks a planted credential and does NOT
 # false-positive on a clean file. Runs in an ISOLATED temp git repo so we never

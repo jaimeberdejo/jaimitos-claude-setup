@@ -1,18 +1,36 @@
 ---
 description: Extra care for high-stakes or hard-to-reverse code — auth, data migrations, anything that moves money or can't be cleanly undone.
 paths:
-  - "**/auth/**"
-  - "**/payments/**"
+  # Faithful mirror of HIGH_STAKES_RE in ../lib/_high-stakes.sh (the ENFORCED list).
+  # Segment categories:
+  - "**/auth*/**"
+  - "**/oauth*/**"
+  - "**/login/**"
+  - "**/session*/**"
+  - "**/account*/**"
+  - "**/payment*/**"
   - "**/billing/**"
-  - "**/transactions/**"
-  - "**/migrations/**"
+  - "**/transaction*/**"
+  - "**/migration*/**"
   - "**/compliance/**"
   - "**/suitability/**"
-  - "**/secrets/**"
-  - "**/*migration*"
+  - "**/secret*/**"
+  - "**/kyc/**"
+  - "**/wallet/**"
+  - "**/ledger/**"
+  # Substring categories (match anywhere in the path):
+  - "**/*migrat*"
   - "**/*money*"
   - "**/*payment*"
   - "**/*credential*"
+  - "**/*delet*"
+  - "**/*destroy*"
+  - "**/*email*"
+  - "**/*deploy*"
+  - "**/*refund*"
+  - "**/*withdraw*"
+  - "**/*charge*"
+  - "**/*webhook*"
 ---
 
 # High-stakes code

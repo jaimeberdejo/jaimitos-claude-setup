@@ -50,6 +50,7 @@ if [ -f "$HS_LIB" ]; then
     warn "cannot verify high-stakes customization — fingerprint .claude/.high-stakes-default missing"
     warn "  (re-run install.sh to create it). Confirm HIGH_STAKES_RE in $HS_LIB matches your paths."
   elif [ "$HS_CUR" = "$(cat .claude/.high-stakes-default 2>/dev/null)" ]; then
+    HS_DEFAULT=1
     warn "HIGH_STAKES_RE is still the shipped default — edit it in $HS_LIB to match THIS project's"
     warn "  sensitive paths. It's the ENFORCED gate; editing only rules/high-stakes.md does nothing."
   else
@@ -103,16 +104,24 @@ if [ -f CLAUDE.md ]; then
   if [ -n "$PH_LINES" ]; then
     warn "un-substituted <...> placeholder(s) in CLAUDE.md — fill them in with your real values:"
     printf '%s\n' "$PH_LINES" | sed 's/^/      /'
+    UNCONFIGURED=1
   else
     ok "no <...> placeholders left in CLAUDE.md"
   fi
 fi
 echo ""
 
-if [ "$PROBLEMS" -eq 0 ]; then
-  echo "All good. Setup looks healthy."
-  exit 0
-else
+if [ "$PROBLEMS" -ne 0 ]; then
   echo "$PROBLEMS problem(s) found. Fix the ✗ items above before an unattended run."
   exit 1
+elif [ "${UNCONFIGURED:-0}" = 1 ] || [ "${HS_DEFAULT:-0}" = 1 ]; then
+  # Installed correctly but not yet customized — do NOT imply it's ready to run unattended.
+  echo "Installed OK, but NOT yet configured for THIS project (see the ! warnings above):"
+  [ "${UNCONFIGURED:-0}" = 1 ] && echo "  • fill the CLAUDE.md command placeholders"
+  [ "${HS_DEFAULT:-0}" = 1 ]  && echo "  • point HIGH_STAKES_RE in .claude/lib/_high-stakes.sh at your sensitive paths"
+  echo "Finish those before an unattended autopilot run."
+  exit 0
+else
+  echo "All good. Setup looks healthy."
+  exit 0
 fi

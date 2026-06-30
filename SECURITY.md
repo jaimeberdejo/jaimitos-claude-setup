@@ -34,11 +34,15 @@ section — the deterministic layer (hooks + `autopilot.sh`) fails closed; the a
 
 **What it explicitly does NOT guarantee — your responsibility:**
 
-- **The secret-scan is a best-effort commit-time guard, NOT a secret scanner.** It matches
-  secret-y filenames plus high-confidence token regexes (AWS `AKIA`, PEM blocks, OpenAI `sk-`,
-  Stripe `sk_live_`/`rk_live_`, GitHub `ghp_…`, Slack `xox*`, Google `AIza…`, and URLs with an
-  embedded `user:password`) over the staged diff. It will miss novel or encoded secrets. Use a
-  real scanner (gitleaks, trufflehog, GitHub secret scanning) and pre-commit hooks for coverage.
+- **The secret-scan is a best-effort, prefix-matching commit-time guard — NOT a scanner, and it
+  runs on the default-on auto-commit path.** It matches secret-y filenames plus ~20 fixed-prefix
+  token shapes (AWS, Anthropic `sk-ant-`, OpenAI `sk-`/`sk-proj-`, Stripe, Google `AIza`/`GOCSPX-`,
+  GitHub/GitLab/Slack/npm/SendGrid/Azure/DigitalOcean, JWTs, PEM/PGP blocks, `user:password` URLs).
+  Because it matches PREFIXES, it **cannot catch secrets that have no fixed prefix** — bare-hex
+  Twilio/Mailgun-style tokens, Django/Rails random `SECRET_KEY` values, and generic `password=` /
+  high-entropy strings will pass through and be auto-committed with a normal "✓ checkpointed"
+  message. Do NOT rely on it as a safety net: use a real scanner (gitleaks, trufflehog, GitHub
+  secret scanning) + a pre-commit hook, and review your diffs. This guard only stops the obvious.
 - **`permissions.deny` is defense-in-depth, not a boundary.** The `Read(...)` denies are a
   real boundary; the `Bash(...)` denies are a bypassable speed-bump (`less`, `source`,
   `python -c …`). The real boundary for unattended runs is the **environment**: a

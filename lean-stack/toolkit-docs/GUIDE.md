@@ -260,6 +260,64 @@ echo "Use Decimal for money, never float. Refactor what you've done." > STEER.md
 touch AGENT_STOP     # halt at next tool call   ·   rm AGENT_STOP   # resume
 ```
 
+### Adding phases mid-roadmap
+Adding a phase (or a whole batch) to a roadmap that's already in progress is a **first-class,
+supported operation** — the loop is checkbox-driven, not index-driven. It finds work by
+grepping for any `- [ ]` (`autopilot.sh`), runs *"the first phase with unchecked items"*
+(`/phase`), and ticks by matching the heading verbatim (`tick_phase`). So new open boxes are
+just more work for the same machinery; `/phase` even whitelists it (*"You MAY append NEW
+phases"*). To add one, drop a block in the **same shape** anywhere in `docs/ROADMAP.md`:
+
+```
+## Phase 7 — <goal>
+- [ ] task
+Done when: <observable condition>
+Mode: <loopable | supervised>
+```
+
+**Position = execution order:** the topmost open phase runs next. Append at the bottom to run
+after current work; insert *above* the remaining open phases to jump the queue.
+
+Two things to get right, plus three nuances:
+- **Every phase needs a `Done when:` line** — that exact text is what the independent evaluator
+  grades against. No criteria → no trustworthy PASS.
+- **Each `## ` heading must be unique, verbatim** — `tick_phase` matches with `grep -F` +
+  exact-line awk, so duplicate headings tick the wrong section. Phase *numbers* are cosmetic
+  (the tooling ignores them), so renumbering on insert is optional; unique heading text isn't.
+- **Don't edit the file during an active `autopilot.sh` run** — it rewrites `ROADMAP.md` every
+  tick, so a live edit is racy. `touch AGENT_STOP`, add the phases, `rm AGENT_STOP`. (To
+  redirect the *current* phase without adding roadmap entries, write `STEER.md` instead.)
+- **Count caps still apply** — `autopilot.sh 3` stops after 3 phases even if you added a 4th;
+  use `all` to drain. The thrash detector just sees the open set changed and resets harmlessly.
+- **Sensitive phases are safe to queue** — a new phase touching auth/money/migrations/deletes
+  auto-trips the high-stakes gate at PASS (supervised stop, never auto-ticked, never pushed even
+  with `--pr`), so you can drop high-stakes work into an autopilot roadmap without it merging.
+
+### Finishing a roadmap (start the next batch)
+When **every** phase in `docs/ROADMAP.md` is `- [x]`, that batch of work is done.
+There is **deliberately no `milestone` command, hook, or state machine** — that ceremony is
+what the heavyweight frameworks add, and it would grow the surface this stack keeps small.
+Cycling to the next batch is a ~30-second human step you do at a clean checkpoint (all phases
+ticked, tree committed):
+
+```bash
+mkdir -p docs/archive
+git mv docs/ROADMAP.md docs/archive/ROADMAP-v1.md   # freeze the finished batch (rename per version)
+# write a fresh docs/ROADMAP.md for the next batch — same format (phases + "Done when:" + Mode)
+#   tip: describe the next goals in plan mode, then run the `roadmap` skill to generate it
+```
+
+Then, in the same pass:
+- **Reset `docs/STATE.md`** — "## Now" = next batch begins; "## Next action" = first phase.
+- **Update `docs/SPEC.md`** if the goal/non-goals shifted (append, don't rewrite history).
+- **Bump `VERSION`** and tag (`git tag vX.Y`) if you version the product — optional, but the
+  archived `ROADMAP-vN.md` name should match whatever scheme you tag with.
+- Leave `docs/decisions/` ADRs in place — they span the whole project, not one batch.
+
+Why a convention and not a command: archiving is one `git mv`, and "is the roadmap finished?"
+is a glance, not logic worth testing/securing. `/wrap` will *point you here* when it notices the
+last box got ticked — it won't archive or start a new roadmap on its own (that's your call).
+
 ---
 
 ## Part 6 — Autonomy in depth
@@ -358,6 +416,10 @@ INSTALL      git clone …/my-claude-code-setup ~/my-claude-code-setup
              (don't set CLAUDE_CODE_SUBAGENT_MODEL=haiku — it downgrades the evaluator)
 
 DAILY LOOP   /resume → /phase → review → teach-back → /wrap → /clear
+ADD PHASES    drop "## Phase N …" + "- [ ]" + "Done when:" anywhere; topmost open runs next
+              (unique heading; stop the loop before editing live) — Part 5 → "Adding phases mid-roadmap"
+ROADMAP DONE  all phases [x] → git mv docs/ROADMAP.md docs/archive/ROADMAP-vN.md;
+              write a fresh ROADMAP, reset STATE, bump VERSION (Part 5 → "Finishing a roadmap")
 
 COMMANDS     /resume       orient at session start
              /phase        build one phase (research→plan→TDD→grade; no self-tick)

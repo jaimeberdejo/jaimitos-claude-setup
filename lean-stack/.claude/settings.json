@@ -9,6 +9,7 @@
       "Read(**/secrets/**)",
       "Read(**/*.pem)",
       "Read(**/*.key)",
+      "Read(**/*.p8)",
       "Read(**/credentials.json)",
       "Read(**/id_rsa)",
       "Read(**/.envrc)",

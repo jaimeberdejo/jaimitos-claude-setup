@@ -36,13 +36,16 @@ _secret_basename_match() {
 }
 
 # --- content patterns: high-confidence secret tokens in ADDED lines ---
-# Tuned for low false-positives but broadened to the credential shapes a real project
-# most often leaks: AWS keys, PEM private-key blocks, OpenAI (sk-) AND Stripe (sk_live_/
-# rk_live_) keys, GitHub/Slack tokens, Google API keys (AIza…), and URLs with an embedded
-# user:password (postgres://user:pass@host). The URL rule requires BOTH a non-empty user
-# and password before '@', so bare URLs (https://host, redis://:@h) do NOT trip it.
-# Still NOT a full scanner (use gitleaks/trufflehog for that) — a strong commit-time default.
-_SECRET_CONTENT_RE='AKIA[0-9A-Z]{16}|(aws_secret_access_key|AWS_SECRET_ACCESS_KEY)[^A-Za-z0-9]{1,8}[A-Za-z0-9/+]{40}|-----BEGIN [A-Z ]*PRIVATE KEY[A-Z ]*-----|(^|[^A-Za-z0-9])sk-(proj|svcacct|admin|None)-[A-Za-z0-9_-]{20,}|(^|[^A-Za-z0-9])sk-[A-Za-z0-9]{20,}|sk_live_[A-Za-z0-9]{16,}|rk_live_[A-Za-z0-9]{16,}|whsec_[A-Za-z0-9]{16,}|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{50,}|glpat-[A-Za-z0-9_-]{16,}|npm_[A-Za-z0-9]{30,}|SG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}|key-[0-9a-f]{32}|ey[A-Za-z0-9_-]{8,}\.ey[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}|xox[baprs]-[A-Za-z0-9-]{10,}|AIza[0-9A-Za-z_-]{35}|AccountKey=[A-Za-z0-9/+]{40,}|[a-zA-Z][a-zA-Z0-9+.-]*://[^/[:space:]:@]+:[^/[:space:]:@]+@'
+# Tuned for low false-positives, covering fixed-PREFIX credential shapes a real project most
+# often leaks: AWS keys, PEM/PGP private-key blocks, Anthropic (sk-ant-), OpenAI (sk-/sk-proj-),
+# Stripe (sk_live_/rk_live_/whsec_), Google (AIza/GOCSPX-/ya29.), GitHub/GitLab/Slack/npm/
+# SendGrid/Azure/Mailgun/DigitalOcean tokens, JWTs, and connection-string URLs that embed a
+# user:password (requires BOTH non-empty, so bare/credless URLs do NOT trip it).
+# IMPORTANT — this is a regex prefix-matcher, NOT a scanner: it CANNOT catch prefix-less secrets
+# (bare-hex Twilio/Mailgun-style tokens, Django/Rails random SECRET_KEY values, generic
+# `password=`/high-entropy strings). For real coverage use gitleaks/trufflehog + a pre-commit
+# hook. This is a best-effort commit-time speed-bump, not a guarantee.
+_SECRET_CONTENT_RE='AKIA[0-9A-Z]{16}|(aws_secret_access_key|AWS_SECRET_ACCESS_KEY)[^A-Za-z0-9]{1,8}[A-Za-z0-9/+]{40}|-----BEGIN [A-Z ]*PRIVATE KEY[A-Z ]*-----|(^|[^A-Za-z0-9])sk-(ant|proj|svcacct|admin|None)-[A-Za-z0-9_-]{20,}|(^|[^A-Za-z0-9])sk-[A-Za-z0-9]{20,}|sk_live_[A-Za-z0-9]{16,}|rk_live_[A-Za-z0-9]{16,}|whsec_[A-Za-z0-9]{16,}|GOCSPX-[A-Za-z0-9_-]{20,}|ya29\.[A-Za-z0-9_-]{20,}|dop_v1_[a-f0-9]{40,}|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{50,}|glpat-[A-Za-z0-9_-]{16,}|npm_[A-Za-z0-9]{30,}|SG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}|key-[0-9a-f]{32}|ey[A-Za-z0-9_-]{8,}\.ey[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}|xox[baprs]-[A-Za-z0-9-]{10,}|AIza[0-9A-Za-z_-]{35}|AccountKey=[A-Za-z0-9/+]{40,}|[a-zA-Z][a-zA-Z0-9+.-]*://[^/[:space:]:@]+:[^/[:space:]:@]+@'
 
 # _secret_content_hits <git-diff-args...>: emit up to 10 ADDED lines (leading '+'
 # stripped) that contain a high-confidence secret token. Shared by both scanners so the
