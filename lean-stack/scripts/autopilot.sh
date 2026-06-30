@@ -92,6 +92,35 @@ ORIG_ROOT="$PWD"
 # ----------------------------- preflight -----------------------------
 fail() { echo "autopilot: PREFLIGHT FAILED — $1" >&2; exit 1; }
 
+# ---- single-run lock + cleanup trap ----
+# Prevent two autopilots from racing the same checkout, and never leave a stale lock or silently
+# orphan a worktree. The lock lives in the ORIGINAL checkout (the worktree is per-run).
+LOCK="$ORIG_ROOT/.claude/.autopilot.lock"
+LOCK_HELD=0
+cleanup_on_exit() {
+  local rc=$?
+  [ "$LOCK_HELD" -eq 1 ] && rm -f "$LOCK" 2>/dev/null
+  # Abnormal exit (signal / error) AFTER a worktree was created: do NOT auto-remove it — it may
+  # hold unpushed or high-stakes commits. Point the operator at it instead.
+  if [ "$rc" -ne 0 ] && [ "${USE_WORKTREE:-0}" -eq 1 ] && [ -n "${WT_DIR:-}" ] && [ -d "${WT_DIR:-/nonexistent}" ]; then
+    echo "autopilot: ⚠ exited early (rc $rc); worktree left for inspection: $WT_DIR" >&2
+    echo "autopilot:   review it, then remove with: git worktree remove \"$WT_DIR\" (add --force to discard)." >&2
+  fi
+}
+trap cleanup_on_exit EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+mkdir -p "$ORIG_ROOT/.claude" 2>/dev/null || true
+if [ -f "$LOCK" ]; then
+  OLDPID=$(head -1 "$LOCK" 2>/dev/null)
+  if [ -n "$OLDPID" ] && kill -0 "$OLDPID" 2>/dev/null; then
+    fail "another autopilot run is active (pid $OLDPID; lock $LOCK). Wait for it, or remove the lock if you're certain it's dead."
+  fi
+  echo "autopilot: stale lock from dead pid ${OLDPID:-?} — reclaiming."
+fi
+echo "$$" > "$LOCK" && LOCK_HELD=1
+
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || fail "not inside a git repository (run 'git init')."
 command -v claude >/dev/null 2>&1 || fail "'claude' CLI not found on PATH."
 command -v jq     >/dev/null 2>&1 || fail "'jq' not found (hooks need it)."

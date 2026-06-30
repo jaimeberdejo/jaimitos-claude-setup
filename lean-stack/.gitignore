@@ -10,6 +10,7 @@ test-results.json
 .claude/.tick-evidence.json
 .claude/.phase-base
 .claude/.phase-grade
+.claude/.autopilot.lock
 .claude/.last-changed
 .claude/.evidence-reads
 

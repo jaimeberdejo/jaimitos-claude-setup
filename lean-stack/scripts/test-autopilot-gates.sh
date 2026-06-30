@@ -100,6 +100,7 @@ test-results.json
 .claude/.phase-base
 .claude/.phase-ready
 .claude/.phase-grade
+.claude/.autopilot.lock
 .claude/.last-changed
 GI
   printf '## Phase 1 — Work\n\n- [ ] do the work\n' > "$REPO/docs/ROADMAP.md"
@@ -176,6 +177,19 @@ ticked "$REPO" && pass "needs_then_pass eventually ticks" || fail "needs_then_pa
 { [ -f "$REPO/docs/FAILURES.md" ] && grep -q "second pass" "$REPO/docs/FAILURES.md"; } \
   && pass "resolved finding archived to docs/FAILURES.md" || fail "failure not archived to FAILURES.md"
 [ ! -f "$REPO/NEXT_FINDINGS.md" ] && pass "NEXT_FINDINGS.md cleared after archive" || fail "NEXT_FINDINGS.md not cleared"
+
+# 10 — concurrency lock: a live lock (this test's own pid) makes a second run refuse.
+mkrepo r10; mkdir -p "$REPO/.claude"; echo "$$" > "$REPO/.claude/.autopilot.lock"
+BUILDER_MODE=clean EVAL_MODE=pass; export BUILDER_MODE EVAL_MODE; rc=$(run "$REPO" 1 --no-worktree --allow-dirty)
+{ [ "$rc" = 1 ] && grep -q "another autopilot run is active" "$WORK/out" && ! ticked "$REPO"; } \
+  && pass "live lock → second run refuses (no concurrent run)" || fail "concurrency lock did not hold (rc=$rc)"
+
+# 11 — stale lock from a dead pid is reclaimed, and the run proceeds + releases the lock.
+mkrepo r11; mkdir -p "$REPO/.claude"; echo "999999" > "$REPO/.claude/.autopilot.lock"
+BUILDER_MODE=clean EVAL_MODE=pass; export BUILDER_MODE EVAL_MODE; run "$REPO" 1 --no-worktree --allow-dirty >/dev/null
+grep -q "stale lock" "$WORK/out" && pass "stale lock (dead pid) is reclaimed" || fail "stale lock not reclaimed"
+ticked "$REPO" && pass "run proceeds after reclaiming a stale lock" || fail "did not proceed after stale lock"
+[ ! -f "$REPO/.claude/.autopilot.lock" ] && pass "lock released on normal exit (trap)" || fail "lock not released after run"
 
 echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All autopilot gate tests passed."; exit 0
