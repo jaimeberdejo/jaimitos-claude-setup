@@ -73,5 +73,29 @@ echo "Fail-safe: an empty/unset HIGH_STAKES_RE must treat ALL paths as high-stak
 ) || FAILS=$((FAILS+1))
 
 echo ""
+echo "Content-level detection — destructive operations in a benignly-named file (must match):"
+content_match()  { if high_stakes_content_match "$1" >/dev/null; then printf '  ✓ content matches: %s\n' "$1"; else printf '  ✗ MISSED content (should match): %s\n' "$1"; FAILS=$((FAILS+1)); fi; }
+content_ignore() { if high_stakes_content_match "$1" >/dev/null; then printf '  ✗ FALSE content HIT (should ignore): %s\n' "$1"; FAILS=$((FAILS+1)); else printf '  ✓ ignores content: %s\n' "$1"; fi; }
+content_match 'cursor.execute("DROP TABLE users")'
+content_match 'DELETE FROM sessions WHERE id = 1'
+content_match 'TRUNCATE TABLE audit_log'
+content_match 'os.system("reboot now")'
+content_match 'subprocess.run(cmd, shell=True)'
+content_match 'value = eval(user_input)'
+content_match 'subprocess.run("rm -rf /tmp/cache")'
+content_match 'git push origin main --force'
+content_match 'git commit --no-verify'
+
+echo ""
+echo "Content-level — benign code that must NOT trip the content matcher:"
+content_ignore 'result = retrieval(query)'        # contains "eval(" only inside a word
+content_ignore 'df = format_table(rows)'           # "TABLE" but not DROP/TRUNCATE
+content_ignore 'items.remove(stale_entry)'         # "rm" only inside a word
+content_ignore 'user = get_account(account_id)'
+content_ignore 'return shell_path == expected'     # "shell" but not shell=True
+content_ignore 'model.eval()'                      # method call, not bare eval( — must not trip
+content_ignore 'self.encoder.eval()'               # dotted method call (PyTorch idiom)
+
+echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All high-stakes detection tests passed."; exit 0
 else echo "$FAILS detection test(s) FAILED."; exit 1; fi

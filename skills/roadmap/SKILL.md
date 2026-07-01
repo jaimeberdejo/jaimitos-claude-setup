@@ -59,11 +59,12 @@ bounded scope, independent verifiability (the evaluator can confirm from diff + 
 command), and a low/reversible blast radius. If it fails any — especially anything
 touching money, auth, prod migrations, or compliance judgment — mark it **supervised**.
 
-> **The `Mode:` tag is advisory — `autopilot.sh` does not parse it.** It documents intent and
-> is a human decision aid; it does NOT gate the loop. The *enforced* control is the high-stakes
-> **path** gate (`HIGH_STAKES_RE` in `.claude/lib/_high-stakes.sh`), matched against the phase
-> diff. So it's your responsibility not to point autopilot at a range containing `supervised`
-> phases, and to make sure genuinely sensitive work lives under a path the regex matches.
+> **The `Mode:` tag is ENFORCED.** `scripts/tick.sh` parses the phase's `Mode:` line, and a
+> phase marked `supervised` REFUSES to auto-tick (it exits "supervised", same as a high-stakes
+> hit) in every mode — headless and in-session. It is backed up by the high-stakes **path** and
+> **content** gates (`.claude/lib/_high-stakes.sh`), matched against the phase diff. Still keep
+> genuinely sensitive work under a sensibly-named path, but a `supervised` tag alone now blocks
+> the auto-tick.
 
 ## Output format (write to docs/ROADMAP.md)
 

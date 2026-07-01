@@ -7,8 +7,9 @@ tutorials. For a hands-on walkthrough, build the standalone
 
 This guide is part of **[my-claude-code-setup](../README.md)** (the repo-root README is the
 master map). Drop the `lean-stack/` folder's contents into any repo and you have the whole
-system: auto-maintained docs, deterministic hooks, an independent evaluator, path-scoped
-rules, and two autonomous loops (one watchable, one headless) — all project-neutral.
+system: an evidence-gated, auto-ticked roadmap with auto-written state, deterministic hooks,
+an independent evaluator, path-scoped rules, and two autonomous loops (one watchable, one
+headless) — all project-neutral.
 
 > **The one idea:** `CLAUDE.md` advises · **hooks enforce** · **docs hold knowledge**.
 > And **match ceremony to stakes**: tiny/reversible → just prompt; medium → supervised;

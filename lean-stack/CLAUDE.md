@@ -28,12 +28,16 @@
 
 ## Autonomy
 - `/phase` runs one roadmap phase end-to-end with self-verification (it does NOT tick the
-  roadmap — `/wrap` or the script does that).
-- `/autopilot N` loops N phases IN THIS SESSION (watchable). `scripts/autopilot.sh N`
-  loops headless in fresh processes (overnight). Both gate ticking on an independent evaluator
-  PASS, but only the **headless script** is a deterministic sole-ticker (it discards evaluator
-  changes, secret-scans before commit, and the high-stakes gate never pushes). In-session, the
-  builder session does the tick on the evaluator's PASS — the grader is independent, the tick is not.
+  roadmap — the shared gate does that).
+- **All ticking goes through `scripts/tick.sh`** — the single gate that flips `- [ ]` → `- [x]`.
+  Nothing (no command, prompt, or model) may mark a phase done without passing it: it requires a
+  recorded evaluator PASS, fresh green test evidence bound to the exact commit, a clean secret
+  scan, and no high-stakes changes, then updates the STATE auto-block. `/wrap`, `/autopilot`, and
+  `scripts/autopilot.sh` all call it.
+- `/autopilot N` loops N phases IN THIS SESSION (watchable). `scripts/autopilot.sh N` loops
+  headless in fresh processes (overnight). Both gate ticking through `scripts/tick.sh`. What the
+  **headless script** adds is fresh-context-per-phase, evaluator-change discard, and throwaway-
+  worktree isolation; the in-session loops share the tick gate but not that isolation.
 - The `evaluator` subagent grades completion independently — never mark a phase
   done on the builder's say-so alone.
 - `touch AGENT_STOP` halts the loop at the next tool call (it can't claw back a call already

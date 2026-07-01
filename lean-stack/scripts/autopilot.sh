@@ -92,6 +92,44 @@ ORIG_ROOT="$PWD"
 # ----------------------------- preflight -----------------------------
 fail() { echo "autopilot: PREFLIGHT FAILED — $1" >&2; exit 1; }
 
+# ---- single-run lock + cleanup trap ----
+# Prevent two autopilots from racing the same checkout, and never leave a stale lock or silently
+# orphan a worktree. The lock lives in the ORIGINAL checkout (the worktree is per-run).
+LOCK="$ORIG_ROOT/.claude/.autopilot.lock"
+LOCK_HELD=0
+cleanup_on_exit() {
+  local rc=$?
+  [ "$LOCK_HELD" -eq 1 ] && rm -f "$LOCK" 2>/dev/null
+  # Abnormal exit (signal / error) AFTER a worktree was created: do NOT auto-remove it — it may
+  # hold unpushed or high-stakes commits. Point the operator at it instead.
+  if [ "$rc" -ne 0 ] && [ "${USE_WORKTREE:-0}" -eq 1 ] && [ -n "${WT_DIR:-}" ] && [ -d "${WT_DIR:-/nonexistent}" ]; then
+    echo "autopilot: ⚠ exited early (rc $rc); worktree left for inspection: $WT_DIR" >&2
+    echo "autopilot:   review it, then remove with: git worktree remove \"$WT_DIR\" (add --force to discard)." >&2
+  fi
+}
+trap cleanup_on_exit EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+mkdir -p "$ORIG_ROOT/.claude" 2>/dev/null || true
+# Atomic acquire: `set -o noclobber` makes `>` fail if the file already exists (O_EXCL), so two
+# simultaneous launches can't both win the check-then-write race.
+if ( set -o noclobber; echo "$$" > "$LOCK" ) 2>/dev/null; then
+  LOCK_HELD=1
+else
+  OLDPID=$(head -1 "$LOCK" 2>/dev/null)
+  if [ -n "$OLDPID" ] && kill -0 "$OLDPID" 2>/dev/null; then
+    fail "another autopilot run is active (pid $OLDPID; lock $LOCK). Wait for it, or remove the lock if you're certain it's dead."
+  fi
+  echo "autopilot: stale lock from dead pid ${OLDPID:-?} — reclaiming."
+  rm -f "$LOCK"
+  if ( set -o noclobber; echo "$$" > "$LOCK" ) 2>/dev/null; then
+    LOCK_HELD=1
+  else
+    fail "could not acquire lock $LOCK (racing another run?)."
+  fi
+fi
+
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || fail "not inside a git repository (run 'git init')."
 command -v claude >/dev/null 2>&1 || fail "'claude' CLI not found on PATH."
 command -v jq     >/dev/null 2>&1 || fail "'jq' not found (hooks need it)."
@@ -152,33 +190,10 @@ else
   echo "autopilot: up to $MAX_ITER iterations. touch AGENT_STOP to halt."
 fi
 
-# Tick every "- [ ]" line under the phase heading recorded in .claude/.phase-ready,
-# up to the next "## " heading. Deterministic; the script owns roadmap state.
-tick_phase() {
-  local heading; heading=$(cat .claude/.phase-ready 2>/dev/null)
-  [ -z "$heading" ] && { echo "autopilot: no .phase-ready heading — cannot tick."; return 1; }
-  if ! grep -qF "$heading" docs/ROADMAP.md; then
-    echo "autopilot: WARNING — phase heading not found verbatim in ROADMAP ('$heading'). Not ticking — check .claude/.phase-ready vs the roadmap heading."
-    return 1
-  fi
-  local before after
-  # grep -c always prints a count (0 when none) — no `|| echo 0` (that printed a
-  # second line "0\n0" and crashed the integer compare on the final phase).
-  before=$(grep -c '\- \[ \]' docs/ROADMAP.md 2>/dev/null)
-  awk -v ph="$heading" '
-    $0==ph { inphase=1; print; next }
-    /^## / && inphase { inphase=0 }
-    inphase { gsub(/- \[ \]/, "- [x]") }
-    { print }
-  ' docs/ROADMAP.md > docs/ROADMAP.md.tmp && mv docs/ROADMAP.md.tmp docs/ROADMAP.md
-  after=$(grep -c '\- \[ \]' docs/ROADMAP.md 2>/dev/null)
-  rm -f .claude/.phase-ready
-  if [ "$after" -ge "$before" ]; then
-    echo "autopilot: WARNING — tick changed no items under '$heading' (maybe already ticked, or no '- [ ]' in that section)."
-    return 1
-  fi
-  echo "autopilot: ticked phase → $heading ($((before - after)) item(s))"
-}
+# Roadmap ticking + ALL completion gates (evidence freshness, secret scan, high-stakes,
+# and — in Phase 2B — the STATE machine block) now live in the SHARED scripts/tick.sh,
+# called below on a PASS. The in-session /wrap path calls the same script, so no command,
+# prompt, or model can mark roadmap work done without passing the identical gate.
 
 # Decision A — discard any file changes the EVALUATOR made before trusting its
 # verdict (so a grader that edits code into passing can't influence the ticked tree).
@@ -250,6 +265,14 @@ for i in $(seq 1 "$MAX_ITER"); do
     echo "autopilot: builder process exited non-zero — stopping." | tee -a autopilot.log; break
   fi
 
+  # Produce AUTHORITATIVE tick evidence now that the builder has fully exited and HEAD is
+  # final. The Stop-hook test-gate is advisory and races commit-on-stop (which advances HEAD
+  # past any sha a Stop-time gate stamped), so it cannot be trusted for the run_id binding.
+  # --allow-no-tests records passed:null without failing the loop; scripts/tick.sh still
+  # requires the evaluator's NO_TESTS_OK before it will tick a no-test phase. Run BEFORE the
+  # pre-grade snapshot so the (gitignored) evidence file is settled and survives cleanup.
+  bash scripts/test-evidence.sh --allow-no-tests >>autopilot.log 2>&1 || true
+
   # Snapshot the tree BEFORE grading so we can discard whatever the evaluator changes.
   # PRE_SNAP empty ⇔ tracked tree clean (git stash create stashes only tracked work).
   # PRE_GRADE_HEAD lets us detect (and undo) a COMMIT the evaluator makes — git reset
@@ -299,44 +322,47 @@ for i in $(seq 1 "$MAX_ITER"); do
       fi
       ;;
     PASS)
-      # (a) HIGH-STAKES gate: never auto-tick/commit/push a phase whose changed-file PATHS are
-      #     NAMED like high-stakes work (auth/ money/ migrations/ delete…). NOTE: this matches
-      #     path NAMES only — it is structurally blind to destructive CONTENT in a benignly-named
-      #     file (e.g. a `DROP TABLE` or float-money math in src/utils.py). Keep sensitive code in
-      #     sensibly-named paths; the gate is a backstop, not a content analyzer. Diff is the whole
-      #     phase (.phase-base..HEAD), matched against the shared high-stakes path list.
-      if type -t high_stakes_match >/dev/null 2>&1; then
-        BASE=$(cat .claude/.phase-base 2>/dev/null)
-        CHANGED=$(git diff --name-only "${BASE:-HEAD~1}..HEAD" 2>/dev/null)
-        if HS=$(high_stakes_match "$CHANGED"); then
-          HS_BLOCKED=1   # finish block must NOT push this branch, even with --pr
-          echo "autopilot: ⛔ HIGH-STAKES paths changed this phase — finish it SUPERVISED. Not ticking/committing; branch stays LOCAL (no push even with --pr):" | tee -a autopilot.log
-          printf '%s\n' "$HS" | sed 's/^/    /' | tee -a autopilot.log
+      # Record the independent grade as evidence for the shared tick gate (same writer the
+      # in-session /wrap path uses, so the grade-file format has one source). run_id binds it to
+      # the exact commit; NO_TESTS_OK (only if the grader emitted it) authorizes ticking a phase
+      # that legitimately has no test suite.
+      bash scripts/record-grade.sh "$VERDICT" >>autopilot.log 2>&1
+
+      # Route through the SINGLE completion gate. tick.sh verifies the evidence (grade + fresh
+      # green tests bound to HEAD), secret-scans the whole phase diff, blocks high-stakes paths,
+      # updates the STATE machine block, and only then flips the checkbox — the SAME gate /wrap
+      # uses. It reads its inputs from the filesystem and committed history, so nothing needs
+      # staging beforehand; we stage + commit the resulting roadmap/STATE change only on success.
+      PHASE_HEADING=$(cat .claude/.phase-ready 2>/dev/null || echo "phase")   # tick.sh consumes .phase-ready
+      bash scripts/tick.sh 2>&1 | tee -a autopilot.log
+      TICK_RC="${PIPESTATUS[0]}"
+      case "$TICK_RC" in
+        0)
+          # Persist the resolved failure trail (don't just delete it): a phase that needed work
+          # before passing leaves a record in docs/FAILURES.md so recurring blockers are visible.
+          if [ -f NEXT_FINDINGS.md ]; then
+            {
+              echo ""
+              echo "## ${PHASE_HEADING#\#\# } — resolved $(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo unknown)"
+              cat NEXT_FINDINGS.md
+            } >> docs/FAILURES.md
+            rm -f NEXT_FINDINGS.md
+          fi
+          git add -A 2>/dev/null
+          git commit -m "autopilot: phase passed independent grade (iteration $i)" >/dev/null 2>&1 || true
+          SAME_PHASE_FAILS=0; PREV_OPEN_SIGNATURE=""
+          ;;
+        3)
+          HS_BLOCKED=1   # high-stakes: finish block must NOT push this branch, even with --pr
+          echo "autopilot: ⛔ HIGH-STAKES phase — finish it SUPERVISED. Branch stays LOCAL (no push even with --pr)." | tee -a autopilot.log
           break
-        fi
-      fi
-      # (b) ONLY now — on an independent PASS, no high-stakes paths — tick the roadmap.
-      tick_phase 2>&1 | tee -a autopilot.log
-      if [ "${PIPESTATUS[0]}" -ne 0 ]; then
-        echo "autopilot: ticking failed (see warning above) — stopping rather than re-running the same phase." | tee -a autopilot.log
-        break
-      fi
-      # (c) Stage, then run the SHARED secret-scan before committing (the orchestrator
-      #     commit must not bypass the guard the Stop hook enforces).
-      git add -A 2>/dev/null
-      if type -t secret_scan_staged >/dev/null 2>&1; then
-        FINDINGS=$(secret_scan_staged); SCAN_RC=$?
-        if [ "$SCAN_RC" -ne 0 ]; then
-          git reset -q 2>/dev/null
-          echo "autopilot: ⛔ SECRET GUARD — staged phase changes contain a secret. NOT committing. STOPPING." | tee -a autopilot.log
-          printf '%s\n' "$FINDINGS" | tee -a autopilot.log
+          ;;
+        *)
+          git reset -q 2>/dev/null || true
+          echo "autopilot: tick gate REFUSED (rc $TICK_RC) — not ticking. See NEXT_FINDINGS.md / autopilot.log. STOPPING." | tee -a autopilot.log
           break
-        fi
-      fi
-      # (d) Commit the passed phase.
-      git commit -m "autopilot: phase passed independent grade (iteration $i)" >/dev/null 2>&1 || true
-      rm -f NEXT_FINDINGS.md
-      SAME_PHASE_FAILS=0; PREV_OPEN_SIGNATURE=""
+          ;;
+      esac
       ;;
     *)
       echo "autopilot: unrecognized verdict (final line: '$LASTLINE') — stopping (won't assume success)." | tee -a autopilot.log; break

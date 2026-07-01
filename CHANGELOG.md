@@ -4,6 +4,45 @@ All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/); this project
 uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased] — automation hardening
+
+Third hardening pass from a skeptical multi-agent automation audit. Turns prompt-only joints
+into code-enforced, tested ones, with one shared completion gate. No breaking changes.
+
+### Added — one shared completion gate
+- **`scripts/tick.sh` is now the ONLY path that ticks the roadmap.** `/wrap`, `/autopilot`, and
+  `scripts/autopilot.sh` all route through it — nothing marks a phase done by prose. It requires a
+  recorded evaluator PASS, fresh green test evidence bound to the exact commit, a clean secret scan,
+  and no high-stakes (path **or** content) changes, then updates the STATE auto-block. Fails closed,
+  leaving `docs/ROADMAP.md` byte-identical on any refusal. (`scripts/test-tick.sh`)
+- **`scripts/test-evidence.sh`** — authoritative test-evidence producer, run after the builder exits
+  so `run_id` binds to the final HEAD (the Stop-hook gate raced commit-on-stop and is now advisory).
+- **`scripts/record-grade.sh`** — single writer of the evaluator grade file (HEAD-bound; refuses
+  non-PASS); shared by autopilot and the in-session tick path.
+- **Deterministic STATE on every tick** — `docs/STATE.md` gets a machine-managed block (last ticked
+  phase, next open phase + task) so it can no longer lag the roadmap. Model narrative is untouched.
+- **`scripts/close-milestone.sh`** — gated milestone closure: refuses while any open item or
+  unresolved `NEXT_FINDINGS.md` remains; no "proceed anyway" bypass. (`scripts/test-close-milestone.sh`)
+- **Failure history** — resolved findings are archived to `docs/FAILURES.md` instead of deleted.
+- **`doctor.sh --fix`** — safe, idempotent local repair (chmod, dirs, FAILURES.md); never touches
+  the high-stakes fingerprint. (`scripts/test-doctor.sh`)
+
+### Changed — broader, enforced guards
+- **Content-level high-stakes detection** — `high_stakes_content_match` catches destructive
+  operations (DROP/DELETE/TRUNCATE, `rm -rf`, force-push, `--no-verify`, `os.system`, `shell=True`,
+  `eval(`) in benignly-named files; forces supervised review.
+- **`Mode: supervised` is now ENFORCED** — `tick.sh` parses it and refuses to auto-tick such a
+  phase (was advisory/unparsed).
+- **Autopilot crash-safety** — a single-run lock (`.claude/.autopilot.lock`) blocks concurrent runs
+  and reclaims a stale lock; an EXIT/INT/TERM trap releases it and reports (never auto-removes) an
+  orphaned worktree.
+- **Honesty** — "auto-maintained docs" reworded to "an evidence-gated, auto-ticked roadmap with
+  auto-written state" (now actually true). Kill-switch match-all wiring is asserted by doctor + test.
+
+### Added — tests
+Behavioral coverage for commit-on-stop, steer, format-on-edit, and test-gate modes; a docs-invariant
+guard against prose ticking; lint/helper tests (`next-adr.sh`, `lint-roadmap.sh`). All wired into CI.
+
 ## [1.0.3] — 2026-06-30
 
 Second enforcement-hardening pass, driven by a multi-agent audit. Closes the remaining gaps
@@ -135,8 +174,9 @@ accurate docs.
 ## [1.0.0] — 2026-06-30
 
 First public release. A lean, project-neutral Claude Code operating system:
-auto-maintained docs, deterministic hooks, an independent evaluator, two autonomous
-loops (watchable + headless), path-scoped rules, and a pack of portable skills.
+an evidence-gated, auto-ticked roadmap with auto-written state, deterministic hooks, an
+independent evaluator, two autonomous loops (watchable + headless), path-scoped rules, and
+a pack of portable skills.
 
 ### Added — scaffold (`lean-stack/`)
 - `CLAUDE.md` lean constitution; `docs/` source-of-truth set (SPEC, ROADMAP, STATE,

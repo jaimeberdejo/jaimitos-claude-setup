@@ -29,8 +29,15 @@ Loop, for each phase, until your count target is met OR docs/ROADMAP.md has no `
    It runs in fresh context with no edit tools and a default-FAIL contract — it is the gate.
    Do NOT grade it yourself.
 
-4. **Act on the verdict — the subagent's PASS is the only thing that ticks the roadmap:**
-   - **PASS:** tick this phase's items in docs/ROADMAP.md, update docs/STATE.md, commit, continue.
+4. **Act on the verdict — ticking goes through the shared gate, NEVER by editing checkboxes:**
+   - **PASS:** produce evidence and tick via the SAME scripts the headless loop uses — do not
+     flip `- [ ]` → `- [x]` yourself:
+       - `bash scripts/test-evidence.sh --allow-no-tests`   (fresh test evidence at this commit)
+       - `bash scripts/record-grade.sh "<the evaluator's full verdict text>"`
+       - `bash scripts/tick.sh "<exact phase heading>"`
+     tick.sh verifies the grade + fresh green tests + a clean secret scan + no high-stakes
+     changes, then flips the checkbox and updates the STATE auto-block. If it REFUSES (including a
+     high-stakes or secret hit), do NOT tick — report why and stop. Then commit and continue.
    - **NEEDS_WORK:** address the listed items, re-run the evaluator (max 2 rounds). If it still
      fails, write the findings to NEXT_FINDINGS.md, do NOT tick, and STOP — report the blocker.
 
@@ -41,8 +48,10 @@ Loop, for each phase, until your count target is met OR docs/ROADMAP.md has no `
    small caps here; reach for the script for anything long.
 
 At the end, summarize: phases completed, phases remaining, and the single next action.
-Do not push to a remote. **Never run this mode on high-stakes phases.** Unlike the headless
-`scripts/autopilot.sh`, this in-session loop has NO programmatic high-stakes gate, evaluator-
-change discard, or secret-scan-before-commit — you (the watcher) are those guardrails here.
-High-stakes work is `supervised` per the roadmap and the .claude/rules/high-stakes.md rule;
-for any unattended high-stakes run, there is no safe mode — do it by hand.
+Do not push to a remote. Ticking now goes through `scripts/tick.sh` — the SAME secret-scan,
+high-stakes, and fresh-test-evidence gate the headless loop uses — so an unverified or
+high-stakes phase will REFUSE to tick here too, not just in the script. What this in-session
+loop still LACKS versus `scripts/autopilot.sh` is the evaluator-change discard and the
+throwaway-worktree isolation: you (the watcher) are those guardrails. High-stakes work is
+`supervised` per the roadmap and .claude/rules/high-stakes.md; for unattended high-stakes
+runs there is no safe mode — do it by hand.

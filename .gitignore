@@ -8,6 +8,9 @@
 **/.claude/.last-changed
 **/.claude/.phase-base
 **/.claude/.phase-ready
+**/.claude/.phase-grade
+**/.claude/.tick-evidence.json
+**/.claude/.autopilot.lock
 **/.claude/.evidence-reads
 **/.claude/settings.local.json
 **/AGENT_STOP
