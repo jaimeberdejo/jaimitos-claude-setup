@@ -29,6 +29,13 @@ fi
 if [ -z "$CHANGED" ]; then
   CHANGED=$(git show --name-only --pretty=format: HEAD 2>/dev/null)
 fi
+# A merge commit (e.g. /autopilot-parallel integrating a phase branch) shows an EMPTY diff
+# under `git show`'s default combined-diff format when there's no conflict resolution to
+# display — even though real work landed via the merged branch. Fall back to a diff against
+# the first parent so a merge-only turn doesn't silently skip both nudges below.
+if [ -z "$CHANGED" ]; then
+  CHANGED=$(git diff --name-only HEAD^1 HEAD 2>/dev/null)
+fi
 
 if grep -qE '\.(py|ts|tsx|js|jsx|go|rs)$' <<<"$CHANGED"; then
   echo "↳ ownership check:"
@@ -44,7 +51,8 @@ fi
 # roadmap loop and STATE.md may now be describing stale "where we are" context that
 # session-start.sh will keep re-injecting. Advisory only — never blocks, matches the
 # ceremony-to-stakes rule for tiny/reversible work.
-if [ -n "$CHANGED" ] && [ ! -f .claude/.phase-ready ] && [ -f docs/STATE.md ]; then
+if [ -n "$CHANGED" ] && [ ! -f .claude/.phase-ready ] && [ -f docs/STATE.md ] \
+   && ! grep -qxF 'docs/STATE.md' <<<"$CHANGED"; then
   echo "↳ this change happened outside an active roadmap phase — if it changes \"where we"
   echo "  are,\" add a one-line note to docs/STATE.md so the next session isn't reading stale state."
 fi

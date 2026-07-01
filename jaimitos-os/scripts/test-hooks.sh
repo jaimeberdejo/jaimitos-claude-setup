@@ -304,6 +304,50 @@ behav_ownership_state_nudge() (
 )
 if behav_ownership_state_nudge; then pass "ownership-nudge: nudges docs/STATE.md update only for changes outside an active phase"; else fail "ownership-nudge STATE.md drift check (rc=$?)"; fi
 
+# ownership-nudge: a MERGE commit's default `git show` diff is empty (no conflict-resolution
+# hunks to display), even though real work landed via the merged branch — the last-resort
+# fallback must still surface it via a first-parent diff, not silently skip the nudge.
+behav_ownership_merge_fallback() (
+  set -uo pipefail
+  t=$(mktemp -d) || exit 20; trap 'rm -rf "$t"' EXIT
+  mkdir -p "$t/.claude/hooks" "$t/docs"
+  cp "$HROOT/.claude/hooks/ownership-nudge.sh" "$t/.claude/hooks/" || exit 22
+  cd "$t" || exit 21
+  git init -q && git config user.email t@t.t && git config user.name t
+  printf 'next: whatever\n' > docs/STATE.md
+  git add -A && git commit -qm init
+  git branch feature -q
+  git checkout -q feature
+  mkdir -p src && printf 'def f(): return 1\n' > src/feature.py
+  git add -A && git commit -qm "add feature"
+  git checkout -q master -q 2>/dev/null || git checkout -q main
+  git merge --no-ff feature -q -m "merge feature"
+  # clean tree, no breadcrumb — CHANGED must fall all the way to the merge-aware last resort.
+  out=$(printf '%s' '{"stop_hook_active":false}' | CLAUDE_PROJECT_DIR="$t" bash .claude/hooks/ownership-nudge.sh 2>/dev/null)
+  printf '%s\n' "$out" | grep -q 'ownership check' || exit 1
+  printf '%s\n' "$out" | grep -q 'outside an active roadmap phase' || exit 2
+  exit 0
+)
+if behav_ownership_merge_fallback; then pass "ownership-nudge: fires on a clean merge commit (first-parent fallback), not silently skipped"; else fail "ownership-nudge merge-commit blind spot (rc=$?)"; fi
+
+# ownership-nudge: if docs/STATE.md is ITSELF the (only) changed file this turn, the drift
+# nudge would be redundant — the user already touched the exact file it's about to suggest.
+behav_ownership_state_already_changed() (
+  set -uo pipefail
+  t=$(mktemp -d) || exit 20; trap 'rm -rf "$t"' EXIT
+  mkdir -p "$t/.claude/hooks" "$t/docs"
+  cp "$HROOT/.claude/hooks/ownership-nudge.sh" "$t/.claude/hooks/" || exit 22
+  cd "$t" || exit 21
+  git init -q && git config user.email t@t.t && git config user.name t
+  printf 'next: whatever\n' > docs/STATE.md
+  git add -A && git commit -qm init
+  echo 'docs/STATE.md' > .claude/.last-changed
+  out=$(printf '%s' '{"stop_hook_active":false}' | CLAUDE_PROJECT_DIR="$t" bash .claude/hooks/ownership-nudge.sh 2>/dev/null)
+  printf '%s\n' "$out" | grep -q 'outside an active roadmap phase' && exit 1
+  exit 0
+)
+if behav_ownership_state_already_changed; then pass "ownership-nudge: no redundant nudge when docs/STATE.md is already the changed file"; else fail "ownership-nudge STATE.md-redundancy check (rc=$?)"; fi
+
 echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All hook smoke + behavioral tests passed."; exit 0
 else echo "$FAILS hook test(s) failed."; exit 1; fi

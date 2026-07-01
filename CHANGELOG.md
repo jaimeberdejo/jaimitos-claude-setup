@@ -15,6 +15,17 @@ uses [Semantic Versioning](https://semver.org/).
   nudges you to add a one-line STATE.md note if it matters — advisory only, never blocks, same
   ceremony-to-stakes rule as everywhere else. (`scripts/test-hooks.sh`)
 
+### Fixed
+- **`ownership-nudge.sh` no longer silently skips a merge-commit turn.** Its last-resort
+  "files in the most recent commit" fallback (`git show --name-only HEAD`) returns empty by
+  default for a clean merge commit (e.g. right after `/autopilot-parallel` integrates a phase
+  branch), even though real work landed — so with a clean tree and no breadcrumb, neither the
+  ownership nudge nor the STATE.md-drift nudge fired at all. Added a first-parent-diff fallback
+  (`git diff --name-only HEAD^1 HEAD`) for exactly that case. Found via 20 adversarial tests run
+  in parallel against the hook; confirmed with a real merge-commit repro.
+- The STATE.md-drift nudge no longer fires when `docs/STATE.md` is itself the only file that
+  changed this turn — telling someone to update the exact file they just updated was redundant.
+
 ## [2.0.0] — 2026-07-02 — Jaimitos OS rename + automation hardening
 
 ### Changed — BREAKING: renamed "the Lean Stack" to "Jaimitos OS"
