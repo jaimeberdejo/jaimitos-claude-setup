@@ -46,7 +46,8 @@ grep -q "Lean Stack — the scaffold" README.md && bad "scaffold README content 
 [ -e .github/workflows/lean-stack-ci.yml ] && bad "CI copied without --with-ci" || ok "CI absent by default"
 # Core scaffold + shared libs present.
 for f in CLAUDE.md .claude/settings.json scripts/autopilot.sh \
-         .claude/lib/_secret-scan.sh .claude/lib/_high-stakes.sh; do
+         .claude/lib/_secret-scan.sh .claude/lib/_high-stakes.sh \
+         .claude/commands/autopilot-parallel.md; do
   [ -f "$f" ] && ok "installed $f" || bad "missing $f"
 done
 # Skills installed per-project — but the installer/meta skill is NOT.

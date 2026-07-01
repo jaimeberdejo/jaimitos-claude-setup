@@ -16,9 +16,12 @@
   it, and call it out. Never touch unrelated files.
 - Never edit the current phase's `Done when:` line or heading in docs/ROADMAP.md
   while building it — you must not weaken the criteria you're graded against.
-- High-stakes/irreversible code (auth, migrations, money, deletes, external side
-  effects): supervised only — no autopilot, smallest phases, `permission_mode: default`,
-  human approval before merge. (Also in .claude/rules/high-stakes.md.)
+- High-stakes/irreversible code (auth, migrations, money, deletes, external side effects that
+  MUTATE something outside our control — payments, emails, webhooks, deploys): supervised only —
+  no autopilot, smallest phases, `permission_mode: default`, human approval before merge. A
+  read-only/idempotent external call (a GET against public data) is NOT automatically high-stakes
+  on that basis alone — judge it on its own actual blast radius. (Also in
+  .claude/rules/high-stakes.md.)
 
 ## Docs are the source of truth (not this file, not your memory)
 - docs/SPEC.md     = what we're building and why; non-goals

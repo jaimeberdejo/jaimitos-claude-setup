@@ -72,6 +72,12 @@ bounded scope, independent verifiability (the evaluator can confirm from diff + 
 command), and a low/reversible blast radius. If it fails any — especially anything
 touching money, auth, prod migrations, or compliance judgment — mark it **supervised**.
 
+Don't over-tag: "the phase makes an external API call" is not by itself a reason to mark it
+supervised. Judge the actual blast radius — a read-only, idempotent, unauthenticated GET against
+public data is a different risk than a call that mutates something outside your control (a
+payment, an email send, a webhook, a deploy). The latter is supervised; the former can be
+loopable if the other three criteria hold.
+
 > **The `Mode:` tag is ENFORCED.** `scripts/tick.sh` parses the phase's `Mode:` line, and a
 > phase marked `supervised` REFUSES to auto-tick (it exits "supervised", same as a high-stakes
 > hit) in every mode — headless and in-session. It is backed up by the high-stakes **path** and

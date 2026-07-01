@@ -57,7 +57,7 @@ echo ""
 
 echo "Agents, commands, rules:"
 [ -f .claude/agents/evaluator.md ] && ok ".claude/agents/evaluator.md" || bad "missing .claude/agents/evaluator.md (independent grader)"
-for c in resume wrap phase autopilot; do
+for c in resume wrap phase autopilot autopilot-parallel; do
   [ -f ".claude/commands/$c.md" ] && ok ".claude/commands/$c.md" || bad "missing .claude/commands/$c.md"
 done
 [ -f .claude/rules/high-stakes.md ] && ok ".claude/rules/high-stakes.md" || bad "missing .claude/rules/high-stakes.md"

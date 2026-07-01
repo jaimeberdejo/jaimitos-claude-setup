@@ -59,9 +59,12 @@ regex at its shipped default (a sign the enforced gate was never pointed at your
 - **Smallest possible phases.** One reviewable change at a time. No drive-by refactors.
 - **Explainable line by line.** Record real decisions (and the alternative rejected)
   with the `adr` skill so the change is defensible later.
-- **Never** run migrations against shared/prod data, perform irreversible deletes, or
-  trigger external side effects (payments, emails) as part of an automated loop. Keep
-  those outside the loop's blast radius (e.g. no prod credentials in the loop's env).
+- **Never** run migrations against shared/prod data, perform irreversible deletes, or trigger
+  external side effects that MUTATE something outside our control (payments, emails, webhooks,
+  deploys) as part of an automated loop. Keep those outside the loop's blast radius (e.g. no prod
+  credentials in the loop's env). A read-only, idempotent call to a public endpoint (fetching
+  data, not changing it) is not this category by itself — don't tag a phase supervised on "it
+  makes an external call" alone; judge the actual reversibility/consequence.
 - **Money:** never use `float` for currency — use `Decimal` / integer minor units, and
   document the rounding.
 

@@ -24,6 +24,7 @@ TESTS=(
   test-secret-scan.sh
   test-checkpoint.sh
   test-autopilot-gates.sh
+  test-autopilot-parallel.sh
   test-tick.sh
   test-docs-invariants.sh
   test-close-milestone.sh

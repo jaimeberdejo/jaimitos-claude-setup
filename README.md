@@ -60,7 +60,7 @@ jaimitos-claude-setup/
 │   ├── .github/workflows/lean-stack-ci.yml   # OPT-IN CI (install.sh --with-ci)
 │   └── .claude/
 │       ├── settings.json            # hooks → events + permissions.deny
-│       ├── commands/                # /resume /wrap /phase /autopilot
+│       ├── commands/                # /resume /wrap /phase /autopilot /autopilot-parallel
 │       ├── agents/evaluator.md      # independent grader
 │       ├── rules/high-stakes.md     # path-scoped extra care
 │       └── hooks/                   # 7 deterministic shell hooks + 3 shared libs (_secret-scan, _high-stakes, _test-cmd)
@@ -166,6 +166,7 @@ You drive each arrow manually for stakes that warrant it, or hand the bracket to
 | `/resume` | Reads SPEC+ROADMAP+STATE, states the single next action, then waits. Orientation only. |
 | `/phase` | Builds one roadmap phase: research-if-needed → plan → TDD → evaluator self-check. **Does not tick the roadmap** (that's gated on an independent grade). |
 | `/autopilot N` | **Watchable** in-session loop: runs N phases in your terminal, grading each via the evaluator subagent. Accepts `N`, `3-5`, or `all`. |
+| `/autopilot-parallel "<heading>" ...` | Builds **named, user-asserted-independent** phases concurrently in isolated worktrees, then integrates and grades them one at a time through the same `tick.sh` gate. Never auto-detects independence — you name the phases. |
 | `/wrap` | Session close-out: update STATE, tick ROADMAP through the shared `scripts/tick.sh` gate (evaluator PASS + fresh green tests + clean secret scan + no high-stakes), append an ADR. Never flips checkboxes by hand. |
 
 ## Agent & rules
@@ -212,6 +213,7 @@ Three ways to run, in order of trust:
 |---|---|---|
 | Manual | `/phase`, you review each diff | medium stakes, your daily default |
 | Watchable loop | `/autopilot N` (in-session) | a few phases you want to *see* run |
+| Parallel watchable loop | `/autopilot-parallel "<heading>" ...` (in-session, per-phase worktree isolation) | a handful of phases you're confident don't interfere with each other |
 | Headless loop | `bash scripts/autopilot.sh N [--no-worktree] [--pr] [--allow-dirty]` | long/overnight, low-stakes, reversible |
 
 `scripts/autopilot.sh` accepts `N` (up to N), `N-M` (aim for N, cap M), or `all` (malformed
@@ -261,8 +263,18 @@ the **advisory** layer (`CLAUDE.md`, `rules/`, the evaluator prompt) only asks a
   — a graded phase whose diff touches those paths is never auto-ticked/committed, and the branch is
   **never pushed, even with `--pr`** (it stays local for review). The enforced match list is
   `HIGH_STAKES_RE` in `_high-stakes.sh`; **customize it per project** (run `doctor.sh` — it warns if
-  it's still the shipped default). The in-session `/autopilot` and `/phase` modes do **not** apply
-  this gate programmatically; keep high-stakes work out of those loops.
+  it's still the shipped default). `/phase` alone never ticks, so the gate simply never runs in
+  that mode — but `/autopilot` DOES route every PASS through the same `scripts/tick.sh` gate
+  (identical to `/wrap`), so a high-stakes diff is refused there too; `/autopilot` additionally
+  checks the next phase's `Mode:` line *before* building it, not just before ticking, so an
+  unattended run can't carry out a supervised phase's actual work before being blocked from
+  ticking it. Keep high-stakes work out of these loops regardless — `Mode: supervised` and a
+  correctly customized `HIGH_STAKES_RE` are the backstop, not the plan.
+- `/autopilot-parallel` routes every phase through the same `tick.sh` gate, so a high-stakes hit on
+  one named phase is still never auto-ticked or pushed — but unlike `scripts/autopilot.sh` (which
+  aborts the *entire* run), it leaves that one phase local for supervised review and **continues
+  integrating the other named phases**, since each was independently asserted by the user as
+  non-interfering.
 
 ---
 

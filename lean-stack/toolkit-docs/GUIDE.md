@@ -55,8 +55,11 @@ your-repo/
     ├── commands/
     │   ├── resume.md              # /resume    — orient at session start
     │   ├── wrap.md                # /wrap      — close out + tick via the gate + update docs
-    │   ├── phase.md               # /phase     — build one phase (research→plan→TDD→grade; no self-tick)
-    │   └── autopilot.md           # /autopilot — WATCHABLE in-session loop of N phases
+    │   ├── phase.md               # /phase     — build one phase (research→plan→TDD→grade; no self-tick;
+    │   │                          #   optional heading argument to target a specific phase)
+    │   ├── autopilot.md           # /autopilot — WATCHABLE in-session loop of N phases
+    │   └── autopilot-parallel.md  # /autopilot-parallel — user-named independent phases built
+    │                              #   concurrently (isolated worktrees), integrated/ticked one at a time
     ├── agents/
     │   └── evaluator.md           # independent grader (default-FAIL, no edit tools)
     ├── rules/
@@ -311,9 +314,10 @@ Be honest about what actually *enforces* versus what merely *advises* — differ
 |---|---|---|---|---|
 | Manual | `/phase` + `/wrap` | yours | you run `/wrap` → the `tick.sh` gate, after `@evaluator` PASS | medium stakes, daily default |
 | Watchable | `/autopilot N` | one session (rots) | evaluator **subagent** → the `tick.sh` gate | a few phases you want to see |
+| Parallel watchable | `/autopilot-parallel "<heading>" ...` | one session, per-phase **worktree** during build | evaluator **subagent**, fresh per merged phase → the `tick.sh` gate | user-asserted-independent phases you want built concurrently |
 | Headless | `scripts/autopilot.sh N` | fresh per phase (no rot) | separate evaluator **process** → the `tick.sh` gate | long/overnight, low-stakes |
 
-All three route ticking through the **same** `scripts/tick.sh` gate ([Part 4](#the-completion-gate--scriptsticksh-read-this-twice)).
+All four route ticking through the **same** `scripts/tick.sh` gate ([Part 4](#the-completion-gate--scriptsticksh-read-this-twice)).
 **Flexible counts** (both autopilots): `5` (up to 5) · `3-5` (aim ≥3, cap 5) · `all`/`max` (until
 roadmap empty, safety-capped).
 
@@ -335,6 +339,29 @@ Both loops share the tick gate; the **headless** `scripts/autopilot.sh` adds *is
 The in-session `/autopilot` and `/phase`+`/wrap` modes have the independent grader and the shared
 gate, but not that isolation — **you (the watcher) are that guardrail.** Use the headless script for
 unattended runs; use the in-session modes when you want to watch.
+
+### What `/autopilot-parallel` trades for parallelism
+`/autopilot-parallel "<heading>" ...` builds several NAMED phases concurrently, each in its own
+git worktree (via the Agent tool's `isolation: "worktree"`), then integrates them back **one at a
+time** — grading and ticking stay strictly sequential, because `tick.sh` is a single-writer gate
+over one `docs/ROADMAP.md`. What changes versus plain `/autopilot`:
+
+- **Gain: per-phase blast-radius isolation.** Each phase builds in a real, separate worktree —
+  stronger isolation than `/autopilot`'s single shared in-session checkout, closer to (but not the
+  same as) `scripts/autopilot.sh`'s process-level isolation.
+- **Loss: no automatic retry.** Each phase gets exactly one build attempt. A NEEDS_WORK after
+  merging is not retried automatically the way `/phase`'s internal TDD loop or `/autopilot`'s
+  findings-loop retries — it's handed back for a manual `/phase` + `/wrap` follow-up.
+- **Loss: still no evaluator-change discard or process isolation.** The evaluator runs in-session
+  via the Task tool at integration time, same trust model as `/autopilot` — not
+  `scripts/autopilot.sh`'s separate-process, change-discarding evaluator.
+- **A genuinely new, unenforced trust assumption: human-asserted independence.** Nothing in this
+  stack mechanically verifies that two phases don't interfere. A clean `git merge` is *not* proof
+  of independence — two phases can touch entirely disjoint files and still be logically dependent
+  (e.g. one assumes an API the other was supposed to add). A merge conflict is the closest thing to
+  an after-the-fact check, and even that only catches *textual* collisions. Every other guardrail
+  in this stack is enforced by a script or an independent process; this one is enforced by nothing
+  but your own judgment before you name the phases — say so, don't paper over it.
 
 ### Never loop
 Auth, migrations against shared/prod data, money movement, irreversible deletes, external side
@@ -799,6 +826,8 @@ DAILY LOOP   /resume → /phase → review → teach-back → /wrap → /clear
 COMMANDS     /resume       orient at session start
              /phase        build one phase (research→plan→TDD→grade; no self-tick)
              /autopilot N   watchable in-session loop (N | 3-5 | all)
+             /autopilot-parallel "<heading>" ...   build named, user-asserted-independent
+                            phases concurrently (per-phase worktree), integrate + grade serially
              /wrap         update STATE, tick ROADMAP via the tick.sh gate, append ADRs
              @evaluator     grade a phase independently
 

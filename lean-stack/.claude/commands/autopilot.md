@@ -12,10 +12,21 @@ Loop until the count target is met OR `docs/ROADMAP.md` has no `- [ ]` items:
    items → STOP (roadmap complete). `NEXT_FINDINGS.md` exists → read and address it before anything
    else. (The steer.sh hook surfaces any `STEER.md` I write mid-run — act on it when it appears.)
 
-2. **Build the phase: run the `/phase` procedure exactly** (research→plan→execute→verify, TDD,
+2. **Check the next phase's `Mode:` line BEFORE building it — do not wait for `tick.sh` to catch
+   this at the end.** Identify the next phase exactly as `/phase` would (the first phase with
+   unchecked items) and read its `Mode:` line. If it says `supervised`, STOP right here — do NOT
+   run `/phase`, do not start research/plan/TDD, do not attempt anything. Report which phase it is
+   and why (quote its `Mode:` line and any nearby high-stakes note), and say this phase must be
+   built with plain `/phase` under direct human review, then ticked via `/wrap` — never through
+   this loop. This check exists because `tick.sh`'s `Mode: supervised` refusal only protects the
+   *checkbox* — it runs after a phase is fully built, so without this check an unattended loop
+   could still carry out a supervised phase's actual work (including any live external effect it
+   requires) before being blocked from ticking it.
+
+3. **Build the phase: run the `/phase` procedure exactly** (research→plan→execute→verify, TDD,
    3-strike thrash cap, records `.claude/.phase-base`/`.phase-ready`). Do not restate it here.
 
-3. **Grade + tick — ticking ONLY goes through the shared gate, never by editing checkboxes:**
+4. **Grade + tick — ticking ONLY goes through the shared gate, never by editing checkboxes:**
    - **PASS:** produce evidence and tick with the SAME scripts the headless loop uses:
      - `bash scripts/test-evidence.sh --allow-no-tests`
      - `bash scripts/record-grade.sh "<the evaluator's full verdict text>"`
@@ -26,7 +37,7 @@ Loop until the count target is met OR `docs/ROADMAP.md` has no `- [ ]` items:
    - **NEEDS_WORK:** address the items, re-run the `evaluator` (max 2 rounds). If it still fails,
      write the findings to `NEXT_FINDINGS.md`, do NOT tick, and STOP — report the blocker.
 
-4. **Between phases, manage context.** Report your running token/context budget. After 2-3 phases
+5. **Between phases, manage context.** Report your running token/context budget. After 2-3 phases
    or when the window feels full, STOP and recommend I `/wrap` then `/clear` then re-run `/autopilot`
    — this in-session loop rots context the way the headless script does not.
 

@@ -9,6 +9,29 @@ uses [Semantic Versioning](https://semver.org/).
 Third hardening pass from a skeptical multi-agent automation audit. Turns prompt-only joints
 into code-enforced, tested ones, with one shared completion gate. No breaking changes.
 
+### Added — targeted phase selection & parallel execution
+- **`/phase <heading>`** — optional argument to target a specific roadmap phase instead of always
+  picking the first open one (backward compatible; bare `/phase` is unchanged). Refuses clearly on
+  an ambiguous or zero-match heading rather than silently falling through to another phase.
+- **`/autopilot-parallel`** — new command: builds named, user-asserted-independent phases
+  concurrently in isolated git worktrees, then integrates/grades/ticks them one at a time through
+  the same shared `scripts/tick.sh` gate — never a second completion path. Conflicts stop for
+  explicit human direction rather than auto-resolving; a high-stakes phase in the batch stays local
+  without blocking the rest of the batch. (`scripts/test-autopilot-parallel.sh`)
+
+### Fixed — supervised-tag over-broadening & doc accuracy
+- `CLAUDE.md`, `.claude/rules/high-stakes.md`, and the `roadmap` skill no longer treat "makes an
+  external API call" alone as grounds for `Mode: supervised` — only external effects that MUTATE
+  something outside our control (payments, emails, webhooks, deploys) do; a read-only/idempotent
+  call is judged on its actual blast radius instead.
+- **`/autopilot` now checks the next phase's `Mode:` line BEFORE building it**, not just before
+  ticking — previously an unattended run could carry out a supervised phase's real work (including
+  any live external effect it required) and only be blocked from *ticking* it afterward.
+- README no longer claims `/autopilot` doesn't apply the high-stakes gate programmatically — it
+  does, via the same shared `tick.sh`; `/phase` alone genuinely doesn't, since it never ticks at all.
+- `skills/milestone` now defers to `skills/roadmap`'s phase-shape rules instead of restating a
+  looser duplicate (it was only checking a `Done when:` line exists, not that it's measurable).
+
 ### Added — one shared completion gate
 - **`scripts/tick.sh` is now the ONLY path that ticks the roadmap.** `/wrap`, `/autopilot`, and
   `scripts/autopilot.sh` all route through it — nothing marks a phase done by prose. It requires a

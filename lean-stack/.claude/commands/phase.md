@@ -1,9 +1,21 @@
 Run the next unchecked phase of docs/ROADMAP.md, autonomously:
 
+**Optional argument = a specific phase heading to target** (e.g. `/phase "## Phase 4 —
+Hardening"`, or enough of the heading to be unambiguous, e.g. `/phase "Phase 4"`). If given, skip
+"pick the first phase with unchecked items" below and instead find the roadmap phase whose
+heading matches the argument (exact full-line match preferred; if the argument is a partial
+string, match the unique `## ` heading that contains it — if more than one heading matches, STOP
+and ask which one; if ZERO headings match at all, STOP and report that no such phase exists in
+docs/ROADMAP.md — never fall through to picking the first open phase instead). That phase must
+still have at least one unchecked `- [ ]` item, or STOP and report it's already done — do not
+silently fall through to another phase. This is for targeted and parallel work (see
+`/autopilot-parallel`); bare `/phase` (no argument) is unchanged.
+
 0. If NEXT_FINDINGS.md exists, READ IT FIRST. It contains the previous evaluator's
    reasons a phase was not done. Address those findings before selecting any new
    work — do not skip past them.
-1. Read docs/STATE.md and docs/ROADMAP.md. Pick the first phase with unchecked items.
+1. Read docs/STATE.md and docs/ROADMAP.md. If a phase argument was given (see above), select
+   that phase. Otherwise, pick the first phase with unchecked items.
 2. Record the phase base (so the grader can diff the whole phase) and the phase
    heading (so the orchestrator knows which items to tick on PASS). Create .claude/
    if needed, then:
@@ -17,6 +29,11 @@ Run the next unchecked phase of docs/ROADMAP.md, autonomously:
      heading (a genuinely new phase), run `git rev-parse HEAD > .claude/.phase-base`.
    - Write the EXACT heading line to `.claude/.phase-ready`, verbatim, no extra text
      (do this in both cases — it is cheap and idempotent for the same phase).
+   - If this phase's `Mode:` line says `supervised`, say so plainly before continuing — you are
+     about to build it under direct human review (that's what plain `/phase`, unlike `/autopilot`,
+     is for), and its tick will need a manual `/wrap` afterward; `scripts/tick.sh` will refuse to
+     auto-tick it regardless. This is informational, not a stop — building supervised phases
+     interactively is the sanctioned path for them.
 3. **Research (only if the phase needs it).** If the phase uses an unfamiliar API, library,
    or pattern, or touches code you haven't read, do a brief research pass FIRST: read the
    relevant existing code, and consult docs (context7 / web) if available. Capture the
