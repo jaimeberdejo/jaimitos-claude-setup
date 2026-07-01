@@ -21,7 +21,7 @@ independent evaluator, path-scoped rules, one shared completion gate, and two au
 · [5 Autonomy in depth](#part-5--autonomy-in-depth) · [6 Loop engineering (theory)](#part-6--loop-engineering-the-theory)
 · [7 Roadmap lifecycle](#part-7--roadmap-lifecycle) · [8 Worked use cases](#part-8--worked-use-cases)
 · [9 Tutorials](#part-9--tutorials) · [10 Failure modes](#part-10--failure-modes-and-their-fixes)
-· [11 Quick reference](#part-11--quick-reference-card)
+· [11 External-skill synergy](#part-11--synergy-with-external-skills) · [12 Quick reference](#part-12--quick-reference-card)
 
 ---
 
@@ -483,6 +483,67 @@ echo "Use Decimal for money, never float. Refactor what you've done." > STEER.md
 touch AGENT_STOP     # halt at next tool call   ·   rm AGENT_STOP   # resume
 ```
 
+### 6. Start a brand-new project from scratch
+The full greenfield path, thinking-first:
+```
+install.sh (or the setup-lean-stack skill)  →  fill CLAUDE.md commands + HIGH_STAKES_RE
+   ↓ (plan mode) sharpen the idea until the goal + a MEASURABLE success metric are crisp
+      "grill me on <the idea>"   (or the /grill-me skill — see Part 11)
+   ↓ write docs/SPEC.md   →   run the `roadmap` skill  →  docs/ROADMAP.md
+   ↓ /phase → review → teach-back → /wrap → /clear   ×N   →   ship
+```
+The one non-negotiable: the SPEC needs a **measurable** criterion (the `roadmap` skill refuses
+without one). That's why the thinking step comes first — everything downstream inherits its quality.
+
+### 7. Adopt the stack in an existing (brownfield) repo
+```
+bash ~/my-claude-code-setup/install.sh .     # or say "set up the lean stack here"
+```
+Run the **`mapme`** skill *first* — it regenerates `docs/ARCHITECTURE.md` from the real code so you
+start oriented, not from a blank map. Point `HIGH_STAKES_RE` in `_high-stakes.sh` at the repo's
+existing sensitive dirs, then write a SPEC for the **next increment** (not the whole legacy system)
+and roadmap from there. You don't retro-fit phases onto old code — you phase the *new* work.
+
+### 8. A bug that resists the first fix
+```
+"systematic debug: <symptom>. Form a hypothesis, add a failing test that reproduces it, then fix."
+```
+If two or three attempts circle without progress, invoke the **`unstick`** skill — it stops the
+thrash, names the shared assumption behind the failed attempts, and proposes a cheaper test. This is
+the manual analogue of the loop's 3-strike cap: bounded retries, then step back. Don't autopilot a
+bug whose correctness is a judgment call.
+
+### 9. A big refactor with full coverage
+```
+/autopilot 4        # or headless for a large sweep: bash scripts/autopilot.sh 6
+```
+Refactors are ideal loop fodder **when the tests already cover the behavior** — the suite is the
+safety net that lets the loop move fast. Run the **`scope-guard`** skill after, to catch drive-by
+changes that crept beyond the refactor. Split anything touching 20+ files into smaller phases;
+fresh-context loops do best on small slices.
+
+### 10. Recover from a bad autopilot run
+```bash
+tail -40 autopilot.log          # what the builder + evaluator actually did
+cat NEXT_FINDINGS.md            # why the last phase failed its grade
+git log --oneline               # every green step is its own commit
+git reset --hard <last good commit>          # roll back cleanly
+git worktree list && git worktree remove <path> --force   # clean up an orphaned worktree
+echo "<the correction>" > STEER.md           # then rm AGENT_STOP and re-run
+```
+Nothing is lost: green steps are separate commits, resolved findings are archived to
+`docs/FAILURES.md`, and worktree isolation kept your main checkout clean the whole time.
+
+### 11. A high-stakes feature done right (e.g. auth)
+```
+/phase        # supervised — the smallest possible slice
+teach-back    # explain it back; you must own auth line-by-line
+adr           # record the decision + the alternative you rejected
+```
+Never autopilot this — and even if you tried, the `tick.sh` gate refuses to auto-tick a diff that
+touches a high-stakes path and the headless loop never pushes it. Keep `permission_mode: default`,
+one reviewable change at a time, review before merge. Money as `Decimal`, never `float`.
+
 ---
 
 ## Part 9 — Tutorials
@@ -545,7 +606,62 @@ before merge, let git history + ADRs be your audit trail.
 
 ---
 
-## Part 11 — Quick reference card
+## Part 11 — Synergy with external skills
+
+The lean-stack is deliberately small and works standalone — but it leaves whole stages to you:
+*thinking before the spec, hard debugging, deep review.* That's exactly where third-party skill
+packs slot in. Two ground rules keep them from fighting the stack:
+
+- **Precedence.** Your `CLAUDE.md` and direct instructions outrank any skill (the superpowers pack
+  states this itself). If an external skill's ritual conflicts with the stack — e.g. mandatory TDD
+  when you deliberately want to spike — CLAUDE.md wins.
+- **One spine, many steps.** The stack's loop — **build → independent grade → gated tick** — is the
+  orchestrator. Use external skills as *steps within* a phase, or *upstream/downstream* of the loop,
+  **never as a competing loop.** Every skill should answer one question: *am I a step, or a spine?*
+  Steps compose; a second spine collides.
+
+### grill-me / grill-with-docs (mattpocock/skills)
+`npx skills@latest add mattpocock/skills`. `/grill-me` interrogates a plan until every branch of the
+decision tree is resolved; `/grill-with-docs` does the same **and** builds a domain model + updates docs.
+- **Where it fits:** *upstream of the `roadmap` skill.* The roadmap skill refuses a spec without a
+  measurable success criterion — grilling is what manufactures that criterion.
+- **New project:** `install → /grill-me → docs/SPEC.md → roadmap skill → phases`. It's the rigorous
+  version of the built-in `"grill me on <idea>"` prompt pattern in [Part 8, case 6](#6-start-a-brand-new-project-from-scratch).
+- **New milestone:** `milestone skill archives the done roadmap → /grill-me the next batch → SPEC → roadmap`.
+- **Watch for:** aim `/grill-with-docs` at `docs/SPEC.md` / `docs/ARCHITECTURE.md` so it feeds the
+  source-of-truth layout instead of a parallel one (it overlaps the stack's own `mapme`).
+
+### superpowers (the discipline pack)
+A broad pack of process skills. Map each to a stage of the loop rather than adopting it wholesale:
+
+| superpowers skill | Where it slots into the lean-stack |
+|---|---|
+| `brainstorming` | Before the spec — same slot as grill-me; explore intent before `roadmap`. |
+| `test-driven-development` | Reinforces the stack's TDD working agreement; the stack layers the *deterministic* `test-gate` + evidence on top. |
+| `systematic-debugging` | When a phase stalls (the 3-strike cap trips) — pairs with the stack's `unstick`. |
+| `using-git-worktrees` | Manual isolation; the headless `autopilot.sh` already does this for loops. |
+| `verification-before-completion` | Philosophically identical to the evaluator's default-FAIL + the `tick.sh` evidence gate ("evidence before assertions"). |
+| `requesting-code-review` / `receiving-code-review` | Downstream of a phase; complements `ship-check` + the evaluator. |
+| `writing-plans` / `executing-plans` / `subagent-driven-development` | An alternative planning/execution layer — **the classic spine collision.** Don't double-plan with `/phase`; pick one. |
+
+**The biggest overlap to avoid:** superpowers' plan → execute → subagent machinery is a *second
+orchestrator*. If you run `/phase` and the autopilots, don't also drive execution through it — two
+systems will fight over the same files and the same "done." Use superpowers for what the stack
+doesn't cover (brainstorming, debugging, review, verification discipline) and let `/phase` own the build.
+
+### Don't forget the built-in layer
+Before reaching outside, the 11 bundled skills already cover most of the loop: `roadmap`/`milestone`
+(planning), `adr`/`mapme` (knowledge), `ship-check`/`scope-guard`/`explain-diff` (review),
+`teach-back`/`quizme` (ownership), `unstick` (debugging reset). External packs are for *depth in one
+area*, not replacements — reach for them when the built-in skill isn't enough, not by default.
+
+### The one rule, compressed
+**Steps compose; spines collide.** Grill, brainstorm, debug, review — steps, wire them in freely. A
+second plan/execute/tick loop — a spine — run only one, and let it be the lean-stack's.
+
+---
+
+## Part 12 — Quick reference card
 
 ```
 INSTALL      git clone …/my-claude-code-setup ~/my-claude-code-setup
