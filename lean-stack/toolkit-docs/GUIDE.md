@@ -146,6 +146,64 @@ bash scripts/run-guard-tests.sh   # exercise the gates before trusting them
 > [repo-root README](../../README.md#troubleshooting), and [Part 10](#part-10--failure-modes-and-their-fixes)
 > below for loop-specific failure modes.
 
+### Walkthrough A — a brand-new project (greenfield)
+From an empty folder to your first built phase. **`git init` before installing** so the hooks and
+the post-install `doctor` see a real repo.
+```bash
+# one-time: clone the toolkit somewhere stable (you install FROM here into each project)
+git clone https://github.com/jaimeberdejo/my-claude-code-setup ~/my-claude-code-setup
+
+mkdir ~/projects/myapp && cd ~/projects/myapp
+git init
+bash ~/my-claude-code-setup/install.sh .    # or, in Claude: "set up the lean stack here"
+```
+Then:
+1. **Customize.** An empty folder has no stack to detect, so *you* set it: fill `CLAUDE.md`'s
+   `<...>` test/lint/run commands, and point `HIGH_STAKES_RE` in `.claude/lib/_high-stakes.sh` at the
+   sensitive dirs you're about to create (or leave the default; `doctor.sh` reminds you).
+2. **Verify + commit.** `bash scripts/doctor.sh` (green), then `git add -A && git commit -m "chore: scaffold lean-stack"`.
+3. **Think → SPEC.** Plan mode: `"grill me on <the idea>"` (or `/grill-me` — see [Part 11](#part-11--synergy-with-external-skills)),
+   then `"write that to docs/SPEC.md"` with a **measurable** success criterion.
+4. **SPEC → ROADMAP.** Run the `roadmap` skill (`"turn the spec into a roadmap"`).
+5. **Build.** `[ /resume → /phase → teach-back → /wrap → /clear ] × N` (see [Part 3](#part-3--the-core-loop)).
+
+You never run `/init` — the scaffold's `CLAUDE.md` *is* your init, and `/init` would clobber it.
+
+### Walkthrough B — an existing project (brownfield)
+Same spine, with two brownfield-only steps. **The mental shift: you don't roadmap the existing
+code** — you *map* it (orient) and *protect* it (high-stakes), then phase only the *new* work.
+```bash
+cd ~/projects/existing-app
+git status                       # commit/stash first — you want the adoption as a reviewable diff
+git switch -c chore/adopt-lean-stack
+bash ~/my-claude-code-setup/install.sh .    # or "set up the lean stack here"
+```
+`install.sh` is **non-destructive**: it ships the toolkit README as `SCAFFOLD.md` (never touches
+yours), **merges** your `.gitignore`, and is **idempotent — it skips any file that already exists.**
+That last property drives the brownfield-only steps:
+
+1. **⚠️ Merge, don't overwrite (brownfield-only).** Because install *skips existing files*:
+   - **Existing `CLAUDE.md`?** Yours was kept, so the lean constitution was NOT applied. Diff it
+     against `~/my-claude-code-setup/lean-stack/CLAUDE.md` and fold in the sections you lack (working
+     agreement, tick-gate/autonomy, high-stakes, ownership) while keeping your project notes.
+   - **Existing `.claude/settings.json`?** Yours was kept, so **the lean hooks aren't wired.** Merge
+     the `hooks` block + `permissions.deny` from the shipped `settings.json` into yours.
+
+     Had neither file? Skip this step — install dropped them cleanly.
+2. **Point high-stakes at REAL dirs.** Set `HIGH_STAKES_RE` to your actual `auth/`, `migrations/`,
+   `payments/`, delete paths, etc. (`doctor.sh` warns if left at the default).
+3. **Fill/confirm `CLAUDE.md` commands** from the repo's real test/lint/run (the `setup-lean-stack`
+   skill auto-detects these from `package.json` / `pyproject.toml` / Makefile).
+4. **🗺️ Map the existing code — run `mapme` FIRST (brownfield-only).** It writes
+   `docs/ARCHITECTURE.md` from the real code so `session-start` re-orients Claude every session. This
+   is the correct substitute for `/init` — the useful half, without clobbering `CLAUDE.md`.
+5. **Verify + commit.** `bash scripts/doctor.sh` green, run your existing suite once (confirm the gate
+   resolves it), then commit the adoption on the branch.
+6. **New work only.** A feature → grill → SPEC → `roadmap` → `/phase`. A bug fix → just prompt (or
+   `systematic-debugging` / `unstick`). Touch a high-stakes area → it auto-trips the supervised gate.
+
+The two things that make brownfield different: **merge don't overwrite**, and **`mapme` first**.
+
 ---
 
 ## Part 3 — The core loop
