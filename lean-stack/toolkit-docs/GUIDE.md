@@ -321,6 +321,18 @@ the 14,000 identical tool calls, the agent that declared a broken build "done").
 The jump from 1/2/3 to 4 is the jump from "demo" to "trustworthy," and the reason is context:
 1–3 degrade as the window fills; 4 starts every iteration fresh and carries state through files.
 
+> **Harness-native repetition — `/loop`.** Recent Claude Code builds ship a `/loop` command that
+> re-runs a prompt or slash command on an interval (`/loop 5m /some-command`) or self-paced. It's a
+> tidy way to get architecture-2/3-style repetition without writing a Stop hook — but understand what
+> it is: **a runner, not a loop engine.** On its own it has *none* of this scaffold's guardrails (no
+> independent grader, no `tick.sh` gate, no fresh-context isolation, no thrash cap), and it shares one
+> session's context, so it rots on long runs. Don't reach for `/loop /phase` — `/phase` deliberately
+> doesn't tick, so you'd just rebuild the same first unchecked phase. For phase work, `/autopilot`
+> (watchable) and `scripts/autopilot.sh` (headless) are strictly better: they wrap the loop in the
+> grader, the gate, and (headless) real isolation. Use `/loop` for what the autopilots *don't* cover —
+> polling an external job, or repeating one mechanical command on a timer. As with `/goal` above,
+> confirm the command exists in your Claude Code version before relying on it.
+
 ### The five guardrails (non-negotiable)
 1. **A verifiable success signal** — the loop checks itself against something with an **exit code**,
    not a vibe. `pytest` returning 0 is a signal; "looks done" is not. This is why TDD and autonomy
