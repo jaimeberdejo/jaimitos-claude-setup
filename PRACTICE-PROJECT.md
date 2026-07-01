@@ -77,13 +77,15 @@ Mode: loopable
 ## Build it across four sessions
 ```
 Session 1 — scaffold + Phase 1 (manual, learn the rhythm)
-  /resume → plan → "implement phase 1, TDD" → @evaluator grade → /wrap → /clear
+  /resume → plan → "implement phase 1, TDD" → @evaluator grade → teach-back → /wrap → /clear
 
 Session 2 — Phase 2 watchable
   /resume → /autopilot 1   (watch it build fixtures + the eval test) → /wrap → /clear
 
 Session 3 — Phase 3 supervised
   /resume → /phase → curl the endpoint + run the CLI yourself → /wrap → /clear
+  # Phase 3 is Mode: supervised, so the tick gate REFUSES to auto-tick it —
+  # that's why it's a manual session, not an autopilot one.
 
 Session 4 — Phase 4 headless
   bash scripts/autopilot.sh 2
@@ -92,14 +94,26 @@ Session 4 — Phase 4 headless
 At the end you have a working, tested, documented tool with a full git checkpoint history,
 ADRs, and a STATE.md you could hand to a stranger.
 
+> **What actually ticks the roadmap.** In every session, `/wrap` and the autopilots don't flip
+> `- [ ]` → `- [x]` by hand — they route through **`scripts/tick.sh`**, the one gate that requires
+> an independent evaluator PASS, fresh green tests, and a clean secret scan before a phase counts as
+> done. Watch it refuse in Session 1 if you try to `/wrap` before the evaluator passes — that refusal
+> is the whole point.
+>
+> **Ownership matters as much as output.** The `teach-back` skill (Session 1) has Claude explain what
+> it built, then quizzes *you* — code you can't explain is code you don't own. The `ownership-nudge`
+> hook reminds you after each change.
+
 ## What you'll have learned
 Measurable success criteria · phase boundaries that each leave a working program · TDD as the
-loop's truth source · the evaluator catching premature "done" · running a phase watchable and
-headless · steering and stopping a loop.
+loop's truth source · the evaluator catching premature "done" · the `tick.sh` completion gate that
+won't mark a phase done without evidence · owning the code via `teach-back` · running a phase
+watchable and headless · steering and stopping a loop.
 
 ## Graduating to high-stakes work
 Apply the same stack to real work with one change for anything consequential: **drop autopilot
 for high-stakes/irreversible code** (auth, migrations, money, deletes, external effects). Use
 `/phase` supervised, keep `permission_mode: default`, require review before merge, and let git
-history + ADRs be your audit trail. The `high-stakes.md` rule encodes this — point its `paths:`
-at your dirs.
+history + ADRs be your audit trail. Point the **enforced** high-stakes list — `HIGH_STAKES_RE` in
+`.claude/lib/_high-stakes.sh` — at your sensitive dirs (then mirror it in `.claude/rules/high-stakes.md`
+for humans); the tick gate refuses to auto-tick anything that touches those paths.
