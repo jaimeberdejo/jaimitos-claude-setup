@@ -13,7 +13,7 @@ can safely try the autopilots, steering, and the kill-switch.
 1. Make a throwaway repo and install the scaffold into it:
    ```bash
    mkdir /tmp/prendapricer && cd /tmp/prendapricer && git init
-   bash ~/my-claude-code-setup/install.sh .
+   bash ~/jaimitos-claude-setup/install.sh .
    ```
 2. Follow the four sessions below.
 3. When you're done learning, `rm -rf /tmp/prendapricer` (and delete this file). Done.

@@ -1,6 +1,6 @@
 # Personal Skills — general-purpose dev workflow
 
-> Part of **[my-claude-code-setup](../README.md)** — see the repo-root README for the full
+> Part of **[jaimitos-claude-setup](../README.md)** — see the repo-root README for the full
 > picture and how these pair with the lean-stack scaffold.
 
 This is the **complete index of all 11 skills** — 7 workflow + 3 ownership + the installer
@@ -41,8 +41,8 @@ scaffold-aware, not fully stack-neutral.
 **Easiest — the repo installer** copies all 10 portable skills per-project (and
 `setup-lean-stack` only with `--global-skills`):
 ```bash
-bash /path/to/my-claude-code-setup/install.sh .                 # per-project skills
-bash /path/to/my-claude-code-setup/install.sh . --global-skills # also into ~/.claude/skills
+bash /path/to/jaimitos-claude-setup/install.sh .                 # per-project skills
+bash /path/to/jaimitos-claude-setup/install.sh . --global-skills # also into ~/.claude/skills
 ```
 **By hand** — the workflow + ownership skills (everything except the installer one):
 ```bash

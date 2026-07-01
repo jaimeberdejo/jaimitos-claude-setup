@@ -163,10 +163,16 @@ if [ "$SETTINGS_KEPT" -eq 1 ]; then
 fi
 echo ""
 echo "Next:"
+echo "  Existing project (a stack was already here)?"
 echo "  1. Edit CLAUDE.md placeholders (your test/lint/run commands) — or run the"
 echo "     'setup-lean-stack' skill to auto-detect your stack and fill them."
 echo "  2. Point .claude/rules/high-stakes.md 'paths:' at your sensitive dirs."
 echo "  3. Describe the project → docs/SPEC.md, run the 'roadmap' skill → docs/ROADMAP.md."
+echo ""
+echo "  Starting from scratch (empty project, no stack yet)?"
+echo "  1. Describe the project → docs/SPEC.md (grill the idea first for a measurable criterion)."
+echo "  2. Run the 'roadmap' skill → docs/ROADMAP.md. It fills CLAUDE.md's commands from the SPEC"
+echo "     automatically, and reminds you to point high-stakes.md 'paths:' at real dirs."
 echo ""
 
 # 5. Health check. doctor.sh assumes a git repo (it verifies git-tracked guarantees), so only

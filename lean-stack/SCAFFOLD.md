@@ -8,7 +8,7 @@ This is the self-contained quick-start for the lean Claude Code setup that was
 installed into this repo. The full toolkit README is **not** copied into your
 project (so it doesn't pollute it); read it on GitHub:
 
-- <https://github.com/jaimeberdejo/my-claude-code-setup>
+- <https://github.com/jaimeberdejo/jaimitos-claude-setup>
 
 ## What got installed here
 - **CLAUDE.md** — lean constitution (edit the `<...>` placeholders). Includes the Ownership section.
@@ -32,8 +32,9 @@ The two required steps are `chmod` then `doctor.sh`:
     bash scripts/doctor.sh        # verify tooling, scaffold, settings, hooks
     bash scripts/test-hooks.sh    # smoke-test the hooks
 
-Then fill in CLAUDE.md, describe the project → `docs/SPEC.md`, and run the `roadmap`
-skill → `docs/ROADMAP.md`.
+Existing project? Fill in CLAUDE.md's commands now. Starting from scratch? Skip that — describe
+the project → `docs/SPEC.md` first, then run the `roadmap` skill → `docs/ROADMAP.md`; it fills
+CLAUDE.md's commands from the SPEC as it runs.
 
 ### Optional companions (not required)
 Handy extras, not part of setup — skip them and the stack still works:

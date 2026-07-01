@@ -6,7 +6,7 @@ theory behind them, worked use cases, and step-by-step tutorials. For a hands-on
 build the standalone [`PRACTICE-PROJECT.md`](../../PRACTICE-PROJECT.md) (a throwaway you can
 delete afterward).
 
-This guide is part of **[my-claude-code-setup](../../README.md)** (the repo-root README is the
+This guide is part of **[jaimitos-claude-setup](../../README.md)** (the repo-root README is the
 master map). Drop the `lean-stack/` folder's contents into any repo and you have the whole
 system: an evidence-gated, auto-ticked roadmap with auto-written state, deterministic hooks, an
 independent evaluator, path-scoped rules, one shared completion gate, and two autonomous loops
@@ -94,13 +94,13 @@ and fresh processes.
 Clone this setup once, then use any of three paths (full detail in the [root README](../../README.md#install)):
 
 ```bash
-git clone https://github.com/jaimeberdejo/my-claude-code-setup ~/my-claude-code-setup
+git clone https://github.com/jaimeberdejo/jaimitos-claude-setup ~/jaimitos-claude-setup
 
 # A) one command (recommended): deterministic copy + skills + chmod + doctor
-bash ~/my-claude-code-setup/install.sh /path/to/your-repo
+bash ~/jaimitos-claude-setup/install.sh /path/to/your-repo
 
 # B) the skill: install skills globally once, then say "set up the lean stack here"
-bash ~/my-claude-code-setup/install.sh /path/to/your-repo --global-skills
+bash ~/jaimitos-claude-setup/install.sh /path/to/your-repo --global-skills
 #    → in the project, the `setup-lean-stack` skill copies + auto-fills CLAUDE.md for your stack
 
 # C) manual: cp -r lean-stack/. and skills/* yourself (see root README)
@@ -151,21 +151,29 @@ From an empty folder to your first built phase. **`git init` before installing**
 the post-install `doctor` see a real repo.
 ```bash
 # one-time: clone the toolkit somewhere stable (you install FROM here into each project)
-git clone https://github.com/jaimeberdejo/my-claude-code-setup ~/my-claude-code-setup
+git clone https://github.com/jaimeberdejo/jaimitos-claude-setup ~/jaimitos-claude-setup
 
 mkdir ~/projects/myapp && cd ~/projects/myapp
 git init
-bash ~/my-claude-code-setup/install.sh .    # or, in Claude: "set up the lean stack here"
+bash ~/jaimitos-claude-setup/install.sh .    # or, in Claude: "set up the lean stack here"
 ```
 Then:
-1. **Customize.** An empty folder has no stack to detect, so *you* set it: fill `CLAUDE.md`'s
-   `<...>` test/lint/run commands, and point `HIGH_STAKES_RE` in `.claude/lib/_high-stakes.sh` at the
-   sensitive dirs you're about to create (or leave the default; `doctor.sh` reminds you).
-2. **Verify + commit.** `bash scripts/doctor.sh` (green), then `git add -A && git commit -m "chore: scaffold lean-stack"`.
-3. **Think → SPEC.** Plan mode: `"grill me on <the idea>"` (or `/grill-me` — see [Part 11](#part-11--synergy-with-external-skills)),
-   then `"write that to docs/SPEC.md"` with a **measurable** success criterion.
-4. **SPEC → ROADMAP.** Run the `roadmap` skill (`"turn the spec into a roadmap"`).
-5. **Build.** `[ /resume → /phase → teach-back → /wrap → /clear ] × N` (see [Part 3](#part-3--the-core-loop)).
+1. **Verify + commit.** `bash scripts/doctor.sh` — expect it green overall but with `!` warnings
+   about `CLAUDE.md`'s un-filled `<...>` placeholders and the default `HIGH_STAKES_RE`; that's
+   expected pre-SPEC, not a problem (an empty folder has no real stack or sensitive dirs to point
+   at yet — `doctor.sh` warns, it doesn't fail). Then
+   `git add -A && git commit -m "chore: scaffold lean-stack"`.
+2. **Think → SPEC.** Plan mode: `"grill me on <the idea>"` (or `/grill-me` — see [Part 11](#part-11--synergy-with-external-skills)),
+   then `"write that to docs/SPEC.md"` with a **measurable** success criterion. This is where the
+   real stack gets decided (the SPEC's Constraints section).
+3. **SPEC → ROADMAP (auto-fills CLAUDE.md too).** Run the `roadmap` skill
+   (`"turn the spec into a roadmap"`). Before writing `docs/ROADMAP.md`, it checks `CLAUDE.md` for
+   left-over placeholders and fills the test/lint/run commands from the SPEC you just wrote — no
+   separate manual edit step. It also reminds you to point `HIGH_STAKES_RE` in
+   `.claude/lib/_high-stakes.sh` (and the mirrored `paths:` in `.claude/rules/high-stakes.md`) at
+   any sensitive dirs the project turns out to need — that part stays a judgment call, not
+   auto-filled.
+4. **Build.** `[ /resume → /phase → teach-back → /wrap → /clear ] × N` (see [Part 3](#part-3--the-core-loop)).
 
 You never run `/init` — the scaffold's `CLAUDE.md` *is* your init, and `/init` would clobber it.
 
@@ -176,7 +184,7 @@ code** — you *map* it (orient) and *protect* it (high-stakes), then phase only
 cd ~/projects/existing-app
 git status                       # commit/stash first — you want the adoption as a reviewable diff
 git switch -c chore/adopt-lean-stack
-bash ~/my-claude-code-setup/install.sh .    # or "set up the lean stack here"
+bash ~/jaimitos-claude-setup/install.sh .    # or "set up the lean stack here"
 ```
 `install.sh` is **non-destructive**: it ships the toolkit README as `SCAFFOLD.md` (never touches
 yours), **merges** your `.gitignore`, and is **idempotent — it skips any file that already exists.**
@@ -184,7 +192,7 @@ That last property drives the brownfield-only steps:
 
 1. **⚠️ Merge, don't overwrite (brownfield-only).** Because install *skips existing files*:
    - **Existing `CLAUDE.md`?** Yours was kept, so the lean constitution was NOT applied. Diff it
-     against `~/my-claude-code-setup/lean-stack/CLAUDE.md` and fold in the sections you lack (working
+     against `~/jaimitos-claude-setup/lean-stack/CLAUDE.md` and fold in the sections you lack (working
      agreement, tick-gate/autonomy, high-stakes, ownership) while keeping your project notes.
    - **Existing `.claude/settings.json`?** Yours was kept, so **the lean hooks aren't wired.** Merge
      the `hooks` block + `permissions.deny` from the shipped `settings.json` into yours.
@@ -542,25 +550,61 @@ touch AGENT_STOP     # halt at next tool call   ·   rm AGENT_STOP   # resume
 ```
 
 ### 6. Start a brand-new project from scratch
-The full greenfield path, thinking-first:
+The full greenfield path, thinking-first — **CLAUDE.md fill-in is now automatic**, folded into
+the `roadmap` step instead of a manual pre-SPEC edit:
+
 ```
-install.sh (or the setup-lean-stack skill)  →  fill CLAUDE.md commands + HIGH_STAKES_RE
-   ↓ (plan mode) sharpen the idea until the goal + a MEASURABLE success metric are crisp
-      "grill me on <the idea>"   (or the /grill-me skill — see Part 11)
-   ↓ write docs/SPEC.md   →   run the `roadmap` skill  →  docs/ROADMAP.md
-   ↓ /phase → review → teach-back → /wrap → /clear   ×N   →   ship
+┌─────────────┐     ┌──────────────┐     ┌─────────────────┐     ┌────────────────────────────┐     ┌────────┐
+│  install.sh │ ──▶ │  doctor.sh   │ ──▶ │  grill the idea │ ──▶ │   roadmap skill             │ ──▶ │ build  │
+│ (scaffold)  │     │ (green, but  │     │  → docs/SPEC.md │     │  → docs/ROADMAP.md          │     │/phase  │
+│             │     │  ! warns:    │     │  (measurable    │     │  + AUTO-FILLS CLAUDE.md     │     │×N →    │
+│             │     │  CLAUDE.md   │     │   criterion,    │     │    commands from SPEC's     │     │ ship   │
+│             │     │  placeholders│     │   Constraints   │     │    Constraints section      │     │        │
+│             │     │  unfilled —  │     │   section pins  │     │  + reminds: set             │     │        │
+│             │     │  expected)   │     │   the stack)    │     │    HIGH_STAKES_RE manually  │     │        │
+└─────────────┘     └──────────────┘     └─────────────────┘     └────────────────────────────┘     └────────┘
+                                                                          ▲
+                                                          CLAUDE.md fill moved HERE
+                                                          (used to happen before SPEC existed)
 ```
+
 The one non-negotiable: the SPEC needs a **measurable** criterion (the `roadmap` skill refuses
-without one). That's why the thinking step comes first — everything downstream inherits its quality.
+without one). That's why the thinking step comes first — everything downstream inherits its
+quality, including CLAUDE.md's commands, which `roadmap` now fills in from the SPEC as it runs
+(see [Part 7](#part-7--roadmap-lifecycle) for the mechanics).
+
+**Sub-scenarios this covers:**
+- **Ambiguous commands.** If the SPEC's Constraints section names a language but not a package
+  manager/test runner, `roadmap` asks rather than guessing — it never invents a command.
+- **A pre-existing customized CLAUDE.md.** If `roadmap` finds no `<...>` placeholders left (rare
+  for true greenfield, but possible if you filled it by hand), it silently no-ops — no
+  double-fill, no clobber.
+- **Report on completion.** After writing `docs/ROADMAP.md`, `roadmap` states what it filled
+  into CLAUDE.md (or that it was already customized) and reminds you to point
+  `HIGH_STAKES_RE` at any sensitive dirs the project turns out to need.
 
 ### 7. Adopt the stack in an existing (brownfield) repo
+The stack already exists here, so nothing is deferred — CLAUDE.md and the high-stakes gate are
+filled **immediately**, before SPEC:
+
 ```
-bash ~/my-claude-code-setup/install.sh .     # or say "set up the lean stack here"
+┌─────────────┐     ┌────────────────────────────────┐     ┌──────────┐     ┌──────────────────┐     ┌─────────┐
+│  install.sh │ ──▶ │  setup-lean-stack skill          │ ──▶ │  mapme   │ ──▶ │  SPEC (next       │ ──▶ │ roadmap │
+│ (scaffold,  │     │  detects stack (package.json/   │     │ (orient  │     │  increment only,  │     │ → build │
+│  merges     │     │  pyproject.toml/…) → fills       │     │  on real │     │  not the whole    │     │         │
+│  .gitignore)│     │  CLAUDE.md + HIGH_STAKES_RE      │     │  code)   │     │  legacy system)   │     │         │
+│             │     │  IMMEDIATELY — no deferral       │     │          │     │                   │     │         │
+└─────────────┘     └────────────────────────────────┘     └──────────┘     └──────────────────┘     └─────────┘
 ```
+
 Run the **`mapme`** skill *first* — it regenerates `docs/ARCHITECTURE.md` from the real code so you
 start oriented, not from a blank map. Point `HIGH_STAKES_RE` in `_high-stakes.sh` at the repo's
 existing sensitive dirs, then write a SPEC for the **next increment** (not the whole legacy system)
 and roadmap from there. You don't retro-fit phases onto old code — you phase the *new* work.
+
+> **Why the two paths differ:** `roadmap`'s CLAUDE.md-fill step only fires when it finds
+> un-substituted `<...>` placeholders. Brownfield never has any (filled at install), so the step
+> is a silent no-op there — one skill, two behaviors, driven entirely by what it finds on disk.
 
 ### 8. A bug that resists the first fix
 ```
@@ -607,11 +651,12 @@ one reviewable change at a time, review before merge. Money as `Decimal`, never 
 ## Part 9 — Tutorials
 
 ### A — From empty repo to first running feature
-1. `bash ~/my-claude-code-setup/install.sh .` then `git init`.
-2. Edit `CLAUDE.md` placeholders (or run the `setup-lean-stack` skill to auto-fill them).
-3. Plan mode: `"grill me on <your idea>, then write docs/SPEC.md"`.
-4. Run the **`roadmap`** skill: `"turn the spec into a roadmap"`.
-5. `/phase` → review the diff → `/wrap` → `/clear`. Repeat per phase.
+1. `bash ~/jaimitos-claude-setup/install.sh .` then `git init`. (An empty repo has nothing to
+   detect, so `setup-lean-stack`/install.sh leave `CLAUDE.md`'s placeholders as-is for now.)
+2. Plan mode: `"grill me on <your idea>, then write docs/SPEC.md"`.
+3. Run the **`roadmap`** skill: `"turn the spec into a roadmap"` — it fills `CLAUDE.md`'s
+   commands from the SPEC you just wrote, then writes `docs/ROADMAP.md`.
+4. `/phase` → review the diff → `/wrap` → `/clear`. Repeat per phase.
 
 ### B — Wiring TDD so it's never skipped
 The `test-gate.sh` hook (wired first in `Stop`) can make *"a green suite is required to end a turn"*
@@ -687,14 +732,15 @@ measurable success criterion — grilling is what manufactures that criterion. T
 pipeline, with grill-me as the thinking stage:
 
 ```
-  install                setup-lean-stack skill (or install.sh) → fill CLAUDE.md + HIGH_STAKES_RE
+  install                setup-lean-stack skill (or install.sh)
      ↓
   GRILL   ── plan mode ──  /grill-me      ← interrogate until the goal + the ONE measurable
                            (or "grill me on <idea>")   success metric + non-goals are crisp
      ↓
   SPEC                     write docs/SPEC.md   (what/why · MEASURABLE criterion · non-goals · constraints)
      ↓
-  ROADMAP                  roadmap skill  →  docs/ROADMAP.md   (ordered phases: Done when + Mode)
+  ROADMAP                  roadmap skill  →  docs/ROADMAP.md   (ordered phases: Done when + Mode;
+                           also fills CLAUDE.md's commands from the SPEC, reminds re: HIGH_STAKES_RE)
      ↓
   BUILD                    /phase → review → teach-back → /wrap → /clear   ×N   →   ship
 ```
@@ -743,8 +789,8 @@ second plan/execute/tick loop — a spine — run only one, and let it be the le
 ## Part 12 — Quick reference card
 
 ```
-INSTALL      git clone …/my-claude-code-setup ~/my-claude-code-setup
-             bash ~/my-claude-code-setup/install.sh /path/to/repo   (--force, --global-skills, --with-ci)
+INSTALL      git clone …/jaimitos-claude-setup ~/jaimitos-claude-setup
+             bash ~/jaimitos-claude-setup/install.sh /path/to/repo   (--force, --global-skills, --with-ci)
              git init && bash scripts/doctor.sh
              (don't set CLAUDE_CODE_SUBAGENT_MODEL=haiku — it downgrades the evaluator)
 

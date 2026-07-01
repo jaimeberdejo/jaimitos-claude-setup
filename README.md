@@ -1,4 +1,4 @@
-# my-claude-code-setup
+# jaimitos-claude-setup
 
 A lean, **project-neutral operating system for Claude Code**: an evidence-gated, auto-ticked
 roadmap with auto-written state, deterministic hooks, an independent grader, two autonomous
@@ -19,16 +19,23 @@ research fan-out**, so you keep full visibility and a 1-experienced-dev token bu
 ## Quickstart
 
 ```bash
-git clone https://github.com/jaimeberdejo/my-claude-code-setup.git ~/my-claude-code-setup
+git clone https://github.com/jaimeberdejo/jaimitos-claude-setup.git ~/jaimitos-claude-setup
 cd /path/to/your-project
 git init                                           # first, so the post-install doctor is clean
-bash ~/my-claude-code-setup/install.sh .           # drops the scaffold + skills in (auto-runs doctor)
-# then: fill CLAUDE.md placeholders + point HIGH_STAKES_RE in .claude/lib/_high-stakes.sh at your paths
+bash ~/jaimitos-claude-setup/install.sh .           # drops the scaffold + skills in (auto-runs doctor)
 ```
 
-Then: edit `CLAUDE.md` (your test/lint/run commands) → point `HIGH_STAKES_RE` in
-`.claude/lib/_high-stakes.sh` at your sensitive paths → write `docs/SPEC.md` → run the
-`roadmap` skill → build with `/phase`. New to it all? Work through `PRACTICE-PROJECT.md` first.
+Then it branches on whether there's an existing stack to detect:
+- **Adopting into an existing repo?** Fill `CLAUDE.md`'s commands + point `HIGH_STAKES_RE` in
+  `.claude/lib/_high-stakes.sh` at your sensitive paths now (the `setup-lean-stack` skill can
+  auto-detect and do this for you) — then write `docs/SPEC.md` → run the `roadmap` skill → build.
+- **Starting from scratch?** There's no stack to fill CLAUDE.md with yet — write `docs/SPEC.md`
+  first (grill the idea until it has a *measurable* success criterion). Then run the `roadmap`
+  skill: it fills `CLAUDE.md`'s test/lint/run commands from the SPEC automatically as it writes
+  `docs/ROADMAP.md`, and reminds you to point `HIGH_STAKES_RE` at any sensitive paths — no manual
+  CLAUDE.md edit needed. Then build with `/phase`.
+
+New to it all? Work through `PRACTICE-PROJECT.md` first.
 
 > **Two parts, how they relate:** the **`lean-stack/` scaffold** (hooks, commands, docs layout,
 > autopilot) and the **`skills/` pack** (11 skills; 10 are copied per-project). Skills work standalone, but several
@@ -40,7 +47,7 @@ Then: edit `CLAUDE.md` (your test/lint/run commands) → point `HIGH_STAKES_RE` 
 ## Repository layout
 
 ```
-my-claude-code-setup/
+jaimitos-claude-setup/
 ├── README.md              ← you are here (the master guide)
 ├── install.sh             ← one-command installer (deterministic copy + doctor)
 ├── PRACTICE-PROJECT.md    ← standalone hands-on tutorial (delete after you've learned the stack)
@@ -87,14 +94,14 @@ Install these before running `install.sh` or any unattended loop:
 First, clone this repo somewhere stable:
 
 ```bash
-git clone https://github.com/jaimeberdejo/my-claude-code-setup ~/my-claude-code-setup
+git clone https://github.com/jaimeberdejo/jaimitos-claude-setup ~/jaimitos-claude-setup
 ```
 
 Then pick one of three ways to get it into a project, from most to least automated:
 
 ### Option A — one command (recommended)
 ```bash
-bash ~/my-claude-code-setup/install.sh /path/to/your-repo
+bash ~/jaimitos-claude-setup/install.sh /path/to/your-repo
 ```
 `install.sh` does the **deterministic** part: copies the scaffold, copies all skills into
 `.claude/skills/`, `chmod +x`s the hooks/scripts, and runs `doctor.sh`. It's **idempotent** —
@@ -113,13 +120,16 @@ blind copy can't: detects your stack, fills `CLAUDE.md`'s test/lint/run commands
 
 ### Option C — manual copy
 ```bash
-cp -r ~/my-claude-code-setup/lean-stack/. /path/to/your-repo/
-mkdir -p /path/to/your-repo/.claude/skills && cp -r ~/my-claude-code-setup/skills/*/ /path/to/your-repo/.claude/skills/
+cp -r ~/jaimitos-claude-setup/lean-stack/. /path/to/your-repo/
+mkdir -p /path/to/your-repo/.claude/skills && cp -r ~/jaimitos-claude-setup/skills/*/ /path/to/your-repo/.claude/skills/
 cd /path/to/your-repo && chmod +x .claude/hooks/*.sh scripts/*.sh && bash scripts/doctor.sh
 ```
 
-After any option: edit `CLAUDE.md`'s placeholders (your real commands) if the skill didn't,
-then describe the project → `docs/SPEC.md`, run the `roadmap` skill → `docs/ROADMAP.md`, and loop.
+After any option: if there was an existing stack to detect, `CLAUDE.md`'s placeholders are
+already filled with your real commands (via `setup-lean-stack`, or edit them yourself). Starting
+from an empty project instead? Leave them — describe the project → `docs/SPEC.md`, then run the
+`roadmap` skill → `docs/ROADMAP.md`; it fills `CLAUDE.md`'s commands from the SPEC as it runs.
+Then loop.
 
 > **Why a script and not an "init" skill that writes the files?** Copying static files must
 > be deterministic — having a model regenerate the scaffold's files risks drift, costs tokens, and is

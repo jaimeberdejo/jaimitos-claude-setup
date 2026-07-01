@@ -9,10 +9,10 @@ The COPY is deterministic — do not recreate files by hand. The CUSTOMIZE step 
 you (the model) add value: detect the stack and fill in what a blind copy can't.
 
 ## Step 1 — Copy the scaffold (deterministic; never hand-write the files)
-Find the installer (the cloned `my-claude-code-setup` repo) and run it against the current
+Find the installer (the cloned `jaimitos-claude-setup` repo) and run it against the current
 directory. Ask the user for the path if you can't find it:
 ```bash
-bash /path/to/my-claude-code-setup/install.sh .
+bash /path/to/jaimitos-claude-setup/install.sh .
 ```
 If files already exist and the user wants them replaced, re-run with `--force`. Do NOT
 recreate any scaffold file by writing it out — if install.sh isn't reachable, ask the user
@@ -25,13 +25,20 @@ Look at the repo to determine the real commands:
 - Node/TS: `package.json` → read its `scripts` for the actual `test`, `typecheck`/`tsc`,
   `lint`, `dev`/`build` names. Use what's really there, not guesses.
 - Other stacks: find the test runner, linter, type checker, and run command from config files.
-If you genuinely can't tell, ask — don't invent commands.
 
-## Step 3 — Fill CLAUDE.md
+**Branch on what you find:**
+- **Stack detected (brownfield — an existing project)** → continue to Step 3 now; you have
+  everything you need to fill CLAUDE.md immediately.
+- **No stack detected (greenfield — an empty/near-empty project)** → there's nothing real to
+  fill yet. **Skip Step 3 for now.** CLAUDE.md's placeholders will be filled automatically by
+  the `roadmap` skill once `docs/SPEC.md` exists and pins the stack — don't guess commands
+  here, and don't ask the user to remember to fill them later by hand. Go straight to Step 5.
+
+## Step 3 — Fill CLAUDE.md (brownfield only — skip if greenfield, see Step 2)
 Replace the `<...>` placeholders in `CLAUDE.md` with the real Test / Typecheck / Lint /
 Run commands, and `<NAME>` with the project name. Keep CLAUDE.md lean (under ~200 lines).
 
-## Step 4 — Point the high-stakes gate at real paths (BOTH the enforced regex and the rule)
+## Step 4 — Point the high-stakes gate at real paths (brownfield only — skip if greenfield, see Step 2)
 The high-stakes gate has two pieces and you MUST update the enforced one:
 
 1. **`.claude/lib/_high-stakes.sh` → `HIGH_STAKES_RE`** — this is what `scripts/autopilot.sh`
@@ -52,8 +59,15 @@ shipped default.
 - Run `bash scripts/test-hooks.sh` to confirm the hooks work.
 
 ## Step 6 — Report
-Tell the user: what commands you wired into CLAUDE.md, which high-stakes paths you set,
-the doctor result, and the single next action (usually: write the SPEC, then run `roadmap`).
+- **Brownfield:** tell the user what commands you wired into CLAUDE.md, which high-stakes
+  paths you set, the doctor result, and the single next action (usually: write the SPEC, then
+  run `roadmap`).
+- **Greenfield:** tell the user CLAUDE.md and the high-stakes gate are intentionally left as
+  shipped defaults for now — they'll be filled automatically (CLAUDE.md) or flagged as a
+  reminder (high-stakes paths) by the `roadmap` skill once `docs/SPEC.md` exists. Report the
+  doctor result (expect its `!` warnings about placeholders — that's expected pre-SPEC, not a
+  problem) and the single next action: write the SPEC (grill first if useful), then run
+  `roadmap`.
 
 ## Guardrails
 - Deterministic copy via install.sh; intelligent customization by you. Never blur the two.

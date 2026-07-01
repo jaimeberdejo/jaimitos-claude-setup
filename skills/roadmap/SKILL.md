@@ -16,6 +16,19 @@ phases that are each verifiable, bounded, and demoable.
    measurable target produces unverifiable phases. Offer to grill the spec first.
 2. Note the constraints (stack, data sources, compliance, performance budgets) — they
    shape phase boundaries.
+3. **Fill CLAUDE.md from the SPEC, if it's still templated.** Check `CLAUDE.md` for
+   un-substituted `<...>` placeholders (the `<NAME>` header and the Test/Typecheck/Lint/Run
+   command lines — the same check `doctor.sh` runs). If any remain, this is a greenfield
+   project whose stack wasn't known at install time — it's known now, from the SPEC's
+   Constraints section you just read. Fill them in before writing the roadmap:
+   - `<NAME>` → the project name (from the SPEC's title/what-and-why).
+   - Test/Typecheck/Lint/Run commands → derived from the Constraints section (language,
+     package manager, tooling named there) and any manifests that already exist
+     (`package.json` scripts, `pyproject.toml`, etc.).
+   - If the Constraints section doesn't pin down real commands (ambiguous or missing
+     tooling choices), ask rather than guess — don't invent a command that doesn't exist.
+   - If CLAUDE.md has no placeholders left (already customized — the common brownfield
+     case, filled by `setup-lean-stack`/install), skip this silently; it's a no-op.
 
 ## Decide how many phases (don't hardcode a number)
 
@@ -87,6 +100,12 @@ Mode: loopable | supervised
 ## After writing
 
 - Tell the user how many phases, and which are `supervised` (and why).
+- If you filled CLAUDE.md's placeholders in step 3, say so and list what you set (commands +
+  name) — otherwise note it was already customized.
+- Remind the user to point `HIGH_STAKES_RE` in `.claude/lib/_high-stakes.sh` (and the mirrored
+  `paths:` in `.claude/rules/high-stakes.md`) at this project's real sensitive dirs if it has
+  any (auth, migrations, payments, deletes, external effects) — that's a judgment call from the
+  scope, not something this skill infers automatically.
 - Update `docs/STATE.md` "Next action" to point at the first phase.
 - Do NOT start building. The roadmap is a plan; building is `/phase` or `/autopilot`.
 
