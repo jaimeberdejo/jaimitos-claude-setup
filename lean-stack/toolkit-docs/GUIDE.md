@@ -247,7 +247,7 @@ Be honest about what actually *enforces* versus what merely *advises* — differ
 | Watchable | `/autopilot N` | one session (rots) | evaluator **subagent** → the `tick.sh` gate | a few phases you want to see |
 | Headless | `scripts/autopilot.sh N` | fresh per phase (no rot) | separate evaluator **process** → the `tick.sh` gate | long/overnight, low-stakes |
 
-All three route ticking through the **same** `scripts/tick.sh` gate ([Part 4](#the-completion-gate--scriptstickshsh-read-this-twice)).
+All three route ticking through the **same** `scripts/tick.sh` gate ([Part 4](#the-completion-gate--scriptsticksh-read-this-twice)).
 **Flexible counts** (both autopilots): `5` (up to 5) · `3-5` (aim ≥3, cap 5) · `all`/`max` (until
 roadmap empty, safety-capped).
 
@@ -336,7 +336,7 @@ The jump from 1/2/3 to 4 is the jump from "demo" to "trustworthy," and the reaso
 5. **An independent verifier (not the builder)** — the grader must not be the worker. The `evaluator`
    is hard to fool because of three properties: **fresh context**, **no Write/Edit tools**, and a
    **default-FAIL contract**. `/phase` runs it as a self-check but never ticks; ticking is the shared
-   `tick.sh` gate's job (see [Part 4](#the-completion-gate--scriptstickshsh-read-this-twice)). The
+   `tick.sh` gate's job (see [Part 4](#the-completion-gate--scriptsticksh-read-this-twice)). The
    headless loop runs a **second, separate-process** evaluator and discards its changes before ticking.
 
 **Plus** the kill-switch (`touch AGENT_STOP` blocks the next tool call onward — your seatbelt) and a
