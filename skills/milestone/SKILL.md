@@ -25,11 +25,19 @@ exact heading. So this is mechanical and low-risk. Pick the matching mode.
    Done when: <observable, machine-checkable condition>
    Mode: <loopable | supervised>
    ```
-3. Enforce the two invariants: every phase needs a `Done when:` line (the evaluator grades it),
-   and each `## ` heading must be **unique and verbatim**. Renumbering on insert is optional
-   (numbers are cosmetic) — uniqueness of heading text is what matters.
+3. **Phase shape is defined once, in the `roadmap` skill — don't restate a looser copy here.**
+   Apply `roadmap/SKILL.md`'s "Every phase MUST" rules verbatim: a `Done when:` line naming an
+   *observable, machine-checkable* condition (a passing command, an eval threshold, a curl that
+   returns the right thing) — not just a line that happens to exist. "The pricing feels
+   reasonable" is not a `Done when:`; if a requested phase can't be made measurable, say so and
+   propose how to make it checkable, exactly as `roadmap` would, rather than inserting a vague
+   one. Also enforce: each `## ` heading must be **unique and verbatim**. Renumbering on insert
+   is optional (numbers are cosmetic) — uniqueness of heading text is what matters, since
+   `tick.sh` matches against it exactly later.
 4. Mark `supervised` (not `loopable`) for anything touching auth / money / migrations / deletes /
-   external effects, or anything not independently verifiable.
+   external effects, or anything not independently verifiable — same bar as `roadmap`'s
+   loopable/supervised rule (all four of: machine-checkable done condition, bounded scope,
+   independent verifiability, low/reversible blast radius).
 5. Commit just the roadmap change (`docs/ROADMAP.md`). Tell the user which phases you added and
    whether they run next or after current work.
 
