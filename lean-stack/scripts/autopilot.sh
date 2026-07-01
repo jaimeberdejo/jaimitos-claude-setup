@@ -112,14 +112,23 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 mkdir -p "$ORIG_ROOT/.claude" 2>/dev/null || true
-if [ -f "$LOCK" ]; then
+# Atomic acquire: `set -o noclobber` makes `>` fail if the file already exists (O_EXCL), so two
+# simultaneous launches can't both win the check-then-write race.
+if ( set -o noclobber; echo "$$" > "$LOCK" ) 2>/dev/null; then
+  LOCK_HELD=1
+else
   OLDPID=$(head -1 "$LOCK" 2>/dev/null)
   if [ -n "$OLDPID" ] && kill -0 "$OLDPID" 2>/dev/null; then
     fail "another autopilot run is active (pid $OLDPID; lock $LOCK). Wait for it, or remove the lock if you're certain it's dead."
   fi
   echo "autopilot: stale lock from dead pid ${OLDPID:-?} — reclaiming."
+  rm -f "$LOCK"
+  if ( set -o noclobber; echo "$$" > "$LOCK" ) 2>/dev/null; then
+    LOCK_HELD=1
+  else
+    fail "could not acquire lock $LOCK (racing another run?)."
+  fi
 fi
-echo "$$" > "$LOCK" && LOCK_HELD=1
 
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || fail "not inside a git repository (run 'git init')."
 command -v claude >/dev/null 2>&1 || fail "'claude' CLI not found on PATH."

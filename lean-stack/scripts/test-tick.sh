@@ -91,6 +91,10 @@ mkrepo t4; good_grade t4; set_evidence t4 "{not json"; rc=$(runtick "$REPO")
 mkrepo t5; good_grade t5; set_evidence t5 "{\"passed\":true,\"run_id\":\"deadbeefstale\"}"; rc=$(runtick "$REPO")
 { [ "$rc" = 1 ] && ! ticked "$REPO"; } && pass "stale evidence (run_id mismatch) → refuses" || fail "stale evidence mishandled (rc=$rc)"
 
+# 5b — missing .claude/.phase-base → refuses (would otherwise narrow secret/high-stakes scan).
+mkrepo t5b; good_grade t5b; good_evidence t5b; rm -f "$REPO/.claude/.phase-base"; rc=$(runtick "$REPO")
+{ [ "$rc" = 1 ] && ! ticked "$REPO"; } && pass "missing .phase-base → refuses (no scan-window narrowing)" || fail "missing phase-base mishandled (rc=$rc)"
+
 # 6a — passed:null + grade no_tests_ok=1 → ticks.
 mkrepo t6; set_grade t6 "$HEAD" PASS 1; set_evidence t6 "{\"passed\":null,\"run_id\":\"$HEAD\"}"; rc=$(runtick "$REPO")
 { [ "$rc" = 0 ] && ticked "$REPO"; } && pass "passed:null + NO_TESTS_OK → ticks" || fail "null+NO_TESTS_OK did not tick (rc=$rc)"

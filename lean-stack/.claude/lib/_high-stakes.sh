@@ -40,8 +40,10 @@ high_stakes_match() {
 # (never a false PASS), so over-matching is safe; missing a novel destructive pattern is
 # the residual risk. scripts/tick.sh feeds it the ADDED diff lines of a phase.
 #   DROP/TRUNCATE TABLE, DELETE FROM, rm -r/-f, force-push, --no-verify, os.system(),
-#   shell=True, eval(  (eval/rm are anchored so retrieval()/format don't false-hit).
-HIGH_STAKES_CONTENT_RE='DROP[[:space:]]+TABLE|TRUNCATE[[:space:]]+TABLE|DELETE[[:space:]]+FROM|(^|[^[:alnum:]_])rm[[:space:]]+-[a-z]*[rf]|git[[:space:]]+push[[:space:]].*--force|--no-verify|os\.system[[:space:]]*\(|shell[[:space:]]*=[[:space:]]*True|(^|[^[:alnum:]_])eval[[:space:]]*\('
+#   shell=True, eval(  (eval/rm are anchored so retrieval()/format don't false-hit; the eval
+#   anchor also excludes a preceding '.' so method calls like model.eval() / x.eval() — common
+#   and benign, e.g. PyTorch — do NOT trip it; only a bare eval( does).
+HIGH_STAKES_CONTENT_RE='DROP[[:space:]]+TABLE|TRUNCATE[[:space:]]+TABLE|DELETE[[:space:]]+FROM|(^|[^[:alnum:]_])rm[[:space:]]+-[a-z]*[rf]|git[[:space:]]+push[[:space:]].*--force|--no-verify|os\.system[[:space:]]*\(|shell[[:space:]]*=[[:space:]]*True|(^|[^[:alnum:]_.])eval[[:space:]]*\('
 
 # high_stakes_content_match <text>: echoes matching lines; returns 0 if any matched, 1 if none.
 high_stakes_content_match() {

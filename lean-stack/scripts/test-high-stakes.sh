@@ -93,6 +93,8 @@ content_ignore 'df = format_table(rows)'           # "TABLE" but not DROP/TRUNCA
 content_ignore 'items.remove(stale_entry)'         # "rm" only inside a word
 content_ignore 'user = get_account(account_id)'
 content_ignore 'return shell_path == expected'     # "shell" but not shell=True
+content_ignore 'model.eval()'                      # method call, not bare eval( — must not trip
+content_ignore 'self.encoder.eval()'               # dotted method call (PyTorch idiom)
 
 echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All high-stakes detection tests passed."; exit 0

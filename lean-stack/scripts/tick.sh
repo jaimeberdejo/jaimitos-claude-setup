@@ -108,8 +108,11 @@ case "$e_passed" in
 esac
 
 # --- 4 & 5. secret + high-stakes over the WHOLE phase diff ---
+# Require .claude/.phase-base: without it we'd fall back to HEAD~1 and silently NARROW the secret
+# and high-stakes scans to the last commit only, missing earlier phase commits. Fail closed.
 BASE=$(cat .claude/.phase-base 2>/dev/null || true)
-RANGE="${BASE:-HEAD~1}..HEAD"
+[ -n "$BASE" ] || refuse "missing .claude/.phase-base — cannot determine the phase scope to scan (fail-closed)"
+RANGE="${BASE}..HEAD"
 [ -f .claude/lib/_secret-scan.sh ] && . .claude/lib/_secret-scan.sh 2>/dev/null || true
 [ -f .claude/lib/_high-stakes.sh ] && . .claude/lib/_high-stakes.sh 2>/dev/null || true
 
