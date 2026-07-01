@@ -305,6 +305,10 @@ Use the lightest mode that fits the risk:
 
 - **`PRACTICE-PROJECT.md`** — a standalone, throwaway tutorial to learn the whole stack hands-on,
   then delete. Lives at the repo root so `install.sh` never copies it into your real projects.
+- **`lean-stack/toolkit-docs/GUIDE.md`** — the long-form manual: every hook, command, and script
+  explained in depth.
+- **`lean-stack/toolkit-docs/LOOP-ENGINEERING.md`** — the theory behind the autonomous loops
+  (what makes a phase safe to automate, guardrail design, failure modes).
 
 ## License
 

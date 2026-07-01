@@ -38,9 +38,9 @@ into code-enforced, tested ones, with one shared completion gate. No breaking ch
   orphaned worktree.
 - **Honesty** — "auto-maintained docs" reworded to "an evidence-gated, auto-ticked roadmap with
   auto-written state" (now actually true). Kill-switch match-all wiring is asserted by doctor + test.
-- **Lean-docs prune** — `GUIDE.md` and `LOOP-ENGINEERING.md` were merged into the README and
-  deleted to remove parallel manuals. `docs/ROADMAP.md` now matches the enforced `Mode:
-  supervised` behavior in `scripts/tick.sh`.
+- **Docs** — the README is the primary entry point; `lean-stack/toolkit-docs/GUIDE.md` (manual)
+  and `LOOP-ENGINEERING.md` (autonomous-loop theory) are kept as deeper references. `docs/ROADMAP.md`
+  now matches the enforced `Mode: supervised` behavior in `scripts/tick.sh`.
 - **SessionStart context is capped and stricter** — `NEXT_FINDINGS.md` is injected as the last
   60 lines with a file pointer, and roadmap extraction ignores blockquoted/example `- [ ]` text.
 
