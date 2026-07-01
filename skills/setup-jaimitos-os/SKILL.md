@@ -1,9 +1,9 @@
 ---
-name: setup-lean-stack
-description: Installs the lean-stack scaffold into the current project and customizes it for the detected tech stack. Use when starting the lean-stack in a new repo — "set up the lean stack here", "scaffold this project", "install my claude setup". Runs the deterministic install.sh for the copy, then fills CLAUDE.md commands and high-stakes paths.
+name: setup-jaimitos-os
+description: Installs the jaimitos-os scaffold into the current project and customizes it for the detected tech stack. Use when starting jaimitos-os in a new repo — "set up jaimitos-os here", "scaffold this project", "install my claude setup". Runs the deterministic install.sh for the copy, then fills CLAUDE.md commands and high-stakes paths.
 ---
 
-# Set up lean-stack
+# Set up jaimitos-os
 
 The COPY is deterministic — do not recreate files by hand. The CUSTOMIZE step is where
 you (the model) add value: detect the stack and fill in what a blind copy can't.

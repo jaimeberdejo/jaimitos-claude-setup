@@ -20,7 +20,7 @@
 **/test-results.json
 
 # Secrets — never commit credentials while developing the toolkit itself.
-# (Mirrors lean-stack/.gitignore; templates/examples are intentionally allowed.)
+# (Mirrors jaimitos-os/.gitignore; templates/examples are intentionally allowed.)
 .env
 .env.*
 !.env.example

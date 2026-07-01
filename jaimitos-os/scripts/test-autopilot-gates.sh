@@ -73,7 +73,7 @@ exit 0
 STUB
 chmod +x "$BIN/claude" "$BIN/gh"
 
-# mkrepo <name>: a fake installed lean-stack tree with one open phase.
+# mkrepo <name>: a fake installed jaimitos-os tree with one open phase.
 mkrepo() {
   REPO="$WORK/$1"; rm -rf "$REPO"
   mkdir -p "$REPO/.claude/lib" "$REPO/scripts" "$REPO/docs"

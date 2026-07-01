@@ -27,7 +27,7 @@ bash ~/jaimitos-claude-setup/install.sh .           # drops the scaffold + skill
 
 Then it branches on whether there's an existing stack to detect:
 - **Adopting into an existing repo?** Fill `CLAUDE.md`'s commands + point `HIGH_STAKES_RE` in
-  `.claude/lib/_high-stakes.sh` at your sensitive paths now (the `setup-lean-stack` skill can
+  `.claude/lib/_high-stakes.sh` at your sensitive paths now (the `setup-jaimitos-os` skill can
   auto-detect and do this for you) — then write `docs/SPEC.md` → run the `roadmap` skill → build.
 - **Starting from scratch?** There's no stack to fill CLAUDE.md with yet — write `docs/SPEC.md`
   first (grill the idea until it has a *measurable* success criterion). Then run the `roadmap`
@@ -37,7 +37,7 @@ Then it branches on whether there's an existing stack to detect:
 
 New to it all? Work through `PRACTICE-PROJECT.md` first.
 
-> **Two parts, how they relate:** the **`lean-stack/` scaffold** (hooks, commands, docs layout,
+> **Two parts, how they relate:** the **`jaimitos-os/` scaffold** (hooks, commands, docs layout,
 > autopilot) and the **`skills/` pack** (11 skills; 10 are copied per-project). Skills work standalone, but several
 > (`roadmap`, `ship-check`, `adr`, …) assume the scaffold's `docs/` layout — install both for the
 > full experience.
@@ -52,25 +52,25 @@ jaimitos-claude-setup/
 ├── install.sh             ← one-command installer (deterministic copy + doctor)
 ├── PRACTICE-PROJECT.md    ← standalone hands-on tutorial (delete after you've learned the stack)
 ├── CHANGELOG.md · VERSION · LICENSE · .editorconfig
-├── lean-stack/            ← the scaffold you drop into a repo
+├── jaimitos-os/            ← the scaffold you drop into a repo
 │   ├── CLAUDE.md                    # lean constitution (edit placeholders per project)   [installed]
 │   ├── SCAFFOLD.md                  # scaffold quick-start (ships as SCAFFOLD.md, never clobbers README) [installed]
 │   ├── docs/                        # SPEC · ROADMAP · STATE · ARCHITECTURE · decisions/ · plans/
 │   ├── scripts/                     # autopilot.sh · tick.sh (the completion gate) · doctor.sh · test-hooks.sh
-│   ├── .github/workflows/lean-stack-ci.yml   # OPT-IN CI (install.sh --with-ci)
+│   ├── .github/workflows/jaimitos-os-ci.yml   # OPT-IN CI (install.sh --with-ci)
 │   └── .claude/
 │       ├── settings.json            # hooks → events + permissions.deny
 │       ├── commands/                # /resume /wrap /phase /autopilot /autopilot-parallel
 │       ├── agents/evaluator.md      # independent grader
 │       ├── rules/high-stakes.md     # path-scoped extra care
 │       └── hooks/                   # 7 deterministic shell hooks + 3 shared libs (_secret-scan, _high-stakes, _test-cmd)
-└── skills/                ← 11 skills (10 portable + setup-lean-stack installer)
+└── skills/                ← 11 skills (10 portable + setup-jaimitos-os installer)
 ```
 
 > The repo-root `README.md` documents the **toolkit**, so `install.sh` never copies it into your
 > project. Only `SCAFFOLD.md` — a short, clearly-named quick-start — ships alongside the working files.
 
-There are **two parts**: the **`lean-stack/` scaffold** (drop its contents into any repo)
+There are **two parts**: the **`jaimitos-os/` scaffold** (drop its contents into any repo)
 and the **`skills/` pack** (copy any skill into `.claude/skills/` per-project, or
 `~/.claude/skills/` globally). They're designed to work together but each stands alone.
 
@@ -109,24 +109,24 @@ re-running skips files that already exist, so it never clobbers a `CLAUDE.md` yo
 customized. It does **not** copy the toolkit README into your project. Flags: `--force`
 (overwrite existing files), `--global-skills` (also install the
 skills into `~/.claude/skills/` for all projects), `--with-ci` (also drop the opt-in
-`lean-stack-ci.yml` CI workflow).
+`jaimitos-os-ci.yml` CI workflow).
 
-### Option B — the `setup-lean-stack` skill (install **and** customize)
+### Option B — the `setup-jaimitos-os` skill (install **and** customize)
 Install the skills globally once (`install.sh --global-skills`, or copy `skills/*` into
-`~/.claude/skills/`), then in any project just say *"set up the lean stack here."* The
-`setup-lean-stack` skill runs `install.sh` for the copy, then does the **intelligent** part a
+`~/.claude/skills/`), then in any project just say *"set up jaimitos-os here."* The
+`setup-jaimitos-os` skill runs `install.sh` for the copy, then does the **intelligent** part a
 blind copy can't: detects your stack, fills `CLAUDE.md`'s test/lint/run commands, points
 `high-stakes.md` at your real sensitive dirs, and runs the health checks.
 
 ### Option C — manual copy
 ```bash
-cp -r ~/jaimitos-claude-setup/lean-stack/. /path/to/your-repo/
+cp -r ~/jaimitos-claude-setup/jaimitos-os/. /path/to/your-repo/
 mkdir -p /path/to/your-repo/.claude/skills && cp -r ~/jaimitos-claude-setup/skills/*/ /path/to/your-repo/.claude/skills/
 cd /path/to/your-repo && chmod +x .claude/hooks/*.sh scripts/*.sh && bash scripts/doctor.sh
 ```
 
 After any option: if there was an existing stack to detect, `CLAUDE.md`'s placeholders are
-already filled with your real commands (via `setup-lean-stack`, or edit them yourself). Starting
+already filled with your real commands (via `setup-jaimitos-os`, or edit them yourself). Starting
 from an empty project instead? Leave them — describe the project → `docs/SPEC.md`, then run the
 `roadmap` skill → `docs/ROADMAP.md`; it fills `CLAUDE.md`'s commands from the SPEC as it runs.
 Then loop.
@@ -195,7 +195,7 @@ Seven deterministic shell hooks plus three shared libs:
 ## Skills (`skills/`)
 
 Seven workflow skills (roadmap, milestone, adr, ship-check, scope-guard, explain-diff, unstick),
-three ownership skills (teach-back, mapme, quizme), and the `setup-lean-stack` meta-skill. The three
+three ownership skills (teach-back, mapme, quizme), and the `setup-jaimitos-os` meta-skill. The three
 review skills are **report-only** (`disallowed-tools: Edit, Write, …`); a clean pre-commit chain
 is **`scope-guard → explain-diff → ship-check`**.
 
@@ -283,11 +283,11 @@ the **advisory** layer (`CLAUDE.md`, `rules/`, the evaluator prompt) only asks a
 - `bash scripts/doctor.sh` — one-command health check (run before any unattended run).
 - `bash scripts/test-hooks.sh` — hook smoke tests (incl. the secret-scan guard).
 - **Repo CI** `.github/workflows/ci.yml` — on push/PR, runs shell-syntax + `settings.json`
-  validation against `lean-stack/`, shellcheck + actionlint, lints `install.sh`, runs the
+  validation against `jaimitos-os/`, shellcheck + actionlint, lints `install.sh`, runs the
   **behavioral guard suite** (`scripts/run-guard-tests.sh` — the single test list both this
-  workflow and the scaffold's own `lean-stack-ci.yml` call, so the two never drift), and the
+  workflow and the scaffold's own `jaimitos-os-ci.yml` call, so the two never drift), and the
   **install smoke test** (`.github/scripts/install-smoke.sh`: no tool-doc pollution, no README
-  clobber, idempotent, `.gitignore` merge). `lean-stack-ci.yml` is opt-in for installed projects.
+  clobber, idempotent, `.gitignore` merge). `jaimitos-os-ci.yml` is opt-in for installed projects.
 
 ## Loop engineering notes
 
@@ -328,7 +328,7 @@ Use the lightest mode that fits the risk:
 
 - **`PRACTICE-PROJECT.md`** — a standalone, throwaway tutorial to learn the whole stack hands-on,
   then delete. Lives at the repo root so `install.sh` never copies it into your real projects.
-- **[`lean-stack/toolkit-docs/GUIDE.md`](lean-stack/toolkit-docs/GUIDE.md)** — the comprehensive
+- **[`jaimitos-os/toolkit-docs/GUIDE.md`](jaimitos-os/toolkit-docs/GUIDE.md)** — the comprehensive
   guide: every hook, command, script, and the completion gate explained in depth, plus the loop-
   engineering theory (what makes a phase safe to automate, guardrail design, failure modes).
 

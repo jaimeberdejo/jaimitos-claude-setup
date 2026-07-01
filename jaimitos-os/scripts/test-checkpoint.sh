@@ -3,9 +3,9 @@
 # Stop hook). Asserts the honesty contract: it only says "checkpointed N" when a commit truly
 # happened, the count matches the files actually committed, it fails CLOSED on secrets / a
 # missing scan lib, honors the loop-guard / opt-out / non-repo cases, and never hangs on stdin.
-# Each case runs in an isolated mktemp repo. Run: bash lean-stack/scripts/test-checkpoint.sh
+# Each case runs in an isolated mktemp repo. Run: bash jaimitos-os/scripts/test-checkpoint.sh
 set -uo pipefail
-HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"   # lean-stack/
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"   # jaimitos-os/
 HOOK="$HERE/.claude/hooks/commit-on-stop.sh"
 LIB="$HERE/.claude/lib/_secret-scan.sh"
 GI="$HERE/.gitignore"

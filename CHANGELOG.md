@@ -4,10 +4,25 @@ All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/); this project
 uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] — automation hardening
+## [2.0.0] — 2026-07-02 — Jaimitos OS rename + automation hardening
 
-Third hardening pass from a skeptical multi-agent automation audit. Turns prompt-only joints
-into code-enforced, tested ones, with one shared completion gate. No breaking changes.
+### Changed — BREAKING: renamed "the Lean Stack" to "Jaimitos OS"
+- The scaffold directory `lean-stack/` is now `jaimitos-os/`; the shipped CI workflow is now
+  `jaimitos-os-ci.yml`; the installer meta-skill directory is `skills/setup-jaimitos-os/`
+  (trigger phrase: "set up jaimitos-os here"); the generated version-stamp file is now
+  `.claude/.jaimitos-os-version`; `install.sh`'s `.gitignore` merge marker is now
+  `# --- jaimitos-os control/secret ignores ---`.
+- **Clean break, no compatibility shims.** A project that already installed the old `lean-stack`
+  layout keeps working exactly as it is — nothing forces a re-install — but re-running
+  `install.sh` on it will NOT recognize the old marker/version-stamp filenames, so treat a
+  re-install on an old layout as a fresh install, not an in-place upgrade.
+- **`LEAN_TEST_GATE` / `LEAN_TEST_CMD` / `LEAN_CHECKPOINT` env vars are UNCHANGED, deliberately.**
+  These are a quieter, more load-bearing API (someone may already have them set in a shell profile
+  or CI config) than a folder name, so renaming them wasn't worth the silent-breakage risk for a
+  branding win.
+
+Also includes a third hardening pass from a skeptical multi-agent automation audit, turning
+prompt-only joints into code-enforced, tested ones, with one shared completion gate.
 
 ### Added — targeted phase selection & parallel execution
 - **`/phase <heading>`** — optional argument to target a specific roadmap phase instead of always
@@ -62,7 +77,7 @@ into code-enforced, tested ones, with one shared completion gate. No breaking ch
 - **Honesty** — "auto-maintained docs" reworded to "an evidence-gated, auto-ticked roadmap with
   auto-written state" (now actually true). Kill-switch match-all wiring is asserted by doctor + test.
 - **Docs** — the README is the primary entry point; the former `GUIDE.md` and `LOOP-ENGINEERING.md`
-  were merged into one comprehensive `lean-stack/toolkit-docs/GUIDE.md` (manual + loop-engineering
+  were merged into one comprehensive `jaimitos-os/toolkit-docs/GUIDE.md` (manual + loop-engineering
   theory), refreshed to match the shared `scripts/tick.sh` gate. `docs/ROADMAP.md` now matches the
   enforced `Mode: supervised` behavior in `scripts/tick.sh`.
 - **SessionStart context is capped and stricter** — `NEXT_FINDINGS.md` is injected as the last
@@ -81,7 +96,7 @@ auto-ticked roadmap with auto-written state, deterministic hooks, an independent
 autonomous loops (watchable + headless), path-scoped rules, and a pack of portable skills.
 (Consolidates the same-day 1.0.0–1.0.3 hardening passes, each driven by an independent multi-agent audit.)
 
-### Scaffold (`lean-stack/`)
+### Scaffold (`jaimitos-os/`)
 - `CLAUDE.md` lean constitution; `docs/` source-of-truth set (SPEC, ROADMAP, STATE, ARCHITECTURE,
   decisions/, plans/).
 - Commands `/resume`, `/wrap`, `/phase` (research → plan → TDD → self-check; never self-ticks), and
@@ -111,10 +126,10 @@ autonomous loops (watchable + headless), path-scoped rules, and a pack of portab
 ### Install & skills
 - `install.sh`: idempotent, deterministic installer (copies scaffold + skills, chmods, runs doctor;
   `--force`, `--global-skills`, `--with-ci`). Ships toolkit docs by directory; merges (not clobbers)
-  an existing `.gitignore`; `setup-lean-stack` is global/installer-only, not copied per-project.
+  an existing `.gitignore`; `setup-jaimitos-os` is global/installer-only, not copied per-project.
 - Skills pack: workflow (`roadmap`, `milestone`, `adr`, `ship-check`, `scope-guard`, `explain-diff`,
   `unstick` — the three review skills are report-only via `disallowed-tools`), ownership (`teach-back`,
-  `mapme`, `quizme`), and the `setup-lean-stack` meta-skill.
+  `mapme`, `quizme`), and the `setup-jaimitos-os` meta-skill.
 
 ### Fixed
 - Final-phase crash in `tick_phase` (`grep -c … || echo 0` produced `"0\n0"`).

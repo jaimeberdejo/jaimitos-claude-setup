@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# install.sh — drop the lean-stack scaffold + skills into a target repo.
+# install.sh — drop the jaimitos-os scaffold + skills into a target repo.
 # Deterministic file copy ONLY. The intelligent part (filling CLAUDE.md placeholders,
-# pointing high-stakes.md paths at your real dirs) is the `setup-lean-stack` skill's job —
+# pointing high-stakes.md paths at your real dirs) is the `setup-jaimitos-os` skill's job —
 # or do it by hand. This script never asks a model to do anything.
 #
 # Usage:
@@ -9,7 +9,7 @@
 #     TARGET_DIR       where to install (default: current directory)
 #     --force          overwrite existing scaffold files (default: skip files that exist)
 #     --global-skills  also install the skills into ~/.claude/skills (in addition to project)
-#     --with-ci        also copy the CI workflow (.github/workflows/lean-stack-ci.yml).
+#     --with-ci        also copy the CI workflow (.github/workflows/jaimitos-os-ci.yml).
 #                      Off by default — most projects already have their own CI.
 #
 # The repo README documents the toolkit and is NEVER copied into a target. The scaffold's own
@@ -22,7 +22,7 @@ set -uo pipefail
 
 # Resolve this script's directory (the repo root) so it works from anywhere.
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SCAFFOLD="$SRC/lean-stack"
+SCAFFOLD="$SRC/jaimitos-os"
 SKILLS_SRC="$SRC/skills"
 
 TARGET="."
@@ -39,13 +39,13 @@ for arg in "$@"; do
   esac
 done
 
-[ -d "$SCAFFOLD" ]   || { echo "install: can't find lean-stack/ next to this script ($SCAFFOLD)" >&2; exit 1; }
+[ -d "$SCAFFOLD" ]   || { echo "install: can't find jaimitos-os/ next to this script ($SCAFFOLD)" >&2; exit 1; }
 [ -d "$SKILLS_SRC" ] || { echo "install: can't find skills/ next to this script ($SKILLS_SRC)" >&2; exit 1; }
 mkdir -p "$TARGET" || { echo "install: can't create target '$TARGET'" >&2; exit 1; }
 TARGET="$(cd "$TARGET" && pwd)" || { echo "install: can't enter target '$TARGET'" >&2; exit 1; }
 
 VERSION="$(cat "$SRC/VERSION" 2>/dev/null || echo '?')"
-echo "install: lean-stack v$VERSION  →  $TARGET  (force=$FORCE)"
+echo "install: jaimitos-os v$VERSION  →  $TARGET  (force=$FORCE)"
 
 COPIED=0; SKIPPED=0; FAILED=0; SETTINGS_KEPT=0
 
@@ -56,7 +56,7 @@ copy_file() {
   local rel="$1" srcfile="$2" dest="$TARGET/$1"
   if [ -e "$dest" ] && [ "$FORCE" -eq 0 ]; then
     echo "  skip (exists): $rel"; SKIPPED=$((SKIPPED+1))
-    # Brownfield safety: keeping the target's own settings.json means the lean hooks +
+    # Brownfield safety: keeping the target's own settings.json means the jaimitos-os hooks +
     # permissions.deny were NOT merged, so the kill-switch / secret-guard won't fire. Flag it
     # loudly at the end (doctor also catches this, but only when the target is already a git repo).
     [ "$rel" = ".claude/settings.json" ] && SETTINGS_KEPT=1
@@ -70,7 +70,7 @@ copy_file() {
   fi
 }
 
-# 1. Scaffold files (everything under lean-stack/, including dotfiles like .gitignore).
+# 1. Scaffold files (everything under jaimitos-os/, including dotfiles like .gitignore).
 #    EXCLUSIONS (by DIRECTORY, so they can't silently drift):
 #      - toolkit-docs/*  : legacy toolkit docs — never shipped if present in old checkouts
 #      - .github/*       : CI workflow is opt-in (--with-ci)
@@ -89,11 +89,11 @@ while IFS= read -r srcfile; do
 done < <(find "$SCAFFOLD" -type f)
 
 # 2. Skills → <target>/.claude/skills/<skill>/
-#    setup-lean-stack is the installer/meta skill — useless (and slightly misleading) once a
+#    setup-jaimitos-os is the installer/meta skill — useless (and slightly misleading) once a
 #    project is set up, so it is NOT copied per-project; it installs only via --global-skills.
 while IFS= read -r srcfile; do
   skillrel="${srcfile#"$SKILLS_SRC"/}"
-  case "$skillrel" in setup-lean-stack/*) continue ;; esac
+  case "$skillrel" in setup-jaimitos-os/*) continue ;; esac
   copy_file ".claude/skills/$skillrel" "$srcfile"
 done < <(find "$SKILLS_SRC" -mindepth 2 -type f)   # mindepth 2 = inside skill dirs; skips top-level README/OWNERSHIP
 
@@ -114,7 +114,7 @@ fi
 # any missing lines under a marked, idempotent block.
 SCAFFOLD_GI="$SCAFFOLD/.gitignore"
 TARGET_GI="$TARGET/.gitignore"
-GI_MARK="# --- lean-stack control/secret ignores ---"
+GI_MARK="# --- jaimitos-os control/secret ignores ---"
 if [ -f "$SCAFFOLD_GI" ] && [ -f "$TARGET_GI" ]; then
   # Only act if our block isn't already present (idempotent on re-run).
   if ! grep -qF "$GI_MARK" "$TARGET_GI"; then
@@ -136,7 +136,7 @@ if [ -f "$SCAFFOLD_GI" ] && [ -f "$TARGET_GI" ]; then
 fi
 
 # 3c. Stamp the installed version so `doctor.sh` can report what's installed.
-mkdir -p "$TARGET/.claude" && printf '%s\n' "$VERSION" > "$TARGET/.claude/.lean-stack-version" 2>/dev/null || true
+mkdir -p "$TARGET/.claude" && printf '%s\n' "$VERSION" > "$TARGET/.claude/.jaimitos-os-version" 2>/dev/null || true
 
 # 3d. Fingerprint the shipped HIGH_STAKES_RE so doctor.sh can warn when the ENFORCED gate
 # was never pointed at the project's real paths (editing only the advisory rule is the
@@ -150,13 +150,13 @@ chmod +x "$TARGET"/.claude/hooks/*.sh "$TARGET"/scripts/*.sh 2>/dev/null || true
 
 echo ""
 echo "install: copied $COPIED file(s), skipped $SKIPPED, failed $FAILED."
-[ "$WITH_CI" -eq 0 ] && echo "install: CI workflow NOT copied (re-run with --with-ci to add lean-stack-ci.yml)."
+[ "$WITH_CI" -eq 0 ] && echo "install: CI workflow NOT copied (re-run with --with-ci to add jaimitos-os-ci.yml)."
 if [ "$FAILED" -gt 0 ]; then
   echo "install: ⛔ $FAILED file(s) failed to copy — the install is INCOMPLETE. Fix the errors above and re-run." >&2
   exit 1
 fi
 if [ "$SETTINGS_KEPT" -eq 1 ]; then
-  echo "install: ⚠ kept your existing .claude/settings.json — the lean HOOKS and permissions.deny were" >&2
+  echo "install: ⚠ kept your existing .claude/settings.json — the jaimitos-os HOOKS and permissions.deny were" >&2
   echo "install:   NOT merged, so the kill-switch, secret-guard, and other hooks will NOT fire until you" >&2
   echo "install:   merge them from $SCAFFOLD/.claude/settings.json (hooks + permissions blocks). Re-run" >&2
   echo "install:   with --force to overwrite instead. (This is the documented brownfield-adoption step.)" >&2
@@ -165,7 +165,7 @@ echo ""
 echo "Next:"
 echo "  Existing project (a stack was already here)?"
 echo "  1. Edit CLAUDE.md placeholders (your test/lint/run commands) — or run the"
-echo "     'setup-lean-stack' skill to auto-detect your stack and fill them."
+echo "     'setup-jaimitos-os' skill to auto-detect your stack and fill them."
 echo "  2. Point .claude/rules/high-stakes.md 'paths:' at your sensitive dirs."
 echo "  3. Describe the project → docs/SPEC.md, run the 'roadmap' skill → docs/ROADMAP.md."
 echo ""

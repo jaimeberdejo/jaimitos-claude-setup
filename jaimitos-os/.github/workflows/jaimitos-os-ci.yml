@@ -1,4 +1,4 @@
-name: lean-stack CI
+name: jaimitos-os CI
 
 # Guards the setup against regressions: shell syntax, settings.json validity,
 # and the hook smoke tests. Does NOT require the `claude` CLI (not available in

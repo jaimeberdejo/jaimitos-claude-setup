@@ -7,7 +7,7 @@ what it does and does not protect — read the **Scope** section before relying 
 
 Only the **latest release** is supported. The current version is in
 [`VERSION`](VERSION) (and stamped into installed projects as
-`.claude/.lean-stack-version`). Fixes land on the newest release; older tags get nothing.
+`.claude/.jaimitos-os-version`). Fixes land on the newest release; older tags get nothing.
 If you installed an older copy, re-run `install.sh --force` from a fresh clone to update.
 
 ## Reporting a vulnerability

@@ -1,7 +1,7 @@
 # Personal Skills — general-purpose dev workflow
 
 > Part of **[jaimitos-claude-setup](../README.md)** — see the repo-root README for the full
-> picture and how these pair with the lean-stack scaffold.
+> picture and how these pair with the jaimitos-os scaffold.
 
 This is the **complete index of all 11 skills** — 7 workflow + 3 ownership + the installer
 meta-skill. (The three ownership skills have a deeper writeup in the [Ownership](#ownership) section below.)
@@ -9,7 +9,7 @@ meta-skill. (The three ownership skills have a deeper writeup in the [Ownership]
 These are single-file each, no external dependencies. They encode workflows the base model
 doesn't reliably do unprompted. They're largely portable and stack-agnostic — they read
 your commands from CLAUDE.md/README rather than hardcoding a stack — but note the **caveat**
-below: several assume the lean-stack `docs/` layout (SPEC/ROADMAP/STATE), so they're
+below: several assume the jaimitos-os `docs/` layout (SPEC/ROADMAP/STATE), so they're
 scaffold-aware, not fully stack-neutral.
 
 | Skill | Category | Fires when you... | What it does |
@@ -24,7 +24,7 @@ scaffold-aware, not fully stack-neutral.
 | **teach-back** | ownership | finish a non-trivial phase | Claude explains what it built and quizzes you; gaps go to docs/STATE.md "Ownership gaps" |
 | **mapme** | ownership | made big structural changes | Refreshes docs/ARCHITECTURE.md from the actual code |
 | **quizme** | ownership | want to test understanding | Cold-opens a quiz on the codebase to measure how well you know it |
-| **setup-lean-stack** | installer | scaffold a new repo | Runs install.sh then fills CLAUDE.md commands + high-stakes paths. **Global/installer-only** — not copied into per-project `.claude/skills/` |
+| **setup-jaimitos-os** | installer | scaffold a new repo | Runs install.sh then fills CLAUDE.md commands + high-stakes paths. **Global/installer-only** — not copied into per-project `.claude/skills/` |
 
 ## Design principles
 - **Report-only where it matters.** The three review skills (ship-check, scope-guard,
@@ -32,14 +32,14 @@ scaffold-aware, not fully stack-neutral.
   frontmatter — so they *cannot* modify code, only report. Fixing is a separate, deliberate step.
 - **Portable, with a caveat.** They read commands from your CLAUDE.md/README rather than
   hardcoding a stack, so the same skill works in a Python service and a Next.js app.
-  But several (roadmap, and the ownership skills) assume the lean-stack `docs/` layout
+  But several (roadmap, and the ownership skills) assume the jaimitos-os `docs/` layout
   (`docs/SPEC.md`, `docs/ROADMAP.md`, `docs/STATE.md`, `docs/decisions/`) — so they're
   **scaffold-aware**, not fully stack-neutral. Drop the scaffold or adjust the paths to use them elsewhere.
 - **Small.** One file each — low context cost, easy to read and adapt. Edit them; they're yours.
 
 ## Install
 **Easiest — the repo installer** copies all 10 portable skills per-project (and
-`setup-lean-stack` only with `--global-skills`):
+`setup-jaimitos-os` only with `--global-skills`):
 ```bash
 bash /path/to/jaimitos-claude-setup/install.sh .                 # per-project skills
 bash /path/to/jaimitos-claude-setup/install.sh . --global-skills # also into ~/.claude/skills
@@ -55,7 +55,7 @@ cp -r roadmap milestone adr ship-check scope-guard explain-diff unstick teach-ba
 | Symptom | Fix |
 |---|---|
 | A skill didn't auto-trigger | Invoke it by name (e.g. `ship-check`), or use a phrase from its `description:`. Auto-trigger is best-effort, not guaranteed. |
-| Skill errors "can't find docs/SPEC.md" | You're using a scaffold-aware skill (roadmap/ownership) without the lean-stack `docs/` layout. Install the scaffold (`install.sh`) or adjust the skill's paths. |
+| Skill errors "can't find docs/SPEC.md" | You're using a scaffold-aware skill (roadmap/ownership) without the jaimitos-os `docs/` layout. Install the scaffold (`install.sh`) or adjust the skill's paths. |
 
 ## Use
 They auto-trigger on the phrases in each skill's description, or invoke by name:
@@ -84,7 +84,7 @@ code) be accountable for it.
 comments or a giant wiki is something you trust *instead of* understand — the opposite of ownership.
 teach-back and quizme make *you* produce the explanation; that's what sticks.
 
-**The ritual that protects ownership** (already wired into the lean-stack scaffold — the session-start
+**The ritual that protects ownership** (already wired into the jaimitos-os scaffold — the session-start
 hook loads the ARCHITECTURE overview, and the ownership-nudge Stop hook reminds you to ADR + teach-back
 after code changes):
 ```

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # run-guard-tests.sh — the single behavioral-guard test list, run by BOTH CI workflows
-# (root .github/workflows/ci.yml and the shipped lean-stack/.github/workflows/lean-stack-ci.yml)
+# (root .github/workflows/ci.yml and the shipped jaimitos-os/.github/workflows/jaimitos-os-ci.yml)
 # and by anyone locally. Having ONE list here removes the two hand-maintained copies that used to
 # drift between the workflows. Ships with the scaffold (install.sh copies scripts/), so the shipped
 # workflow stays self-contained.

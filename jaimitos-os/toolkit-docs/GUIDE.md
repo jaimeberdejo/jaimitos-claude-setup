@@ -1,4 +1,4 @@
-# The Lean Stack — Complete Guide
+# Jaimitos OS — Complete Guide
 
 The one comprehensive manual for the lightweight "operating system for Claude Code": the
 scaffold, the installer, the per-phase cycle, the completion gate, the autonomous loops and the
@@ -7,7 +7,7 @@ build the standalone [`PRACTICE-PROJECT.md`](../../PRACTICE-PROJECT.md) (a throw
 delete afterward).
 
 This guide is part of **[jaimitos-claude-setup](../../README.md)** (the repo-root README is the
-master map). Drop the `lean-stack/` folder's contents into any repo and you have the whole
+master map). Drop the `jaimitos-os/` folder's contents into any repo and you have the whole
 system: an evidence-gated, auto-ticked roadmap with auto-written state, deterministic hooks, an
 independent evaluator, path-scoped rules, one shared completion gate, and two autonomous loops
 (one watchable, one headless) — all project-neutral.
@@ -32,7 +32,7 @@ your-repo/
 ├── CLAUDE.md                      # lean constitution: commands + working agreement
 ├── SCAFFOLD.md                    # scaffold quick-start (named so it can't clobber YOUR README)
 ├── .gitignore                     # ignores control/scratch/evidence files
-├── .github/workflows/             # OPT-IN CI (only with `install.sh --with-ci`): lean-stack-ci.yml
+├── .github/workflows/             # OPT-IN CI (only with `install.sh --with-ci`): jaimitos-os-ci.yml
 ├── docs/
 │   ├── SPEC.md                    # what & why + a MEASURABLE success criterion
 │   ├── ROADMAP.md                 # phases with checkboxes + "Done when" + Mode (the roadmap skill writes this)
@@ -102,11 +102,11 @@ git clone https://github.com/jaimeberdejo/jaimitos-claude-setup ~/jaimitos-claud
 # A) one command (recommended): deterministic copy + skills + chmod + doctor
 bash ~/jaimitos-claude-setup/install.sh /path/to/your-repo
 
-# B) the skill: install skills globally once, then say "set up the lean stack here"
+# B) the skill: install skills globally once, then say "set up jaimitos-os here"
 bash ~/jaimitos-claude-setup/install.sh /path/to/your-repo --global-skills
-#    → in the project, the `setup-lean-stack` skill copies + auto-fills CLAUDE.md for your stack
+#    → in the project, the `setup-jaimitos-os` skill copies + auto-fills CLAUDE.md for your stack
 
-# C) manual: cp -r lean-stack/. and skills/* yourself (see root README)
+# C) manual: cp -r jaimitos-os/. and skills/* yourself (see root README)
 ```
 
 `install.sh` is **idempotent** — re-running skips files that already exist, so it never clobbers
@@ -114,7 +114,7 @@ a customized `CLAUDE.md`. Use `--force` to overwrite, `--with-ci` to also drop t
 
 ### Customize for your project
 - **`CLAUDE.md`** — replace `<NAME>` and the `<...>` test/lint/run command placeholders with your
-  real commands. Keep it lean (it loads every turn). The `setup-lean-stack` skill can auto-detect
+  real commands. Keep it lean (it loads every turn). The `setup-jaimitos-os` skill can auto-detect
   your stack and fill these for you.
 - **`.claude/lib/_high-stakes.sh`** — this is the **enforced** high-stakes list. Edit
   `HIGH_STAKES_RE` to match *your* sensitive directories (auth, migrations, payments, deletes,
@@ -158,14 +158,14 @@ git clone https://github.com/jaimeberdejo/jaimitos-claude-setup ~/jaimitos-claud
 
 mkdir ~/projects/myapp && cd ~/projects/myapp
 git init
-bash ~/jaimitos-claude-setup/install.sh .    # or, in Claude: "set up the lean stack here"
+bash ~/jaimitos-claude-setup/install.sh .    # or, in Claude: "set up jaimitos-os here"
 ```
 Then:
 1. **Verify + commit.** `bash scripts/doctor.sh` — expect it green overall but with `!` warnings
    about `CLAUDE.md`'s un-filled `<...>` placeholders and the default `HIGH_STAKES_RE`; that's
    expected pre-SPEC, not a problem (an empty folder has no real stack or sensitive dirs to point
    at yet — `doctor.sh` warns, it doesn't fail). Then
-   `git add -A && git commit -m "chore: scaffold lean-stack"`.
+   `git add -A && git commit -m "chore: scaffold jaimitos-os"`.
 2. **Think → SPEC.** Plan mode: `"grill me on <the idea>"` (or `/grill-me` — see [Part 11](#part-11--synergy-with-external-skills)),
    then `"write that to docs/SPEC.md"` with a **measurable** success criterion. This is where the
    real stack gets decided (the SPEC's Constraints section).
@@ -186,8 +186,8 @@ code** — you *map* it (orient) and *protect* it (high-stakes), then phase only
 ```bash
 cd ~/projects/existing-app
 git status                       # commit/stash first — you want the adoption as a reviewable diff
-git switch -c chore/adopt-lean-stack
-bash ~/jaimitos-claude-setup/install.sh .    # or "set up the lean stack here"
+git switch -c chore/adopt-jaimitos-os
+bash ~/jaimitos-claude-setup/install.sh .    # or "set up jaimitos-os here"
 ```
 `install.sh` is **non-destructive**: it ships the toolkit README as `SCAFFOLD.md` (never touches
 yours), **merges** your `.gitignore`, and is **idempotent — it skips any file that already exists.**
@@ -195,15 +195,15 @@ That last property drives the brownfield-only steps:
 
 1. **⚠️ Merge, don't overwrite (brownfield-only).** Because install *skips existing files*:
    - **Existing `CLAUDE.md`?** Yours was kept, so the lean constitution was NOT applied. Diff it
-     against `~/jaimitos-claude-setup/lean-stack/CLAUDE.md` and fold in the sections you lack (working
+     against `~/jaimitos-claude-setup/jaimitos-os/CLAUDE.md` and fold in the sections you lack (working
      agreement, tick-gate/autonomy, high-stakes, ownership) while keeping your project notes.
-   - **Existing `.claude/settings.json`?** Yours was kept, so **the lean hooks aren't wired.** Merge
+   - **Existing `.claude/settings.json`?** Yours was kept, so **the jaimitos-os hooks aren't wired.** Merge
      the `hooks` block + `permissions.deny` from the shipped `settings.json` into yours.
 
      Had neither file? Skip this step — install dropped them cleanly.
 2. **Point high-stakes at REAL dirs.** Set `HIGH_STAKES_RE` to your actual `auth/`, `migrations/`,
    `payments/`, delete paths, etc. (`doctor.sh` warns if left at the default).
-3. **Fill/confirm `CLAUDE.md` commands** from the repo's real test/lint/run (the `setup-lean-stack`
+3. **Fill/confirm `CLAUDE.md` commands** from the repo's real test/lint/run (the `setup-jaimitos-os`
    skill auto-detects these from `package.json` / `pyproject.toml` / Makefile).
 4. **🗺️ Map the existing code — run `mapme` FIRST (brownfield-only).** It writes
    `docs/ARCHITECTURE.md` from the real code so `session-start` re-orients Claude every session. This
@@ -616,7 +616,7 @@ filled **immediately**, before SPEC:
 
 ```
 ┌─────────────┐     ┌────────────────────────────────┐     ┌──────────┐     ┌──────────────────┐     ┌─────────┐
-│  install.sh │ ──▶ │  setup-lean-stack skill          │ ──▶ │  mapme   │ ──▶ │  SPEC (next       │ ──▶ │ roadmap │
+│  install.sh │ ──▶ │  setup-jaimitos-os skill          │ ──▶ │  mapme   │ ──▶ │  SPEC (next       │ ──▶ │ roadmap │
 │ (scaffold,  │     │  detects stack (package.json/   │     │ (orient  │     │  increment only,  │     │ → build │
 │  merges     │     │  pyproject.toml/…) → fills       │     │  on real │     │  not the whole    │     │         │
 │  .gitignore)│     │  CLAUDE.md + HIGH_STAKES_RE      │     │  code)   │     │  legacy system)   │     │         │
@@ -679,7 +679,7 @@ one reviewable change at a time, review before merge. Money as `Decimal`, never 
 
 ### A — From empty repo to first running feature
 1. `bash ~/jaimitos-claude-setup/install.sh .` then `git init`. (An empty repo has nothing to
-   detect, so `setup-lean-stack`/install.sh leave `CLAUDE.md`'s placeholders as-is for now.)
+   detect, so `setup-jaimitos-os`/install.sh leave `CLAUDE.md`'s placeholders as-is for now.)
 2. Plan mode: `"grill me on <your idea>, then write docs/SPEC.md"`.
 3. Run the **`roadmap`** skill: `"turn the spec into a roadmap"` — it fills `CLAUDE.md`'s
    commands from the SPEC you just wrote, then writes `docs/ROADMAP.md`.
@@ -713,7 +713,7 @@ hooks and gates from regressing.
 
 ### Learn it hands-on, then graduate to real work
 The fastest way to internalize the stack is **[`PRACTICE-PROJECT.md`](../../PRACTICE-PROJECT.md)** — a
-standalone throwaway tutorial (at the repo root, outside `lean-stack/`, so `install.sh` never copies
+standalone throwaway tutorial (at the repo root, outside `jaimitos-os/`, so `install.sh` never copies
 it). For real high-stakes work, change one thing: **drop autopilot** (auth, migrations, money,
 deletes, external effects). Use `/phase` supervised, keep `permission_mode: default`, require review
 before merge, let git history + ADRs be your audit trail.
@@ -738,7 +738,7 @@ before merge, let git history + ADRs be your audit trail.
 
 ## Part 11 — Synergy with external skills
 
-The lean-stack is deliberately small and works standalone — but it leaves whole stages to you:
+Jaimitos OS is deliberately small and works standalone — but it leaves whole stages to you:
 *thinking before the spec, hard debugging, deep review.* That's exactly where third-party skill
 packs slot in. Two ground rules keep them from fighting the stack:
 
@@ -759,7 +759,7 @@ measurable success criterion — grilling is what manufactures that criterion. T
 pipeline, with grill-me as the thinking stage:
 
 ```
-  install                setup-lean-stack skill (or install.sh)
+  install                setup-jaimitos-os skill (or install.sh)
      ↓
   GRILL   ── plan mode ──  /grill-me      ← interrogate until the goal + the ONE measurable
                            (or "grill me on <idea>")   success metric + non-goals are crisp
@@ -786,7 +786,7 @@ built-in `"grill me on <idea>"` prompt pattern ([Part 8, case 6](#6-start-a-bran
 ### superpowers (the discipline pack)
 A broad pack of process skills. Map each to a stage of the loop rather than adopting it wholesale:
 
-| superpowers skill | Where it slots into the lean-stack |
+| superpowers skill | Where it slots into jaimitos-os |
 |---|---|
 | `brainstorming` | Before the spec — same slot as grill-me; explore intent before `roadmap`. |
 | `test-driven-development` | Reinforces the stack's TDD working agreement; the stack layers the *deterministic* `test-gate` + evidence on top. |
@@ -809,7 +809,7 @@ area*, not replacements — reach for them when the built-in skill isn't enough,
 
 ### The one rule, compressed
 **Steps compose; spines collide.** Grill, brainstorm, debug, review — steps, wire them in freely. A
-second plan/execute/tick loop — a spine — run only one, and let it be the lean-stack's.
+second plan/execute/tick loop — a spine — run only one, and let it be jaimitos-os's.
 
 ---
 
@@ -833,7 +833,7 @@ COMMANDS     /resume       orient at session start
 
 SKILLS       workflow:   roadmap · milestone · adr · ship-check · scope-guard · explain-diff · unstick
              ownership:  teach-back · mapme · quizme
-             installer:  setup-lean-stack (install + customize)
+             installer:  setup-jaimitos-os (install + customize)
 
 AUTOPILOT    bash scripts/autopilot.sh [N|N-M|all] [--no-worktree] [--pr] [--allow-dirty]
              (worktree isolation is the DEFAULT; --no-worktree runs in-place)

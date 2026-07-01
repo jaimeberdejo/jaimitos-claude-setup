@@ -11,19 +11,19 @@ There are three distinct things in this repo. Edits go to different places:
 - **The toolkit repo itself** — `README.md`, `CHANGELOG.md`, `VERSION`, `install.sh`,
   and `.github/`. These document and ship the toolkit. **They are never copied into a
   target project.**
-- **The `lean-stack/` scaffold** — the files that *do* get installed into a user's repo:
+- **The `jaimitos-os/` scaffold** — the files that *do* get installed into a user's repo:
   `CLAUDE.md`, `SCAFFOLD.md`, `docs/`, `scripts/`, `.claude/` (hooks, commands, the
-  `evaluator` agent, `rules/high-stakes.md`), and the opt-in `.github/workflows/lean-stack-ci.yml`.
+  `evaluator` agent, `rules/high-stakes.md`), and the opt-in `.github/workflows/jaimitos-os-ci.yml`.
 - **`skills/`** — the 10 portable skills, each its own dir. `install.sh` copies them into a
-  target's `.claude/skills/` (all except `setup-lean-stack`, which is global-only).
+  target's `.claude/skills/` (all except `setup-jaimitos-os`, which is global-only).
 
 ## The "ship by directory" boundary — don't break it
 
 `install.sh` decides what ships from the scaffold by **directory**, not by a generated file list.
 So:
 
-- **Put toolkit-only docs at the repo root, not under `lean-stack/`.** A new doc dropped
-  inside `lean-stack/` will start shipping into every install — usually not what you want.
+- **Put toolkit-only docs at the repo root, not under `jaimitos-os/`.** A new doc dropped
+  inside `jaimitos-os/` will start shipping into every install — usually not what you want.
 - Anything a user's project genuinely needs goes in the scaffold proper. The scaffold's own
   note ships as `SCAFFOLD.md` (named so it can't clobber a user's `README.md`).
 - The install **smoke test** (`.github/scripts/install-smoke.sh`) asserts no tool-doc
@@ -36,16 +36,16 @@ behavior tests:
 
 ```bash
 # Syntax — what CI enforces (every script, hook, and the installer)
-for f in lean-stack/scripts/*.sh lean-stack/.claude/hooks/*.sh; do bash -n "$f"; done
+for f in jaimitos-os/scripts/*.sh jaimitos-os/.claude/hooks/*.sh; do bash -n "$f"; done
 bash -n install.sh
 bash -n .github/scripts/install-smoke.sh
-jq empty lean-stack/.claude/settings.json
+jq empty jaimitos-os/.claude/settings.json
 
 # Install smoke test (CI runs this too)
 bash .github/scripts/install-smoke.sh
 
-# Behavior tests — run from inside lean-stack/
-cd lean-stack
+# Behavior tests — run from inside jaimitos-os/
+cd jaimitos-os
 bash scripts/doctor.sh                 # health check
 bash scripts/test-hooks.sh             # hook smoke tests (incl. secret-scan)
 bash scripts/test-high-stakes.sh       # high-stakes path matcher
@@ -62,8 +62,8 @@ change to hooks, the secret-scan, the high-stakes gate, or `autopilot.sh`.
 ## Shell style
 
 - Keep shell **POSIX-careful** and pass **`shellcheck -S warning`** clean (`shellcheck -S warning
-  -e SC1090,SC1091 install.sh lean-stack/scripts/*.sh lean-stack/.claude/hooks/*.sh
-  lean-stack/.claude/lib/*.sh`). Quote expansions, prefer `[ ]` tests, fail closed.
+  -e SC1090,SC1091 install.sh jaimitos-os/scripts/*.sh jaimitos-os/.claude/hooks/*.sh
+  jaimitos-os/.claude/lib/*.sh`). Quote expansions, prefer `[ ]` tests, fail closed.
 - Hooks and guards must **fail closed**: when in doubt, block/stop rather than wave a run
   through. That's the whole point of the deterministic layer.
 

@@ -1,8 +1,8 @@
-# Practice Project — learn the lean-stack hands-on (then delete this)
+# Practice Project — learn jaimitos-os hands-on (then delete this)
 
 > **This file is a standalone, throwaway tutorial — safe to delete completely once you've
 > test-driven the setup.** Nothing in the scaffold depends on it, and `install.sh` does NOT
-> copy it into real projects (it lives at the repo root, outside `lean-stack/`).
+> copy it into real projects (it lives at the repo root, outside `jaimitos-os/`).
 
 A small, self-contained project to learn the whole stack on — not tied to anything real.
 A CLI + API that suggests a secondhand-marketplace listing price from an item description,

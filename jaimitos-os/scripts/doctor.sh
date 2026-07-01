@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# doctor.sh — one-command health check for the lean-stack setup.
+# doctor.sh — one-command health check for the jaimitos-os setup.
 # Verifies the things autopilot.sh and the hooks silently depend on.
 # Exit 0 = healthy, exit 1 = problems found.
 #
@@ -25,8 +25,8 @@ for a in "$@"; do
   esac
 done
 
-echo "lean-stack doctor"
-[ -f .claude/.lean-stack-version ] && echo "lean-stack version: $(cat .claude/.lean-stack-version)"
+echo "jaimitos-os doctor"
+[ -f .claude/.jaimitos-os-version ] && echo "jaimitos-os version: $(cat .claude/.jaimitos-os-version)"
 echo ""
 
 echo "Tooling:"

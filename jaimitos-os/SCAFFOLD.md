@@ -1,4 +1,4 @@
-# Lean Stack — the scaffold (SCAFFOLD.md)
+# Jaimitos OS — the scaffold (SCAFFOLD.md)
 
 > This file ships **with the scaffold** into your project. It is named `SCAFFOLD.md`
 > (not `README.md`) on purpose, so it can never clobber or be mistaken for your own
@@ -20,7 +20,7 @@ project (so it doesn't pollute it); read it on GitHub:
 - **scripts/** — `autopilot.sh` (guarded autonomous loop), `tick.sh` (the completion gate), `doctor.sh`, `test-hooks.sh`.
 
 CI is **opt-in**: re-run the installer with `--with-ci` to also drop a
-`.github/workflows/lean-stack-ci.yml` into your project.
+`.github/workflows/jaimitos-os-ci.yml` into your project.
 
 ## Quick start
 The two required steps are `chmod` then `doctor.sh`:

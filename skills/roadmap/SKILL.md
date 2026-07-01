@@ -28,7 +28,7 @@ phases that are each verifiable, bounded, and demoable.
    - If the Constraints section doesn't pin down real commands (ambiguous or missing
      tooling choices), ask rather than guess — don't invent a command that doesn't exist.
    - If CLAUDE.md has no placeholders left (already customized — the common brownfield
-     case, filled by `setup-lean-stack`/install), skip this silently; it's a no-op.
+     case, filled by `setup-jaimitos-os`/install), skip this silently; it's a no-op.
 
 ## Decide how many phases (don't hardcode a number)
 

@@ -8,7 +8,7 @@
 
 set -uo pipefail
 # Resolve the scaffold SCRIPT-RELATIVE — scripts/.. is always the scaffold root, whether that's the
-# git root (installed project) or lean-stack/ (this toolkit repo). git-toplevel is NOT reliable here:
+# git root (installed project) or jaimitos-os/ (this toolkit repo). git-toplevel is NOT reliable here:
 # in the toolkit repo it points at the OUTER root, and a stray .claude/ there (session artifacts, a
 # parent project) would defeat a "does .claude exist?" heuristic. Script-relative is immune to both.
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" || exit 1
