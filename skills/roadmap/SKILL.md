@@ -55,7 +55,7 @@ Then produce that many phases, ordered so each one builds on the last. Every pha
 
 - **Leave the app in a working, demoable state.** No phase ends with a half-wired feature.
 - **Be one vertical slice / bounded scope.** If a phase would touch ~30 files, split it.
-- Have a **checklist of concrete tasks** (`- [ ]`), each small enough to TDD.
+- Have a **checklist of concrete tasks** (unchecked list items), each small enough to TDD.
 - End with a **`Done when:` line that names an observable, machine-checkable condition** —
   a passing command, an eval threshold, a curl that returns the right thing.
   Good: "pytest passes AND the eval test asserts ≥15/20 within ±20%."
@@ -91,7 +91,7 @@ loopable if the other three criteria hold.
 # Roadmap
 
 > Each phase must leave the app in a working, demoable state.
-> `- [ ]` = todo, `- [x]` = done. The /phase command and hooks read these.
+> Each task line starts as an unchecked list item; the /phase command and hooks check it off when done.
 
 ## Phase 1 — <goal>
 - [ ] <task>

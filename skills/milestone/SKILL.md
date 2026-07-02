@@ -15,8 +15,21 @@ exact heading. So this is mechanical and low-risk. Pick the matching mode.
 - Never weaken or delete existing phases' `Done when:` lines without the user's explicit say-so.
 
 ## Mode A — Add phase(s) to the current roadmap
-1. Read `docs/ROADMAP.md`. Find the highest existing `## Phase N` number (default 0 if none).
-2. For each new phase the user wants, append (or insert above remaining open phases if they want it
+1. **Check whether this is in-scope or scope creep.** Read `docs/SPEC.md`'s In scope / Non-goals
+   against what's being requested. Two cases:
+   - **Fits the existing SPEC** (a missed detail of already-described scope) → skip to step 2, no
+     SPEC edit needed.
+   - **Genuinely beyond it** (a new capability, a reversed non-goal, a direction the original SPEC
+     didn't cover) → **don't silently add the phase.** Say so, then:
+     a. Update `docs/SPEC.md`'s In scope / Non-goals to reflect the new scope (grill first if the
+        addition itself needs sharpening — same bar as the original SPEC: it should stay
+        measurable).
+     b. Log it with the **`adr`** skill — one line Decision (what scope was added), one line Why
+        (including that it started as a mid-project addition, not the original plan). This is
+        what makes the scope change visible later instead of an unexplained SPEC diff.
+     c. Only then continue to step 2.
+2. Read `docs/ROADMAP.md`. Find the highest existing `## Phase N` number (default 0 if none).
+3. For each new phase the user wants, append (or insert above remaining open phases if they want it
    to run next — **position = execution order**) a block in the EXACT shape:
    ```md
    ## Phase <N+1> — <goal>
@@ -25,7 +38,7 @@ exact heading. So this is mechanical and low-risk. Pick the matching mode.
    Done when: <observable, machine-checkable condition>
    Mode: <loopable | supervised>
    ```
-3. **Phase shape is defined once, in the `roadmap` skill — don't restate a looser copy here.**
+4. **Phase shape is defined once, in the `roadmap` skill — don't restate a looser copy here.**
    Apply `roadmap/SKILL.md`'s "Every phase MUST" rules verbatim: a `Done when:` line naming an
    *observable, machine-checkable* condition (a passing command, an eval threshold, a curl that
    returns the right thing) — not just a line that happens to exist. "The pricing feels
@@ -34,12 +47,13 @@ exact heading. So this is mechanical and low-risk. Pick the matching mode.
    one. Also enforce: each `## ` heading must be **unique and verbatim**. Renumbering on insert
    is optional (numbers are cosmetic) — uniqueness of heading text is what matters, since
    `tick.sh` matches against it exactly later.
-4. Mark `supervised` (not `loopable`) for anything touching auth / money / migrations / deletes /
+5. Mark `supervised` (not `loopable`) for anything touching auth / money / migrations / deletes /
    external effects, or anything not independently verifiable — same bar as `roadmap`'s
    loopable/supervised rule (all four of: machine-checkable done condition, bounded scope,
    independent verifiability, low/reversible blast radius).
-5. Commit just the roadmap change (`docs/ROADMAP.md`). Tell the user which phases you added and
-   whether they run next or after current work.
+6. Commit the roadmap change (`docs/ROADMAP.md`, and `docs/SPEC.md` + the ADR file if step 1
+   amended scope). Tell the user which phases you added, whether they run next or after current
+   work, and whether the SPEC was amended.
 
 ## Mode B — Finish a roadmap → start the next batch / new milestone
 Use when every phase is `- [x]` (or the user wants to close the current scope and expand).

@@ -28,5 +28,19 @@ assert_has    ".claude/commands/phase.md" "if ZERO headings match at all, STOP" 
               "/phase <heading> handles zero-match arguments explicitly (no silent fall-through)"
 
 echo ""
+echo "roadmap-legend regression — prose must not use literal checkbox bracket syntax"
+echo "(that syntax once made an unanchored grep in close-milestone.sh/autopilot.sh false-match"
+echo " on every generated roadmap's own legend line; see commit 0d55d49)"
+echo ""
+assert_absent "../skills/roadmap/SKILL.md" '`- [ ]`' \
+              "roadmap skill's legend prose does not use literal '- [ ]' bracket syntax"
+assert_absent "../skills/roadmap/SKILL.md" '`- [x]`' \
+              "roadmap skill's legend prose does not use literal '- [x]' bracket syntax"
+assert_absent "docs/ROADMAP.md" '`- [ ]`' \
+              "shipped ROADMAP.md scaffold's legend prose does not use literal '- [ ]' bracket syntax"
+assert_absent "docs/ROADMAP.md" '`- [x]`' \
+              "shipped ROADMAP.md scaffold's legend prose does not use literal '- [x]' bracket syntax"
+
+echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All docs-invariant checks passed."; exit 0
 else echo "$FAILS docs-invariant check(s) FAILED."; exit 1; fi

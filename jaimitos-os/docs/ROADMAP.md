@@ -1,9 +1,9 @@
 # Roadmap
 
 > Each phase must leave the app in a working, demoable state.
-> `- [ ]` = todo, `- [x]` = done. The /phase command and hooks read these.
-> `Mode: supervised` is enforced by scripts/tick.sh at completion time: it refuses
-> auto-tick and stops for human review. Use `loopable` only for low-risk, verifiable phases.
+> Each task line starts as an unchecked list item; the /phase command and hooks check it off when done.
+> A supervised phase is enforced by scripts/tick.sh at completion time: it refuses
+> auto-tick and stops for human review. Use loopable only for low-risk, verifiable phases.
 
 ## Phase 1 — <goal>
 - [ ] task

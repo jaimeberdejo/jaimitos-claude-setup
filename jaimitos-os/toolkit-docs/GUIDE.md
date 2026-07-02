@@ -426,6 +426,36 @@ The jump from 1/2/3 to 4 is the jump from "demo" to "trustworthy," and the reaso
 > polling an external job, or repeating one mechanical command on a timer. As with `/goal` above,
 > confirm the command exists in your Claude Code version before relying on it.
 
+> **Harness-native condition loop — `/goal`.** Newer Claude Code builds ship `/goal <condition>`: after
+> each turn a separate fast model reads the transcript and judges met/not-met — if not met, Claude just
+> starts another turn instead of returning control to you. That's real independent judging
+> (architecture 2 above), closer to a loop engine than `/loop` — but the judge only reads the
+> transcript, it never runs a command or opens a file itself, so it can be fooled by a claim it can't
+> check. **Don't point `/goal` at "the roadmap is done" and walk away** — pair it with this scaffold's
+> real gate instead of trusting its own verdict. Set the condition to something the transcript can
+> *prove*, and make your first message spell out the actual gated procedure:
+>
+> ```
+> /goal "docs/ROADMAP.md has zero remaining '- [ ] ' items, OR the next unchecked phase's Mode line says supervised (report which, then stop)"
+> ```
+> then, as your first message in that same turn:
+> ```
+> Each turn: check AGENT_STOP, then STEER.md/NEXT_FINDINGS.md, before anything else. Read the next
+> unchecked phase's Mode line — if `supervised`, stop and report, do not build it. Otherwise run the
+> /phase procedure on that phase, then grade + tick exactly as autopilot.md Step 4 does:
+> bash scripts/test-evidence.sh --allow-no-tests, bash scripts/record-grade.sh "<the evaluator's full
+> verdict>", bash scripts/tick.sh "<exact phase heading>" — never flip a checkbox by hand, and if
+> tick.sh refuses, stop and report why instead of retrying blindly. Commit after each tick. State
+> plainly at the end of the turn whether a phase was ticked, skipped (supervised), or blocked.
+> ```
+> This way `/goal`'s transcript judge only ever has to confirm something the transcript genuinely
+> demonstrates — a real `tick.sh` success line, or a supervised-phase stop — while the actual grading,
+> secret scan, and gate stay in the deterministic layer where they belong. It still shares one
+> session's context (no fresh-context isolation), so treat it like `/autopilot`: watch it, and
+> `/wrap` → `/clear` → `/goal` again every few phases rather than letting one window run for hours.
+> For truly unattended overnight runs `scripts/autopilot.sh` is still the better tool — it needs no
+> hand-written condition and gets real process isolation for free.
+
 ### The five guardrails (non-negotiable)
 1. **A verifiable success signal** — the loop checks itself against something with an **exit code**,
    not a vibe. `pytest` returning 0 is a signal; "looks done" is not. This is why TDD and autonomy
@@ -517,6 +547,13 @@ Mode: <loopable | supervised>
 - **Don't edit `ROADMAP.md` while `autopilot.sh` is actively looping** (it rewrites the file each
   tick — racy). `touch AGENT_STOP`, edit, `rm AGENT_STOP`. To redirect the *current* phase, write `STEER.md`.
 - A newly added high-stakes or `Mode: supervised` phase auto-trips the gate at tick time — safe to queue.
+
+**Is it in-scope, or scope creep?** Before adding the phase, the `milestone` skill checks the
+request against `docs/SPEC.md`'s In scope / Non-goals. A missed detail of already-described scope
+needs nothing extra. Something genuinely new — a capability, a reversed non-goal — gets the SPEC
+amended (grilled first if it needs sharpening) and a 4-line `adr` entry noting it was a mid-project
+addition, *before* the phase is added. This keeps SPEC.md the honest source of "what this project
+is," not a stale document phases have quietly outgrown.
 
 ### Finishing a roadmap (start the next batch)
 When every phase is `- [x]`, run the `milestone` skill (it calls `scripts/close-milestone.sh` — a
