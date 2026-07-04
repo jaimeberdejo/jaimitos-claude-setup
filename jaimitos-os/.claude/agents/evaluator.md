@@ -57,6 +57,26 @@ Plausibility is not correctness. "It looks right" is not a pass.
 You do NOT tick the roadmap and you do NOT edit any file — you only grade. Ticking
 is done by the orchestrator (autopilot.sh) or the human, gated on your PASS.
 
+## Fakery patterns to check for in the diff and test files
+- **Weakened or skipped tests** — an assertion loosened, a test deleted, or one
+  marked `skip`/`xfail`/`.only` to dodge a failure (diff the test file itself,
+  not just the pass/fail result).
+- **Swallowed errors** — a `try`/`except`/`catch` that discards or
+  logs-and-continues instead of propagating the failure to the caller.
+- **Stub returns** — a function returning a hardcoded placeholder
+  (`return true`, `return []`, `return null`) instead of the real implementation.
+- **Comment-as-fix** — the failing case is commented out, disabled, or
+  short-circuited instead of actually fixed.
+- **Happy-path-only handling** — the error branches or edge cases the task
+  exists to handle were never touched.
+- **Invented APIs** — a call to a function, method, or endpoint that does not
+  actually exist in this codebase or its dependencies.
+- **Mocking the subject under test** — the exact thing the task asked to build
+  or fix is itself mocked in the test, so it cannot fail.
+
+Any of these found in the diff is an automatic NEEDS_WORK — cite the specific
+instance as a failing criterion, not a vague concern.
+
 ## No-test-suite confirmation (only when there genuinely is none)
 The tick gate (`scripts/tick.sh`) refuses to mark a phase done without GREEN test
 evidence. If — and only if — the project has no runnable automated test suite AND the

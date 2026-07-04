@@ -6,6 +6,18 @@ uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **`evaluator` now checks for specific ways a diff can fake "done."** Beyond the
+  existing criteria-integrity and scope checks (steps 4–5, which guard the
+  acceptance-criteria docs and diff scope), it now has a dedicated checklist for
+  implementation-level shortcuts that can hide inside an otherwise-passing diff:
+  weakened/skipped tests, swallowed errors, stub returns, comment-as-fix,
+  happy-path-only handling, invented APIs, and mocking the subject under test.
+  No automated test accompanies this — it's a prompt-level change to an
+  LLM-graded rubric, and there is no mechanical way to assert it improves grading
+  judgment; the frontmatter and PASS/NEEDS_WORK verdict contract `record-grade.sh`
+  depends on are unchanged.
+
 ### Fixed
 - **`close-milestone.sh` and `autopilot.sh` no longer mistake the `roadmap` skill's own
   legend line for an open task.** Every roadmap the `roadmap` skill generates permanently
