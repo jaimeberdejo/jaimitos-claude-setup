@@ -288,8 +288,12 @@ decides whether that PASS is allowed to become a tick.
 `_high-stakes.sh` catches consequential changes by **path** (`HIGH_STAKES_RE` — auth, oauth,
 session, payment, billing, migration, wallet, ledger, kyc, delete, deploy, webhook, …) **and by
 content** (`high_stakes_content_match` — `DROP`/`DELETE`/`TRUNCATE`, `rm -rf`, force-push,
-`--no-verify`, `os.system`, `shell=True`, `eval(` in benignly-named files). Either match forces
-supervised review: `tick.sh` refuses to auto-tick, and the headless loop never commits or pushes it.
+`--no-verify`, `os.system`, `shell=True`, `eval(`, and web-framework DELETE route registration —
+`@app.delete(`/`@router.delete(` decorators, `methods=[...,"DELETE",...]`, `.delete("path", ...)` —
+in benignly-named files). Either match forces supervised review: `tick.sh` refuses to auto-tick,
+and the headless loop never commits or pushes it. Still a backstop, not exhaustive: judge a real
+destructive endpoint on its own merits and tag its phase `Mode: supervised` rather than assuming
+the content matcher alone will catch every framework's delete-route syntax.
 
 ### Enforcement reality (deterministic layer vs advisory layer)
 Be honest about what actually *enforces* versus what merely *advises* — different tiers:
@@ -466,8 +470,13 @@ The jump from 1/2/3 to 4 is the jump from "demo" to "trustworthy," and the reaso
    rather than thrash. On NEEDS_WORK, write findings to `NEXT_FINDINGS.md` and let the next fresh
    iteration start from them ("fail predictably, feed the failure forward").
 4. **A blast-radius limit** — constrain files (touch only `src/`, `tests/`, `docs/`), commit after
-   every green step (git history *is* your undo stack), use `acceptEdits` on a dev machine and
-   `bypassPermissions` **only** in a sandboxed container, and run long loops in a `git worktree`.
+   every green step (git history *is* your undo stack), use `acceptEdits` when a human is present
+   at a terminal to approve a prompt (a dev machine, interactive). For a genuinely **unattended**
+   run — no TTY, nobody there to approve anything — `acceptEdits` alone cannot get past a prompt
+   for writing `.claude/`'s phase-tracking markers or running the test suite via Bash;
+   `scripts/autopilot.sh --dangerously-skip-permissions` (same flag name as the `claude` CLI's own)
+   is what actually lets a headless run complete a phase, and it belongs **only** in a sandboxed
+   container with no production credentials. Also run long loops in a `git worktree`.
 5. **An independent verifier (not the builder)** — the grader must not be the worker. The `evaluator`
    is hard to fool because of three properties: **fresh context**, **no Write/Edit tools**, and a
    **default-FAIL contract**. `/phase` runs it as a self-check but never ticks; ticking is the shared
@@ -743,10 +752,12 @@ context on every start/resume/compact — so after `/clear`, Claude is already o
 gives you an explicit summary on demand.
 
 ### E — Going headless (CI / scheduled)
-`bash scripts/autopilot.sh 8 --pr` runs the loop in a fresh worktree on a throwaway branch and opens
-a PR — never touches main. Use `bypassPermissions` only inside a sandboxed container; keep
-`AGENT_STOP` reachable; run `doctor.sh` first. The bundled CI (and `run-guard-tests.sh`) keeps the
-hooks and gates from regressing.
+`bash scripts/autopilot.sh 8 --pr --dangerously-skip-permissions` runs the loop in a fresh worktree
+on a throwaway branch and opens a PR — never touches main. The `--dangerously-skip-permissions`
+flag is REQUIRED for a truly unattended run to complete even one phase (no TTY means `acceptEdits`
+can't approve the `.claude/` writes or test-suite Bash calls `/phase` needs) — use it ONLY inside a
+sandboxed container with no production credentials; keep `AGENT_STOP` reachable; run `doctor.sh`
+first. The bundled CI (and `run-guard-tests.sh`) keeps the hooks and gates from regressing.
 
 ### Learn it hands-on, then graduate to real work
 The fastest way to internalize the stack is **[`PRACTICE-PROJECT.md`](../../PRACTICE-PROJECT.md)** — a
@@ -873,7 +884,11 @@ SKILLS       workflow:   roadmap · milestone · adr · ship-check · scope-guar
              installer:  setup-jaimitos-os (install + customize)
 
 AUTOPILOT    bash scripts/autopilot.sh [N|N-M|all] [--no-worktree] [--pr] [--allow-dirty]
+                            [--dangerously-skip-permissions]
              (worktree isolation is the DEFAULT; --no-worktree runs in-place)
+             (--dangerously-skip-permissions REQUIRED for a real unattended/no-TTY run to
+              complete a phase — acceptEdits alone can't approve .claude/ writes or Bash
+              test-suite calls headlessly; sandboxed container + no prod credentials only)
              touch AGENT_STOP   halt   ·   rm AGENT_STOP   resume   ·   echo … > STEER.md   redirect
 
 THE GATE     scripts/tick.sh is the ONLY ticker. Needs: evaluator PASS + fresh green tests +

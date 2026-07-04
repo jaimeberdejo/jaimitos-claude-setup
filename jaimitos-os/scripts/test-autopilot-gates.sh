@@ -35,6 +35,10 @@ trap cleanup EXIT
 BIN="$WORK/bin"; mkdir -p "$BIN"
 cat > "$BIN/claude" <<'STUB'
 #!/usr/bin/env bash
+# Log the exact args this invocation carried, if a caller wants to assert on them
+# (e.g. confirming --dangerously-skip-permissions was/wasn't passed). Kept OUTSIDE
+# the repo via env var, same pattern as EVAL_COUNT_FILE below.
+[ -n "${CLAUDE_ARGS_LOG:-}" ] && printf '%s\n' "$*" >> "$CLAUDE_ARGS_LOG"
 # Evaluator invocation carries --agent.
 is_eval=0; for a in "$@"; do [ "$a" = "--agent" ] && is_eval=1; done
 if [ "$is_eval" = 1 ]; then
@@ -56,6 +60,15 @@ if [ "$is_eval" = 1 ]; then
   exit 0
 fi
 # Builder: record refs like /phase does, then write+commit per BUILDER_MODE.
+# BUILDER_MODE=blocked simulates a builder that exits 0 (the process itself didn't
+# crash) but was blocked from writing its phase markers or committing — the exact
+# real-world failure mode this test suite couldn't see before dogfooding against a
+# real (non-stubbed) `claude` binary: a headless permission prompt with no TTY to
+# answer it. It deliberately does NOT write .claude/.phase-base/.phase-ready.
+if [ "${BUILDER_MODE:-highstakes}" = "blocked" ]; then
+  echo "blocked: this session's permission mode requires approval — retries aren't going through"
+  exit 0
+fi
 git rev-parse HEAD > .claude/.phase-base 2>/dev/null
 printf '## Phase 1 — Work\n' > .claude/.phase-ready
 case "${BUILDER_MODE:-highstakes}" in
@@ -202,6 +215,55 @@ BUILDER_MODE=clean EVAL_MODE=pass; export BUILDER_MODE EVAL_MODE; rc=$(run "$REP
 { [ "$rc" = 0 ] && grep -q "roadmap has no open items" "$WORK/out"; } \
   && pass "roadmap-skill legend line doesn't fool the 'nothing to do' preflight" \
   || fail "legend line made autopilot think open work remains (rc=$rc)"
+
+# 13 — default (no flag): both builder and evaluator invocations carry
+# --permission-mode acceptEdits, never --dangerously-skip-permissions.
+mkrepo r13; rm -f "$WORK/args13.log"
+BUILDER_MODE=clean EVAL_MODE=pass CLAUDE_ARGS_LOG="$WORK/args13.log"
+export BUILDER_MODE EVAL_MODE CLAUDE_ARGS_LOG
+run "$REPO" 1 --no-worktree --allow-dirty >/dev/null
+unset CLAUDE_ARGS_LOG
+{ grep -q -- "--permission-mode acceptEdits" "$WORK/args13.log" \
+  && ! grep -q -- "--dangerously-skip-permissions" "$WORK/args13.log"; } \
+  && pass "default run: acceptEdits used, --dangerously-skip-permissions never passed" \
+  || fail "default permission flags wrong (see $WORK/args13.log)"
+
+# 14 — --dangerously-skip-permissions: both invocations switch to it instead, and the
+# script warns loudly that it's on.
+mkrepo r14; rm -f "$WORK/args14.log"
+BUILDER_MODE=clean EVAL_MODE=pass CLAUDE_ARGS_LOG="$WORK/args14.log"
+export BUILDER_MODE EVAL_MODE CLAUDE_ARGS_LOG
+run "$REPO" 1 --no-worktree --allow-dirty --dangerously-skip-permissions >/dev/null
+unset CLAUDE_ARGS_LOG
+{ grep -q -- "--dangerously-skip-permissions" "$WORK/args14.log" \
+  && ! grep -q -- "--permission-mode acceptEdits" "$WORK/args14.log"; } \
+  && pass "--dangerously-skip-permissions: both builder and evaluator switch to it" \
+  || fail "flag did not propagate to claude invocations (see $WORK/args14.log)"
+grep -q -- "--dangerously-skip-permissions is ON" "$WORK/out" \
+  && pass "--dangerously-skip-permissions: loud warning printed" \
+  || fail "no warning printed when the flag is used"
+ticked "$REPO" && pass "--dangerously-skip-permissions: phase still ticks normally" \
+  || fail "phase did not tick with the flag on"
+
+# 15 — builder blocked (exits 0 but never writes .claude/.phase-ready, the real-world
+# headless-permission-wall failure mode): autopilot must STOP deterministically before
+# ever invoking the evaluator, not burn a grading pass on a phase never attempted.
+mkrepo r15; rm -f "$WORK/args15.log"
+BUILDER_MODE=blocked EVAL_MODE=pass CLAUDE_ARGS_LOG="$WORK/args15.log"
+export BUILDER_MODE EVAL_MODE CLAUDE_ARGS_LOG
+run "$REPO" 1 --no-worktree --allow-dirty >/dev/null
+unset CLAUDE_ARGS_LOG
+grep -q "phase-ready is missing" "$WORK/out" \
+  && pass "blocked builder: detected missing .claude/.phase-ready, clear message" \
+  || fail "blocked builder not detected (see \$WORK/out)"
+grep -q -- "--dangerously-skip-permissions" "$WORK/out" \
+  && pass "blocked builder: points the operator at --dangerously-skip-permissions" \
+  || fail "blocked-builder message doesn't mention the fix"
+{ ! grep -q -- "--agent" "$WORK/args15.log" 2>/dev/null; } \
+  && pass "blocked builder: evaluator never invoked (no wasted grading pass)" \
+  || fail "evaluator was invoked despite the builder being blocked"
+ticked "$REPO" && fail "blocked builder: phase incorrectly ticked" \
+  || pass "blocked builder: phase correctly left unticked"
 
 echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All autopilot gate tests passed."; exit 0

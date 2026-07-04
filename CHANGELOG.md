@@ -6,6 +6,43 @@ uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **`scripts/autopilot.sh` can now actually complete a phase headless against a real
+  (non-stubbed) `claude` binary.** Found via dogfooding a full project through the whole
+  stack, not synthetic testing (which mocks the `claude` binary and so never exercised
+  the real permission system): without a TTY, the hardcoded `--permission-mode acceptEdits`
+  cannot approve writes to `.claude/` (treated as a sensitive path) or Bash commands like
+  the test suite — both were silently denied, so the builder could never write
+  `.claude/.phase-ready`, and `scripts/tick.sh`'s own fail-closed check ("missing
+  `.claude/.phase-base`") meant no phase could ever tick in a truly unattended run.
+  Added `--dangerously-skip-permissions` (same flag name as the `claude` CLI's own) to
+  switch both the builder and evaluator invocations to `bypassPermissions`, opt-in only,
+  with a loud warning (SECURITY.md and the GUIDE now say explicitly: sandboxed container,
+  no production credentials — same bar as any other unattended run). Also added a
+  deterministic post-builder check (`.claude/.phase-ready` must exist after the builder
+  exits) so a blocked builder stops the loop immediately with a clear cause and fix,
+  instead of silently wasting an evaluator grading pass on a phase never attempted.
+  (`scripts/test-autopilot-gates.sh` — 5 new tests: default flags never leak
+  `--dangerously-skip-permissions`, the flag correctly propagates to both invocations,
+  the warning prints, and a blocked-builder run is caught before the evaluator ever runs.)
+- **High-stakes content-matching now catches web-framework `DELETE` route registration**
+  (`@app.delete(`/`@router.delete(` decorators, `methods=[...,"DELETE",...]`,
+  `.delete("path", ...)`) — found via the same dogfood run: a real `DELETE /admin/...`
+  endpoint tripped neither `HIGH_STAKES_RE` (the file lived in an existing `api.py`, no
+  "delete" in its own path) nor, until now, the content matcher, leaving `Mode: supervised`
+  as the only protection for that phase. Still a backstop, not exhaustive — deliberately
+  does NOT match a plain `.delete(some_id)` call with no string literal (an object's own
+  method, not route registration), so it stays a "cite the specific pattern" gate, not a
+  blanket ban on the word "delete". (`scripts/test-high-stakes.sh` — regression tests for
+  both the new matches and the false-positive-avoidance case.)
+- **`/phase` (no argument) documented for the case where it re-selects an already-built
+  `Mode: supervised` phase indefinitely** instead of advancing — a real consequence of
+  checkbox-driven selection combined with `tick.sh` correctly never auto-ticking a
+  supervised phase's checkboxes (also found via dogfooding; not destructive, but
+  undocumented friction). `.claude/commands/phase.md` now tells the builder to verify
+  rather than rebuild in this case, and the root README's troubleshooting table tells a
+  human operator to target the next phase explicitly (`/phase "## Phase N — ..."`).
+
 ### Added
 - **`evaluator` now checks for specific ways a diff can fake "done."** Beyond the
   existing criteria-integrity and scope checks (steps 4–5, which guard the

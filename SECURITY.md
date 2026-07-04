@@ -48,6 +48,14 @@ prompt) only *asks* a model to comply.
   `python -c …`). The real boundary for unattended runs is the **environment**: a
   sandbox/container with **no production credentials** and constrained egress, plus
   `permission_mode: default`. This scaffold can't sandbox itself.
+- **`scripts/autopilot.sh --dangerously-skip-permissions` removes the permission boundary
+  entirely, for both the builder and evaluator processes.** It exists because, without a TTY,
+  the default `acceptEdits` mode cannot approve writes to `.claude/` or Bash commands like the
+  test suite — a real unattended run needs this flag to complete even one phase. That is exactly
+  why it must be confined to a sandbox/container with **no production credentials**: with it on,
+  neither `permissions.deny` nor any interactive prompt stands between the builder and anything
+  your OS user can touch. Prefer `acceptEdits` (the default, no flag needed) whenever a human is
+  at the terminal to approve prompts.
 - **The high-stakes gate only protects paths YOU point it at.** Out of the box,
   `HIGH_STAKES_RE` in `_high-stakes.sh` and `paths:` in `high-stakes.md` are generic
   examples. If you don't edit them to match your real auth/migration/money/delete dirs, a

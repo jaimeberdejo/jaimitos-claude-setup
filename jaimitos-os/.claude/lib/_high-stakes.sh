@@ -43,7 +43,17 @@ high_stakes_match() {
 #   shell=True, eval(  (eval/rm are anchored so retrieval()/format don't false-hit; the eval
 #   anchor also excludes a preceding '.' so method calls like model.eval() / x.eval() — common
 #   and benign, e.g. PyTorch — do NOT trip it; only a bare eval( does).
-HIGH_STAKES_CONTENT_RE='DROP[[:space:]]+TABLE|TRUNCATE[[:space:]]+TABLE|DELETE[[:space:]]+FROM|(^|[^[:alnum:]_])rm[[:space:]]+-[a-z]*[rf]|git[[:space:]]+push[[:space:]].*--force|--no-verify|os\.system[[:space:]]*\(|shell[[:space:]]*=[[:space:]]*True|(^|[^[:alnum:]_.])eval[[:space:]]*\('
+#   Web-framework DELETE routes — @app.delete(/@router.delete( (FastAPI/Flask-RESTX
+#   decorators), methods=[...,"DELETE",...] (Flask/Django route registration), and
+#   .delete("..."/.delete('...' (Express-style, string literal = a route path, not an
+#   arbitrary object's .delete() method call with a variable/id argument). Added after
+#   dogfooding found a real DELETE /admin/... endpoint that this matcher missed entirely —
+#   neither the path (living in an existing api.py, no "delete" in ITS path) nor, until
+#   now, the content matched, leaving `Mode: supervised` as the only protection. Still a
+#   backstop, not exhaustive: a `.delete(some_id)` call with no string literal (the common
+#   shape for retracting-by-id, as opposed to registering a route) deliberately does NOT
+#   match — that's a plain method call, not route registration.
+HIGH_STAKES_CONTENT_RE="DROP[[:space:]]+TABLE|TRUNCATE[[:space:]]+TABLE|DELETE[[:space:]]+FROM|(^|[^[:alnum:]_])rm[[:space:]]+-[a-z]*[rf]|git[[:space:]]+push[[:space:]].*--force|--no-verify|os\.system[[:space:]]*\(|shell[[:space:]]*=[[:space:]]*True|(^|[^[:alnum:]_.])eval[[:space:]]*\(|@[[:alnum:]_]+\.delete\(|methods[[:space:]]*=[[:space:]]*\[[^]]*[\"']DELETE[\"']|\.delete\([\"']"
 
 # high_stakes_content_match <text>: echoes matching lines; returns 0 if any matched, 1 if none.
 high_stakes_content_match() {

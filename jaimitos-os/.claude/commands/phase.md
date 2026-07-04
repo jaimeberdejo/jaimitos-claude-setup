@@ -16,6 +16,16 @@ silently fall through to another phase. This is for targeted and parallel work (
    work — do not skip past them.
 1. Read docs/STATE.md and docs/ROADMAP.md. If a phase argument was given (see above), select
    that phase. Otherwise, pick the first phase with unchecked items.
+
+   **Known consequence of checkbox-driven selection: a `Mode: supervised` phase whose code is
+   already built and evaluator-passed still has unchecked `- [ ]` items** (only a human running
+   `/wrap` — or `scripts/tick.sh` directly — flips them, and it correctly refuses to auto-tick a
+   supervised phase). So bare `/phase` will keep re-selecting that SAME phase on every future
+   invocation instead of advancing, until a human ticks it or you're pointed at the next phase
+   explicitly. If the selected phase's tasks are already implemented and committed, do NOT redo
+   the work — verify it (re-read the code, re-run its tests/evaluator check) and report that it's
+   done and awaiting a manual `/wrap`, exactly as if you'd just finished building it. To actually
+   advance past it, use the heading argument on the NEXT phase (e.g. `/phase "## Phase 6 — ..."`).
 2. Record the phase base (so the grader can diff the whole phase) and the phase
    heading (so the orchestrator knows which items to tick on PASS). Create .claude/
    if needed, then:

@@ -87,6 +87,14 @@ content_match 'git push origin main --force'
 content_match 'git commit --no-verify'
 
 echo ""
+echo "Content-level — web-framework DELETE routes (must match; found missing via dogfooding,"
+echo "a real DELETE /admin/... endpoint tripped neither the path nor the old content matcher):"
+content_match '@app.delete("/admin/traces/{id}")'
+content_match "@router.delete('/x')"
+content_match 'methods=["DELETE", "GET"]'
+content_match "app.delete('/admin/traces/:id', handler)"   # Express-style route registration
+
+echo ""
 echo "Content-level — benign code that must NOT trip the content matcher:"
 content_ignore 'result = retrieval(query)'        # contains "eval(" only inside a word
 content_ignore 'df = format_table(rows)'           # "TABLE" but not DROP/TRUNCATE
@@ -95,6 +103,9 @@ content_ignore 'user = get_account(account_id)'
 content_ignore 'return shell_path == expected'     # "shell" but not shell=True
 content_ignore 'model.eval()'                      # method call, not bare eval( — must not trip
 content_ignore 'self.encoder.eval()'               # dotted method call (PyTorch idiom)
+content_ignore 'registry.delete(fixture_id)'       # .delete(VAR) — a plain method call by id,
+                                                    # not route registration (no string literal)
+content_ignore 'user.delete_notes()'               # different method name entirely ("delete_notes")
 
 echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All high-stakes detection tests passed."; exit 0

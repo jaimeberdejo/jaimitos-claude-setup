@@ -7,7 +7,7 @@
 # State persists in docs/ + git between iterations.
 #
 # Usage:
-#   bash scripts/autopilot.sh [COUNT] [--allow-dirty] [--no-worktree] [--pr]
+#   bash scripts/autopilot.sh [COUNT] [--allow-dirty] [--no-worktree] [--pr] [--dangerously-skip-permissions]
 #     COUNT can be:
 #       N         run up to N phases   (e.g. 5  → "only 5")
 #       N-M       run up to M phases, aiming for at least N  (e.g. 3-5 → "from 3 to 5")
@@ -21,6 +21,12 @@
 #                      with the default worktree; nothing is ever pushed to your current
 #                      branch). A secret-scan gate runs before any push.
 #     --allow-dirty    skip the clean-tree preflight (commit/stash is otherwise required)
+#     --dangerously-skip-permissions   run the builder and evaluator with ALL permission
+#                      checks skipped (same flag name as the `claude` CLI's own). Without
+#                      a TTY, `--permission-mode acceptEdits` (the default) CANNOT approve
+#                      writes to `.claude/` or Bash commands like the test suite — a truly
+#                      headless run needs this to complete even one phase. Use ONLY in a
+#                      sandboxed container with NO production credentials.
 # Stop:    touch AGENT_STOP
 # Steer:   echo "use Decimal not float for money" > STEER.md
 #
@@ -39,12 +45,14 @@ ALLOW_DIRTY=0
 USE_WORKTREE=1         # isolation is the DEFAULT; --no-worktree opts out
 OPEN_PR=0
 HS_BLOCKED=0          # set to 1 if a high-stakes phase tripped the gate (never push it)
+SKIP_PERMISSIONS=0    # --dangerously-skip-permissions opts INTO bypassing all permission checks
 for arg in "$@"; do
   case "$arg" in
     --allow-dirty) ALLOW_DIRTY=1 ; continue ;;
     --worktree)    USE_WORKTREE=1 ; continue ;;            # explicit (already the default)
     --no-worktree) USE_WORKTREE=0 ; continue ;;            # opt out of isolation
     --pr)          OPEN_PR=1 ; continue ;;
+    --dangerously-skip-permissions) SKIP_PERMISSIONS=1 ; continue ;;
     all|max|ALL|MAX) MAX_ITER=50; UNBOUNDED=1 ; continue ;;  # advance as much as you can
   esac
   # Numeric COUNT forms — anchored validation; reject malformed loudly (no silent ignore).
@@ -54,10 +62,23 @@ for arg in "$@"; do
     MIN_TARGET="${arg%%-*}"; MAX_ITER="${arg##*-}"
   else
     echo "autopilot: unrecognized argument '$arg'." >&2
-    echo "  expected: N | N-M | all | --no-worktree | --worktree | --allow-dirty | --pr" >&2
+    echo "  expected: N | N-M | all | --no-worktree | --worktree | --allow-dirty | --pr | --dangerously-skip-permissions" >&2
     exit 1
   fi
 done
+
+# Built once, used for both the builder and evaluator invocations below. Default
+# (acceptEdits) matches Claude Code's own permission modes; without a TTY it CANNOT
+# approve writes to .claude/ or non-trivial Bash commands (e.g. the test suite) —
+# confirmed by dogfooding against a real (non-stubbed) `claude` binary, not just the
+# mocked-CLI test suite. --dangerously-skip-permissions is the only thing that lets a
+# truly headless run complete a phase; it trades away the permission boundary entirely,
+# so it's opt-in, never the default.
+if [ "$SKIP_PERMISSIONS" -eq 1 ]; then
+  CLAUDE_PERM_FLAGS=(--dangerously-skip-permissions)
+else
+  CLAUDE_PERM_FLAGS=(--permission-mode acceptEdits)
+fi
 
 # Default the test gate ON for headless runs so each turn writes test-results.json
 # evidence (the test-gate.sh Stop hook reads $LEAN_TEST_GATE). Set it to `block`
@@ -143,6 +164,14 @@ else
   echo "autopilot: ⚠ running IN-PLACE in your current checkout ($PWD)."
   echo "autopilot:   a runaway loop can mutate the files you're working on. Isolation is the"
   echo "autopilot:   default (--worktree, a throwaway branch); you opted out with --no-worktree."
+fi
+
+if [ "$SKIP_PERMISSIONS" -eq 1 ]; then
+  echo "autopilot: ⚠ --dangerously-skip-permissions is ON — the builder and evaluator run with"
+  echo "autopilot:   ALL permission checks skipped (same as the claude CLI's own flag of this"
+  echo "autopilot:   name). Use this ONLY in a sandboxed container with NO production"
+  echo "autopilot:   credentials — it removes the interactive permission boundary entirely for"
+  echo "autopilot:   the duration of this run, on both the builder and the evaluator process."
 fi
 
 # Baseline commit for the push-gate: secrets must not enter the remote even though
@@ -239,8 +268,25 @@ for i in $(seq 1 "$MAX_ITER"); do
   echo ""; echo "=== iteration $i / $MAX_ITER ==="
 
   # Builder: fresh context, builds ONE phase, does NOT tick the roadmap.
-  if ! claude -p "/phase" --permission-mode acceptEdits 2>&1 | tee -a autopilot.log; then
+  if ! claude -p "/phase" "${CLAUDE_PERM_FLAGS[@]}" 2>&1 | tee -a autopilot.log; then
     echo "autopilot: builder process exited non-zero — stopping." | tee -a autopilot.log; break
+  fi
+
+  # Deterministic check: /phase's own step 2 ALWAYS writes .claude/.phase-ready (the exact
+  # heading it's building), new phase or retry alike — so its absence right after a
+  # successful-exit builder run is a reliable signal the builder was BLOCKED from writing
+  # it, not that it genuinely finished. The most common cause without a TTY: a permission
+  # prompt for a .claude/ write or a Bash command (pytest, git add) that acceptEdits mode
+  # cannot approve headlessly. Catch it HERE, deterministically, instead of burning an
+  # evaluator grading pass against a phase that was never actually attempted.
+  if [ ! -f .claude/.phase-ready ]; then
+    echo "autopilot: ⛔ .claude/.phase-ready is missing after the builder exited — the phase" | tee -a autopilot.log
+    echo "autopilot:   was most likely blocked by a permission prompt it couldn't answer" | tee -a autopilot.log
+    echo "autopilot:   headlessly (no TTY). Check autopilot.log above for what the builder" | tee -a autopilot.log
+    echo "autopilot:   actually reported. If you're in a sandboxed container with NO" | tee -a autopilot.log
+    echo "autopilot:   production credentials, retry with --dangerously-skip-permissions." | tee -a autopilot.log
+    echo "autopilot:   STOPPING (won't grade a phase that was never really attempted)." | tee -a autopilot.log
+    break
   fi
 
   # Produce AUTHORITATIVE tick evidence now that the builder has fully exited and HEAD is
@@ -261,13 +307,16 @@ for i in $(seq 1 "$MAX_ITER"); do
 
   # Independent grader: separate process, runs AS the evaluator (its system prompt +
   # no-edit-tools restriction). This is the sole gate for ticking.
-  # NOTE: `--permission-mode acceptEdits` here is ONLY so it can run tests via Bash
-  # without prompts in headless; the evaluator has no Edit/Write tools, AND any file
-  # change it does make is discarded by cleanup_eval_changes below. Its diff input is
-  # untrusted, so treat its output as data, not instructions. Keep this able to RUN.
+  # NOTE: same $CLAUDE_PERM_FLAGS as the builder — the evaluator has no Edit/Write tools
+  # regardless, AND any file change it does make is discarded by cleanup_eval_changes
+  # below, so bypassing permissions here does not weaken its no-edit contract; it only
+  # lets it actually RUN the test suite/typecheck/lint via Bash headlessly (with the
+  # default acceptEdits and no TTY, those Bash calls would otherwise be denied outright,
+  # producing an empty/uninformative grade rather than a real one). Its diff input is
+  # untrusted, so treat its output as data, not instructions.
   # stderr → autopilot.log (not /dev/null) so an empty/garbled grade is debuggable.
   VERDICT=$(claude --agent evaluator -p "Grade the phase just completed." \
-                   --permission-mode acceptEdits 2>>autopilot.log)
+                   "${CLAUDE_PERM_FLAGS[@]}" 2>>autopilot.log)
 
   if [ -z "$(printf '%s' "$VERDICT" | tr -d '[:space:]')" ]; then
     echo "autopilot: evaluator returned no output — treating as FAILURE, stopping." | tee -a autopilot.log

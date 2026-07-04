@@ -214,13 +214,20 @@ Three ways to run, in order of trust:
 | Manual | `/phase`, you review each diff | medium stakes, your daily default |
 | Watchable loop | `/autopilot N` (in-session) | a few phases you want to *see* run |
 | Parallel watchable loop | `/autopilot-parallel "<heading>" ...` (in-session, per-phase worktree isolation) | a handful of phases you're confident don't interfere with each other |
-| Headless loop | `bash scripts/autopilot.sh N [--no-worktree] [--pr] [--allow-dirty]` | long/overnight, low-stakes, reversible |
+| Headless loop | `bash scripts/autopilot.sh N [--no-worktree] [--pr] [--allow-dirty] [--dangerously-skip-permissions]` | long/overnight, low-stakes, reversible |
 
 `scripts/autopilot.sh` accepts `N` (up to N), `N-M` (aim for N, cap M), or `all` (malformed
 counts are rejected, not ignored). **Worktree isolation is the default** — a bad run can't touch
 your checkout; `--no-worktree` opts out (runs in-place, warned loudly). `--pr` opens a PR at the
 end and never touches main (secret-scanned before any push); `--allow-dirty` skips the clean-tree
 preflight (use sparingly — it removes a safety check).
+
+**`--dangerously-skip-permissions`** — without a TTY, the default `--permission-mode acceptEdits`
+cannot approve writes to `.claude/` (the phase-tracking markers `/phase` needs) or Bash commands
+like the test suite, so a truly unattended run needs this flag to complete even one phase — pass
+it ONLY in a sandboxed container with no production credentials. The script detects a blocked
+builder deterministically (a missing `.claude/.phase-ready` after it exits) and stops with this
+exact guidance rather than silently burning a grading pass on a phase that was never attempted.
 
 **The guardrails:** verifiable signal · bounded stop · bounded retries (3-strike thrash cap) ·
 blast-radius limit · independent verifier before roadmap ticking · the single `scripts/tick.sh`
@@ -321,6 +328,8 @@ Use the lightest mode that fits the risk:
 | Evaluator verdict "unrecognized" | By design the loop stops rather than guess — read the evaluator's output and fix the phase (or the criteria) so it emits a clean PASS/FAIL. |
 | Leftover autopilot worktree | `git worktree remove <path>` (add `--force` if it refuses); `git worktree list` shows them. |
 | `autopilot.sh` preflight aborts | Most often missing `jq` (hard-fail) or a dirty tree — install `jq`, commit/stash, or pass `--allow-dirty` knowingly. |
+| `autopilot.sh` stops immediately: "`.claude/.phase-ready` is missing after the builder exited" | Headless (no TTY) `claude` can't approve a permission prompt for writing `.claude/` or running the test suite via Bash — retry with `--dangerously-skip-permissions`, and only in a sandboxed container with no production credentials. |
+| `/phase` (no argument) keeps re-selecting the same already-built phase | It's `Mode: supervised` — its checkboxes never auto-tick until a human runs `/wrap` (which correctly refuses to auto-tick it). Target the next phase explicitly: `/phase "## Phase N — ..."`. |
 
 ---
 
