@@ -6,10 +6,17 @@
 # Classifies every toolkit-shipped file into one of four tiers and applies each per its rule:
 #   overwrite  toolkit-owned logic, no project values inside     → diff, confirm, copy over
 #   never      project-owned (docs, CLAUDE.md, .gitignore)       → always skipped, never written
-#   mixed      toolkit body + a project-customized value in it   → Phase 2 does the narrow
-#                                                                   value-preserving merge; THIS
-#                                                                   PHASE always routes it to the
-#                                                                   manual-review bucket instead
+#   mixed      toolkit body + a project-customized value in it   → value-preserving merge for the
+#                                                                   three known shapes (the
+#                                                                   HIGH_STAKES_RE= line, an
+#                                                                   agent's model: frontmatter
+#                                                                   line, or rules/high-stakes.md's
+#                                                                   paths: block): toolkit body +
+#                                                                   project value. ALWAYS prompts
+#                                                                   (never bypassed by --yes); an
+#                                                                   unrecognized/malformed shape in
+#                                                                   EITHER copy still routes to the
+#                                                                   manual-review bucket, untouched
 #   unknown    unclassified (e.g. .claude/settings.json, JSON)   → always manual-review, never written
 #
 # Usage:
@@ -135,6 +142,168 @@ should_apply() {
   confirm "$1"
 }
 
+# --- mixed-file value-preserving merge (Phase 2) ------------------------------------------------
+# Three known shapes get a narrow merge (toolkit body + project value) instead of a blind
+# overwrite or a blanket manual-review punt. The overriding rule for all three: validate the
+# shape of BOTH copies BEFORE touching anything; on any ambiguity, write NOTHING and route to
+# manual review, leaving the project file byte-identical. Every merge is built into a TEMP file
+# first and only `cp`'d over the project file after an explicit yes — there is no code path that
+# writes a partial result to the real destination.
+#
+# Value substitution never uses `sed s/.../$value/`: HIGH_STAKES_RE values routinely contain
+# regex metacharacters (|()[].*) that a sed REPLACEMENT string would reinterpret (mangling the
+# value on write — the exact bug models.sh's own set_model() hardened against). Instead each
+# merge prints the captured project line verbatim via awk's ENVIRON (not `awk -v`, which POSIX
+# mandates backslash-escape processing on — see models.sh's own comment on this), or rebuilds the
+# file by line-range selection (sed -n 'N,Mp', which only chooses which lines to print and never
+# interprets their content), so values round-trip byte-for-byte regardless of what they contain.
+
+# mixed_kind <rel-path> → hs_lib | agent | rules_hs, for the three known mixed shapes.
+mixed_kind() {
+  case "$1" in
+    .claude/lib/_high-stakes.sh)  echo hs_lib ;;
+    .claude/agents/*.md)          echo agent ;;
+    .claude/rules/high-stakes.md) echo rules_hs ;;
+    *) return 1 ;;
+  esac
+}
+
+# --- shape 1: .claude/lib/_high-stakes.sh — the single ^HIGH_STAKES_RE= line is the value ------
+hs_line_count() {
+  local n
+  n=$(grep -cE '^HIGH_STAKES_RE=' "$1" 2>/dev/null)
+  printf '%s' "${n:-0}"
+}
+
+# merge_hs_lib <projfile> <toolkitfile> <outfile>: writes toolkit's body with the project's
+# HIGH_STAKES_RE= line substituted in. Returns 1 (outfile untouched/empty, $MIXED_REASON set) if
+# either copy doesn't have EXACTLY ONE such line.
+merge_hs_lib() {
+  local projfile="$1" toolkitfile="$2" outfile="$3" pn tn proj_line
+  pn=$(hs_line_count "$projfile")
+  if [ "$pn" -ne 1 ]; then
+    MIXED_REASON="project copy has $pn HIGH_STAKES_RE= line(s) (expected exactly 1)"; return 1
+  fi
+  tn=$(hs_line_count "$toolkitfile")
+  if [ "$tn" -ne 1 ]; then
+    MIXED_REASON="toolkit copy has $tn HIGH_STAKES_RE= line(s) (expected exactly 1)"; return 1
+  fi
+  proj_line=$(grep -E '^HIGH_STAKES_RE=' "$projfile")
+  HS_PROJ_LINE="$proj_line" awk '
+    /^HIGH_STAKES_RE=/ && !done { print ENVIRON["HS_PROJ_LINE"]; done=1; next }
+    { print }
+  ' "$toolkitfile" > "$outfile"
+}
+
+# --- shape 2: .claude/agents/*.md — the ^model: frontmatter line (0 or 1; MAY be absent) -------
+model_line_count() {
+  local n
+  n=$(grep -cE '^model:' "$1" 2>/dev/null)
+  printf '%s' "${n:-0}"
+}
+
+# has_wellformed_frontmatter <file>: true if line 1 is exactly "---" and a closing "---" exists.
+has_wellformed_frontmatter() {
+  [ "$(sed -n '1p' "$1")" = "---" ] || return 1
+  [ "$(grep -c '^---$' "$1" 2>/dev/null)" -ge 2 ] || return 1
+}
+
+# merge_agent_model <projfile> <toolkitfile> <outfile>: preserves the PROJECT's model: state
+# (its value, or its absence) onto the toolkit's body. Returns 1 (outfile untouched/empty,
+# $MIXED_REASON set) if either copy has MORE THAN ONE model: line, or if inserting a model: line
+# the toolkit lacks would require a frontmatter shape it doesn't have.
+merge_agent_model() {
+  local projfile="$1" toolkitfile="$2" outfile="$3" pn tn proj_line
+  pn=$(model_line_count "$projfile")
+  if [ "$pn" -gt 1 ]; then
+    MIXED_REASON="project copy has $pn model: line(s) (expected 0 or 1)"; return 1
+  fi
+  tn=$(model_line_count "$toolkitfile")
+  if [ "$tn" -gt 1 ]; then
+    MIXED_REASON="toolkit copy has $tn model: line(s) (expected 0 or 1)"; return 1
+  fi
+
+  if [ "$pn" -eq 1 ] && [ "$tn" -eq 1 ]; then
+    proj_line=$(grep -E '^model:' "$projfile" | head -1)
+    MODEL_LINE="$proj_line" awk '
+      /^model:/ && !done { print ENVIRON["MODEL_LINE"]; done=1; next }
+      { print }
+    ' "$toolkitfile" > "$outfile"
+  elif [ "$pn" -eq 1 ] && [ "$tn" -eq 0 ]; then
+    if ! has_wellformed_frontmatter "$toolkitfile"; then
+      MIXED_REASON="toolkit copy has no well-formed --- frontmatter block to insert model: into"; return 1
+    fi
+    proj_line=$(grep -E '^model:' "$projfile" | head -1)
+    MODEL_LINE="$proj_line" awk '
+      NR==1 { print; next }
+      !done && /^---$/ { print ENVIRON["MODEL_LINE"]; print; done=1; next }
+      { print }
+    ' "$toolkitfile" > "$outfile"
+  elif [ "$pn" -eq 0 ] && [ "$tn" -eq 1 ]; then
+    grep -vE '^model:' "$toolkitfile" > "$outfile"
+  else
+    cp "$toolkitfile" "$outfile"
+  fi
+}
+
+# --- shape 3: .claude/rules/high-stakes.md — the ^paths: frontmatter BLOCK ----------------------
+# paths_block_bounds <file>: on success sets globals PB_START/PB_END (1-indexed, inclusive line
+# range of the paths: block: the "paths:" line itself plus every following indented line, up to
+# the next top-level/unindented line or the closing ---) and returns 0. On any ambiguity — no
+# opening/closing --- delimiter, or not EXACTLY ONE top-level paths: key — sets $MIXED_REASON and
+# returns 1 without touching PB_START/PB_END. Called directly (never via `$(...)`) so these
+# globals survive the call — a command-substitution-wrapped call would run in a subshell and
+# lose them.
+paths_block_bounds() {
+  local f="$1" closing paths_lines paths_count ln line
+  [ "$(sed -n '1p' "$f")" = "---" ] || { MIXED_REASON="has no opening --- frontmatter delimiter on line 1"; return 1; }
+  closing=$(awk 'NR>1 && /^---$/ {print NR; exit}' "$f")
+  [ -n "$closing" ] || { MIXED_REASON="frontmatter is never closed with a second ---"; return 1; }
+  paths_lines=$(awk -v c="$closing" 'NR>1 && NR<c && /^paths:/ {print NR}' "$f")
+  paths_count=$(printf '%s\n' "$paths_lines" | grep -c .)
+  if [ "$paths_count" -ne 1 ]; then
+    MIXED_REASON="has $paths_count top-level paths: key(s) in its frontmatter (expected exactly 1)"; return 1
+  fi
+  PB_START="$paths_lines"
+  PB_END="$PB_START"
+  ln=$((PB_START + 1))
+  while [ "$ln" -lt "$closing" ]; do
+    line=$(sed -n "${ln}p" "$f")
+    case "$line" in
+      [[:space:]]*) PB_END=$ln ;;
+      *) break ;;
+    esac
+    ln=$((ln + 1))
+  done
+  return 0
+}
+
+# merge_rules_hs <projfile> <toolkitfile> <outfile>: replaces the toolkit's paths: block with the
+# project's (verbatim, including its own comments/indentation), keeping the rest of the
+# toolkit's body. Returns 1 (outfile untouched/empty, $MIXED_REASON set) if either copy's
+# paths: block can't be unambiguously delimited.
+merge_rules_hs() {
+  local projfile="$1" toolkitfile="$2" outfile="$3" proj_start proj_end tk_start tk_end
+  paths_block_bounds "$projfile" || { MIXED_REASON="project copy $MIXED_REASON"; return 1; }
+  proj_start="$PB_START"; proj_end="$PB_END"
+  paths_block_bounds "$toolkitfile" || { MIXED_REASON="toolkit copy $MIXED_REASON"; return 1; }
+  tk_start="$PB_START"; tk_end="$PB_END"
+  {
+    sed -n "1,$((tk_start - 1))p" "$toolkitfile"
+    sed -n "${proj_start},${proj_end}p" "$projfile"
+    sed -n "$((tk_end + 1)),\$p" "$toolkitfile"
+  } > "$outfile"
+}
+
+# refresh_high_stakes_default <toolkitfile>: after a successful _high-stakes.sh merge, refresh
+# the project's fingerprint to the TOOLKIT's (new) HIGH_STAKES_RE= line, mirroring install.sh's
+# own write (install.sh:145) so doctor.sh's drift check keeps comparing against the CURRENT
+# shipped default rather than a stale one.
+refresh_high_stakes_default() {
+  mkdir -p .claude
+  grep -E '^HIGH_STAKES_RE=' "$1" > .claude/.high-stakes-default 2>/dev/null || true
+}
+
 UPDATED=0
 SKIPPED=0
 MANUAL=0
@@ -194,8 +363,42 @@ done < <(toolkit_files)
         SKIPPED=$((SKIPPED+1))
         ;;
       mixed)
-        echo "  manual review needed (mixed file — value-preserving merge lands in a later step): $rel"
-        MANUAL=$((MANUAL+1))
+        kind="$(mixed_kind "$rel")"
+        tmpfile="$(mktemp 2>/dev/null || mktemp -t jaimitos-os-sync)"
+        MIXED_REASON=""
+        mrc=0
+        case "$kind" in
+          hs_lib)   merge_hs_lib      "$rel" "$toolkitfile" "$tmpfile" || mrc=$? ;;
+          agent)    merge_agent_model "$rel" "$toolkitfile" "$tmpfile" || mrc=$? ;;
+          rules_hs) merge_rules_hs    "$rel" "$toolkitfile" "$tmpfile" || mrc=$? ;;
+          *)        MIXED_REASON="unrecognized mixed-file kind"; mrc=1 ;;
+        esac
+        if [ "$mrc" -ne 0 ] || [ ! -s "$tmpfile" ]; then
+          echo "  manual review needed (mixed file malformed — ${MIXED_REASON:-shape could not be validated}): $rel"
+          MANUAL=$((MANUAL+1))
+        else
+          echo "--- diff: $rel (project vs proposed merge) ---"
+          diff "$rel" "$tmpfile" || true
+          if [ "$DRY_RUN" -eq 1 ]; then
+            echo "  (dry-run) would merge: $rel"
+            UPDATED=$((UPDATED+1))
+          elif confirm "Merge '$rel', preserving your customized value?"; then
+            mkdir -p "$(dirname "$rel")"
+            if cp_err="$(cp "$tmpfile" "$rel" 2>&1 >/dev/null)"; then
+              is_shipped_script "$rel" && chmod +x "$rel"
+              [ "$kind" = "hs_lib" ] && refresh_high_stakes_default "$toolkitfile"
+              echo "  merged: $rel"
+              UPDATED=$((UPDATED+1))
+            else
+              echo "  FAILED: $rel${cp_err:+ ($cp_err)}" >&2
+              FAILED=$((FAILED+1))
+            fi
+          else
+            echo "  skipped (declined mixed merge): $rel"
+            SKIPPED=$((SKIPPED+1))
+          fi
+        fi
+        rm -f "$tmpfile"
         ;;
       unknown)
         echo "  manual review needed (unclassified): $rel"
