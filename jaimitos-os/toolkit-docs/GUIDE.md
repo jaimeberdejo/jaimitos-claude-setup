@@ -365,7 +365,17 @@ roadmap empty, safety-capped).
 **`autopilot.sh` flags:** worktree isolation is **the default** (a bad run can't touch your
 checkout) · `--no-worktree` (opt out — run IN-PLACE, mutating your current checkout; warned loudly)
 · `--pr` (push + open a PR, never touches main; secret-scanned before any push) · `--allow-dirty`
-(skip the clean-tree preflight).
+(skip the clean-tree preflight) · `--dangerously-skip-permissions` (see below).
+
+> **Headless autopilot currently assumes `--dangerously-skip-permissions`.** A *truly* unattended
+> run needs it: the default `--permission-mode acceptEdits` cannot, without a TTY, approve the
+> `.claude/` state-writes or the Bash calls (test suite, `git`) that a phase requires, so it stalls.
+> A *narrower* scoped profile was investigated and is **not currently possible** — `.claude/` is a
+> Claude-Code protected path whose writes are denied in every mode except bypass, even with an
+> explicit `permissions.allow` rule, and `/phase` writes `.claude/.phase-base`/`.phase-ready` from
+> inside the session. So headless == bypass == **sandbox-only**: run it in a container with **no
+> production credentials** (the real boundary from Part 2). The in-session `/autopilot` and
+> `/phase` keep the interactive permission prompts and don't need the flag.
 
 ### What the headless script adds over the in-session loops
 Both loops share the tick gate; the **headless** `scripts/autopilot.sh` adds *isolation* on top:

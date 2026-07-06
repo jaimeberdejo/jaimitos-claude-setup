@@ -74,6 +74,15 @@ done
 # mocked-CLI test suite. --dangerously-skip-permissions is the only thing that lets a
 # truly headless run complete a phase; it trades away the permission boundary entirely,
 # so it's opt-in, never the default.
+#
+# A NARROWER headless profile was investigated and is NOT currently possible: a scoped
+# `permissions.allow` list (+ `--permission-mode dontAsk`) CAN auto-approve git/test Bash
+# calls, but `.claude/` is a Claude-Code PROTECTED PATH whose writes are denied in every
+# mode except bypass — even with an explicit `Write(.claude/**)` allow rule. Since /phase
+# writes .claude/.phase-base and .claude/.phase-ready from inside the session, no allowlist
+# can replace bypass unless those state-writes are moved OUT of the claude process (a change
+# to /phase's contract, deferred). So today: headless == --dangerously-skip-permissions ==
+# sandbox-only. (Verified against Claude Code docs/CLI, 2026-07.)
 if [ "$SKIP_PERMISSIONS" -eq 1 ]; then
   CLAUDE_PERM_FLAGS=(--dangerously-skip-permissions)
 else
