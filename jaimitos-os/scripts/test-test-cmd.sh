@@ -161,5 +161,81 @@ echo "Nothing resolvable at all:"
 )
 
 echo ""
+echo "LEAN_TEST_CMD env var UNSET but .claude/settings.json env block sets it ->"
+echo "resolver reads it from the file (env-propagation-failure fallback):"
+(
+  scenario_dir
+  mkdir -p .claude
+  printf '{"env":{"LEAN_TEST_CMD":"settings-json runner"}}' > .claude/settings.json
+  unset LEAN_TEST_CMD
+  PATH="$BIN:$PATH"
+  export PATH
+  expect_cmd "settings.json env.LEAN_TEST_CMD, no env var" "settings-json runner"
+)
+
+echo ""
+echo "LEAN_TEST_CMD env var SET still wins over a DIFFERING settings.json value"
+echo "(explicit env override keeps precedence over the file fallback):"
+(
+  scenario_dir
+  mkdir -p .claude
+  printf '{"env":{"LEAN_TEST_CMD":"settings-json runner"}}' > .claude/settings.json
+  LEAN_TEST_CMD="env var runner"
+  PATH="$BIN:$PATH"
+  export LEAN_TEST_CMD PATH
+  expect_cmd "env var beats settings.json" "env var runner"
+)
+
+echo ""
+echo "No .claude/settings.json at all -> falls through to existing uv.lock/pytest behavior:"
+(
+  scenario_dir
+  mkdir -p tests; : > uv.lock
+  unset LEAN_TEST_CMD
+  PATH="$BIN:$PATH"
+  export PATH
+  expect_cmd "no settings.json, uv.lock present" "uv run pytest -q"
+)
+
+echo ""
+echo "settings.json present but its env block has NO LEAN_TEST_CMD key -> existing"
+echo "uv.lock/pytest behavior unchanged (jq yields empty, degrades silently):"
+(
+  scenario_dir
+  mkdir -p tests .claude; : > uv.lock
+  printf '{"env":{"OTHER_VAR":"x"}}' > .claude/settings.json
+  unset LEAN_TEST_CMD
+  PATH="$BIN:$PATH"
+  export PATH
+  expect_cmd "settings.json without LEAN_TEST_CMD key" "uv run pytest -q"
+)
+
+echo ""
+echo "settings.json present but malformed JSON -> degrades silently to existing behavior"
+echo "(no jq error noise on stdout, no crash):"
+(
+  scenario_dir
+  mkdir -p tests .claude; : > uv.lock
+  printf '{not valid json' > .claude/settings.json
+  unset LEAN_TEST_CMD
+  PATH="$BIN:$PATH"
+  export PATH
+  expect_cmd "malformed settings.json" "uv run pytest -q"
+)
+
+echo ""
+echo "settings.json has no top-level env block at all -> jq's // empty yields nothing,"
+echo "falls through unchanged:"
+(
+  scenario_dir
+  mkdir -p tests .claude; : > uv.lock
+  printf '{"hooks":{}}' > .claude/settings.json
+  unset LEAN_TEST_CMD
+  PATH="$BIN:$PATH"
+  export PATH
+  expect_cmd "settings.json with no env block" "uv run pytest -q"
+)
+
+echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All test-cmd resolver tests passed."; exit 0
 else echo "$FAILS test-cmd resolver test(s) FAILED."; exit 1; fi
