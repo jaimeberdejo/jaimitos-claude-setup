@@ -131,6 +131,52 @@ mkrepo t9b src/utils.py 'cursor.execute("DROP TABLE users")'; good_grade t9b; go
 mkrepo t9c; printf 'Mode: supervised\n' >> "$REPO/docs/ROADMAP.md"; good_grade t9c; good_evidence t9c; rc=$(runtick "$REPO")
 { [ "$rc" = 3 ] && ! ticked "$REPO"; } && pass "Mode: supervised → exit 3 (tag enforced, not auto-ticked)" || fail "Mode:supervised not enforced (rc=$rc)"
 
+# 9d (C1) — phase edits the high-stakes path ALLOWLIST → exit 3 (a phase cannot self-EXEMPT the gate
+# by adding its own allowlist line in the same commit tick.sh then reads). The allowlist path is not
+# itself in HIGH_STAKES_RE, so only the new gate-config guard catches this.
+mkrepo t9d .claude/high-stakes-path-allowlist 'src/foo.py: reviewed, safe'; good_grade t9d; good_evidence t9d; rc=$(runtick "$REPO")
+{ [ "$rc" = 3 ] && ! ticked "$REPO" && [ ! -f "$REPO/NEXT_FINDINGS.md" ]; } \
+  && pass "phase edits high-stakes-path-allowlist → exit 3 (no self-exempt)" || fail "allowlist-in-diff not gated (rc=$rc)"
+
+# 9e (C1) — phase modifies the high-stakes matcher LIB (_high-stakes.sh) → exit 3 (a phase cannot
+# self-NARROW the gate by shrinking HIGH_STAKES_RE in the same commit). Bespoke fixture: mkrepo
+# commits _high-stakes.sh at INIT (before phase-base), so we modify it INSIDE the phase — appending
+# a harmless comment (the lib still sources cleanly; a garbage overwrite would instead trip tick's
+# "library unavailable" refuse, rc=1) — then re-stamp grade+evidence against the new HEAD.
+mkrepo t9e
+( cd "$REPO" && printf '# v2.2.1 regression tweak (still valid bash, sourced return is above)\n' >> .claude/lib/_high-stakes.sh \
+    && git add -A && git commit -q -m tweak-hslib )
+HEAD=$(git -C "$REPO" rev-parse HEAD)
+good_grade t9e; good_evidence t9e; rc=$(runtick "$REPO")
+{ [ "$rc" = 3 ] && ! ticked "$REPO" && [ ! -f "$REPO/NEXT_FINDINGS.md" ]; } \
+  && pass "phase modifies _high-stakes.sh → exit 3 (no self-narrow)" || fail "_high-stakes.sh-in-diff not gated (rc=$rc)"
+
+# 9f (C1 control) — a PRE-EXISTING allowlist entry (committed BEFORE phase-base, so NOT in the phase
+# diff) must still suppress a high-stakes path changed in the phase → exit 0 ticks. Proves the guard
+# fires ONLY on an in-phase gate-config change and does not break legitimate pre-existing allowlists.
+REPO="$WORK/t9f"; rm -rf "$REPO"; mkdir -p "$REPO/.claude/lib" "$REPO/scripts" "$REPO/docs"
+cp "$TICK" "$REPO/scripts/tick.sh"; cp "$HS_LIB" "$REPO/.claude/lib/_high-stakes.sh"; cp "$SS_LIB" "$REPO/.claude/lib/_secret-scan.sh"
+printf '## Phase 1 — Work\n\n- [ ] do the work\n' > "$REPO/docs/ROADMAP.md"
+printf 'next: work\n' > "$REPO/docs/STATE.md"
+printf 'auth/login.py: reviewed at init, pre-existing entry\n' > "$REPO/.claude/high-stakes-path-allowlist"
+cat > "$REPO/.gitignore" <<'GI'
+NEXT_FINDINGS.md
+.claude/.tick-evidence.json
+.claude/.phase-base
+.claude/.phase-ready
+.claude/.phase-grade
+GI
+( cd "$REPO" && git init -q && git config user.email t@t.t && git config user.name t && git config gc.auto 0 \
+    && git add -A && git commit -q -m init \
+    && git rev-parse HEAD > .claude/.phase-base \
+    && mkdir -p auth && printf 'def login(): return True\n' > auth/login.py \
+    && git add -A && git commit -q -m build \
+    && printf '## Phase 1 — Work\n' > .claude/.phase-ready )
+HEAD=$(git -C "$REPO" rev-parse HEAD)
+good_grade t9f; good_evidence t9f; rc=$(runtick "$REPO")
+{ [ "$rc" = 0 ] && ticked "$REPO"; } \
+  && pass "pre-existing allowlist entry (not in phase diff) still suppresses → ticks" || fail "pre-existing allowlist not honored (rc=$rc)"
+
 # 10 — already-ticked phase (no open item) → refuses.
 mkrepo t10; good_grade t10; good_evidence t10
 sed_i() { perl -i -pe 's/- \[ \] do the work/- [x] do the work/' "$1"; }
