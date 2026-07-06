@@ -162,6 +162,57 @@ EOF
 bash "$MODELS" exec=haiku >/dev/null 2>&1 && fail "did not refuse a corrupted (duplicate model:) file" || pass "refuses when a role file already has duplicate model: lines"
 
 echo ""
+echo "Values containing sed/awk metacharacters round-trip byte-for-byte, update path (&, /, \\)"
+write_fixture
+bash "$MODELS" exec=opus >/dev/null   # give exec an existing model: line first (update path)
+bash "$MODELS" 'exec=foo&bar' >/dev/null
+grep -qx 'model: foo&bar' .claude/agents/executor.md && pass "'&' survives update path unmangled" || fail "'&' corrupted the model: line on update path"
+grep -q "body unchanged marker EXECUTOR" .claude/agents/executor.md && pass "body untouched after '&' update" || fail "body altered after '&' update"
+bash "$MODELS" 'exec=a/b' >/dev/null
+grep -qx 'model: a/b' .claude/agents/executor.md && pass "'/' survives update path unmangled" || fail "'/' broke sed delimiter parsing on update path"
+bash "$MODELS" 'exec=a\b' >/dev/null
+[ "$(grep '^model:' .claude/agents/executor.md)" = 'model: a\b' ] && pass "'\\' survives update path unmangled" || fail "'\\' was mangled on update path"
+
+echo ""
+echo "Values containing awk -v escape sequences round-trip byte-for-byte, insert path (\\n, \\b)"
+write_fixture
+bash "$MODELS" 'research=foo\nbar' >/dev/null
+[ "$(grep -c '^model:' .claude/agents/researcher.md)" -eq 1 ] && pass "'\\n' insert produced exactly one model: line (no stray injected line)" || fail "'\\n' injected an extra line into the frontmatter"
+grep -qxF 'model: foo\nbar' .claude/agents/researcher.md && pass "literal backslash-n survives insert path unmangled" || fail "literal backslash-n was turned into a real newline"
+write_fixture
+bash "$MODELS" 'research=a\b' >/dev/null
+[ "$(grep '^model:' .claude/agents/researcher.md)" = 'model: a\b' ] && pass "literal backslash-b survives insert path unmangled" || fail "literal backslash-b was turned into a control byte"
+
+echo ""
+echo "Malformed/missing frontmatter delimiters: refuses cleanly instead of silently no-op'ing or corrupting"
+write_fixture
+printf -- '---\nname: executor\ntools: Read\nbody, no closing delimiter\n' > .claude/agents/executor.md
+BEFORE=$(cat .claude/agents/executor.md)
+bash "$MODELS" exec=opus >/dev/null 2>&1 && fail "missing closing --- did not exit nonzero" || pass "missing closing --- exits nonzero"
+AFTER=$(cat .claude/agents/executor.md)
+[ "$BEFORE" = "$AFTER" ] && pass "missing closing --- left the file untouched" || fail "missing closing --- modified the file"
+
+echo ""
+echo "A deleted role file is refused with a clear error, not a silent stray .tmp file"
+write_fixture
+rm -f .claude/agents/researcher.md
+bash "$MODELS" research=opus >/dev/null 2>&1 && fail "deleted role file did not exit nonzero" || pass "deleted role file exits nonzero"
+[ -e .claude/agents/researcher.md.tmp ] && fail "a stray researcher.md.tmp was left behind" || pass "no stray .tmp file left behind"
+
+echo ""
+echo "chmod 444 on a role file survives a set on EITHER code path (insert and update)"
+write_fixture
+chmod 444 .claude/agents/executor.md
+bash "$MODELS" exec=opus >/dev/null   # insert path (no pre-existing model: line)
+PERM_AFTER_INSERT=$(ls -l .claude/agents/executor.md | cut -c1-10)
+case "$PERM_AFTER_INSERT" in -r--r--r--*) pass "insert path preserves chmod 444" ;; *) fail "insert path reset permissions to $PERM_AFTER_INSERT" ;; esac
+chmod 444 .claude/agents/executor.md
+bash "$MODELS" exec=sonnet >/dev/null   # update path (model: line now exists)
+PERM_AFTER_UPDATE=$(ls -l .claude/agents/executor.md | cut -c1-10)
+case "$PERM_AFTER_UPDATE" in -r--r--r--*) pass "update path preserves chmod 444" ;; *) fail "update path reset permissions to $PERM_AFTER_UPDATE" ;; esac
+chmod 644 .claude/agents/executor.md   # restore so later fixtures/cleanup aren't blocked by read-only perms
+
+echo ""
 echo "CLAUDE_CODE_SUBAGENT_MODEL warning appears in the no-arg report only when set"
 write_fixture
 OUT=$(CLAUDE_CODE_SUBAGENT_MODEL=haiku bash "$MODELS")

@@ -67,14 +67,46 @@ show_all() {
 
 set_model() {
   f="$1"; v="$2"
+  if [ ! -f "$f" ]; then
+    echo "models: role file '$f' not found -- cannot set its model" >&2
+    return 1
+  fi
   if grep -qE '^model:' "$f"; then
-    sed -i.bak -E "s/^model:.*/model: $v/" "$f" && rm -f "$f.bak"
+    # Escape the value for safe use as sed REPLACEMENT text: unescaped '&' means "the whole
+    # match" and a bare '\' starts a backreference/escape in that position, while '/' collides
+    # with the s/// delimiter. Escaping all three with a leading backslash makes sed treat them
+    # as inert literal characters instead of metacharacters, so the value round-trips verbatim.
+    esc=$(printf '%s' "$v" | sed -e 's/[&/\]/\\&/g')
+    if sed -i.bak -E "s/^model:.*/model: $esc/" "$f"; then
+      rm -f "$f.bak"
+    else
+      rm -f "$f.bak"
+      echo "models: failed to update the model: line in '$f'" >&2
+      return 1
+    fi
   else
-    awk -v val="$v" '
+    if [ "$(head -n1 "$f")" != "---" ] || [ "$(grep -c '^---$' "$f")" -lt 2 ]; then
+      echo "models: '$f' has no well-formed --- frontmatter block -- refusing to insert a model: line" >&2
+      return 1
+    fi
+    # Pass the value through ENVIRON rather than awk -v: POSIX mandates backslash-escape
+    # processing on -v assignments, so a literal \n or \b in the value would be turned into a
+    # real newline or backspace byte in the file. ENVIRON values are not escape-processed.
+    if MODELS_VAL="$v" awk '
       NR==1 { print; next }
-      !done && /^---$/ { print "model: " val; print; done=1; next }
+      !done && /^---$/ { print "model: " ENVIRON["MODELS_VAL"]; print; done=1; next }
       { print }
-    ' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+    ' "$f" > "$f.tmp"; then
+      # Preserve the original file's permission bits on the replacement (a plain '>' redirect
+      # takes the umask default instead), so this path matches sed -i's behavior above.
+      mode=$(stat -c '%a' "$f" 2>/dev/null || stat -f '%Lp' "$f" 2>/dev/null)
+      [ -n "$mode" ] && chmod "$mode" "$f.tmp" 2>/dev/null
+      mv "$f.tmp" "$f"
+    else
+      rm -f "$f.tmp"
+      echo "models: failed to insert a model: line in '$f'" >&2
+      return 1
+    fi
   fi
 }
 
@@ -109,7 +141,7 @@ if [ "$#" -eq 1 ] && [ "$1" = "reset" ]; then
   remove_model "$(role_file research)"
   remove_model "$(role_file plan)"
   remove_model "$(role_file exec)"
-  set_model "$(role_file eval)" "sonnet"
+  set_model "$(role_file eval)" "sonnet" || exit 1
   echo "Reset to shipped defaults:"
   show_all
   exit 0
@@ -145,10 +177,10 @@ for pair in "$@"; do
   esac
 done
 
-[ -n "$R_RESEARCH" ] && set_model "$(role_file research)" "$R_RESEARCH"
-[ -n "$R_PLAN" ]     && set_model "$(role_file plan)"     "$R_PLAN"
-[ -n "$R_EXEC" ]     && set_model "$(role_file exec)"     "$R_EXEC"
-[ -n "$R_EVAL" ]     && set_model "$(role_file eval)"     "$R_EVAL"
+[ -n "$R_RESEARCH" ] && { set_model "$(role_file research)" "$R_RESEARCH" || exit 1; }
+[ -n "$R_PLAN" ]     && { set_model "$(role_file plan)"     "$R_PLAN"     || exit 1; }
+[ -n "$R_EXEC" ]     && { set_model "$(role_file exec)"     "$R_EXEC"     || exit 1; }
+[ -n "$R_EVAL" ]     && { set_model "$(role_file eval)"     "$R_EVAL"     || exit 1; }
 
 echo "Updated:"
 show_all
