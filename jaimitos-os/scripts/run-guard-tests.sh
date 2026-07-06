@@ -30,6 +30,7 @@ TESTS=(
   test-close-milestone.sh
   test-doctor.sh
   test-lint.sh
+  test-models.sh
   test-test-cmd.sh
 )
 
