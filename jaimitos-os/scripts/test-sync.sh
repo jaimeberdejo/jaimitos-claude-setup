@@ -316,10 +316,11 @@ rc=$(runsync --yes)
 mktoolkit
 mkproject t13
 mkdir -p .claude/lib
-printf '#!/usr/bin/env bash\n# PROJECT_HS_BODY_V1\nHIGH_STAKES_RE=project-custom|regex(with)[chars].*\n' > .claude/lib/_high-stakes.sh
+# single-quoted, as every real _high-stakes.sh is (must be valid bash to source; the C2 guard bash -n's the merge)
+printf '#!/usr/bin/env bash\n# PROJECT_HS_BODY_V1\nHIGH_STAKES_RE='"'"'project-custom|regex(with)[chars].*'"'"'\n' > .claude/lib/_high-stakes.sh
 printf 'y\n' | bash "$SYNC" --toolkit "$TOOLKIT" --yes >"$WORK/out" 2>&1; rc=$?
 { [ "$rc" -eq 0 ] \
-  && grep -qF 'HIGH_STAKES_RE=project-custom|regex(with)[chars].*' .claude/lib/_high-stakes.sh \
+  && grep -qF "HIGH_STAKES_RE='project-custom|regex(with)[chars].*'" .claude/lib/_high-stakes.sh \
   && grep -q "TOOLKIT_HS_BODY_V2" .claude/lib/_high-stakes.sh \
   && ! grep -q "PROJECT_HS_BODY_V1" .claude/lib/_high-stakes.sh \
   && grep -qi "merged" "$WORK/out"; } \
@@ -348,6 +349,41 @@ printf 'y\n' | bash "$SYNC" --toolkit "$TOOLKIT" --yes >"$WORK/out" 2>&1; rc=$?
 { [ "$rc" -eq 0 ] && cmp -s .claude/lib/_high-stakes.sh "$WORK/t14b-before" && grep -qi "manual review" "$WORK/out"; } \
   && pass "malformed _high-stakes.sh (0 HIGH_STAKES_RE lines) → manual review, byte-identical" \
   || fail "malformed _high-stakes.sh (0 lines) mishandled (rc=$rc)"
+
+# 14c — hs_lib malformed (C2): the project's HIGH_STAKES_RE= line ends with a line-continuation
+# backslash, so its real value spans a SECOND physical line that grep's single-line capture never
+# sees — substituting only the first line would silently TRUNCATE the safety regex. Must route to
+# manual review, byte-identical, even with 'y' piped.
+mktoolkit
+mkproject t14c
+mkdir -p .claude/lib
+cat > .claude/lib/_high-stakes.sh <<'EOF'
+#!/usr/bin/env bash
+HIGH_STAKES_RE=foo\
+bar
+EOF
+cp .claude/lib/_high-stakes.sh "$WORK/t14c-before"
+printf 'y\n' | bash "$SYNC" --toolkit "$TOOLKIT" --yes >"$WORK/out" 2>&1; rc=$?
+{ [ "$rc" -eq 0 ] && cmp -s .claude/lib/_high-stakes.sh "$WORK/t14c-before" && grep -qi "manual review" "$WORK/out"; } \
+  && pass "C2: _high-stakes.sh HIGH_STAKES_RE= line ending in a backslash continuation → manual review, byte-identical" \
+  || fail "backslash-continuation HIGH_STAKES_RE= line was merged/truncated or not reported (rc=$rc)"
+
+# 14d — hs_lib malformed (C2): the project's HIGH_STAKES_RE= value is a single-quoted string that
+# spans two physical lines (an odd quote count on the captured line is the tell) — same truncation
+# risk as 14c, just via a quoted multi-line value instead of a backslash. Manual review, byte-identical.
+mktoolkit
+mkproject t14d
+mkdir -p .claude/lib
+cat > .claude/lib/_high-stakes.sh <<'EOF'
+#!/usr/bin/env bash
+HIGH_STAKES_RE='foo
+bar'
+EOF
+cp .claude/lib/_high-stakes.sh "$WORK/t14d-before"
+printf 'y\n' | bash "$SYNC" --toolkit "$TOOLKIT" --yes >"$WORK/out" 2>&1; rc=$?
+{ [ "$rc" -eq 0 ] && cmp -s .claude/lib/_high-stakes.sh "$WORK/t14d-before" && grep -qi "manual review" "$WORK/out"; } \
+  && pass "C2: _high-stakes.sh HIGH_STAKES_RE= line with an unbalanced (odd) quote count → manual review, byte-identical" \
+  || fail "odd-quote-count HIGH_STAKES_RE= line was merged/truncated or not reported (rc=$rc)"
 
 # 15 — agent normal merge: project's model: opus (customized) survives, toolkit's body update
 # lands, and no duplicate model: line is introduced.
@@ -413,6 +449,68 @@ printf 'y\n' | bash "$SYNC" --toolkit "$TOOLKIT" --yes >"$WORK/out" 2>&1; rc=$?
 { [ "$rc" -eq 0 ] && cmp -s .claude/agents/evaluator.md "$WORK/t17-before" && grep -qi "manual review" "$WORK/out"; } \
   && pass "malformed agent file (2 model: lines) → manual review, byte-identical even with 'y' piped" \
   || fail "malformed agent file (dup model:) mishandled (rc=$rc)"
+
+# 17a — agent C3: project has VALID frontmatter with NO model: inside it, but a stray `model: haiku`
+# line in the markdown BODY. That body line must NOT be mistaken for config (the pre-C3 bug counted
+# it and substituted it into the toolkit's frontmatter). Correct behavior: frontmatter says inherit
+# (pn=0), so the toolkit's model: sonnet is stripped → merge SUCCEEDS, merged frontmatter has no
+# model: line, the body `haiku` never leaks into config, toolkit body update lands.
+mktoolkit
+mkproject t17a
+mkdir -p .claude/agents
+cat > .claude/agents/evaluator.md <<'EOF'
+---
+name: evaluator
+description: PROJECT_BODY_V1 evaluator
+tools: Read, Glob, Grep, Bash
+---
+
+Project evaluator body v1.
+model: haiku
+EOF
+printf 'y\n' | bash "$SYNC" --toolkit "$TOOLKIT" --yes >"$WORK/out" 2>&1; rc=$?
+{ [ "$rc" -eq 0 ] \
+  && ! grep -q '^model:' .claude/agents/evaluator.md \
+  && ! grep -q 'haiku' .claude/agents/evaluator.md \
+  && grep -q "TOOLKIT_BODY_V2" .claude/agents/evaluator.md \
+  && grep -qi "merged" "$WORK/out"; } \
+  && pass "agent C3: a stray body model: line is NOT config — frontmatter has no model: so merge inherits (toolkit model: stripped), body 'haiku' never leaks" \
+  || fail "agent C3: stray body model: line was mistaken for config (rc=$rc)"
+
+# 17b — agent C3: project file has NO frontmatter at all (no --- delimiters) but a model: line.
+# A frontmatter-less file must never be treated as config → manual review, byte-identical.
+mktoolkit
+mkproject t17b
+mkdir -p .claude/agents
+cat > .claude/agents/evaluator.md <<'EOF'
+name: evaluator
+model: opus
+
+Body-only file with no frontmatter delimiters at all.
+EOF
+cp .claude/agents/evaluator.md "$WORK/t17b-before"
+printf 'y\n' | bash "$SYNC" --toolkit "$TOOLKIT" --yes >"$WORK/out" 2>&1; rc=$?
+{ [ "$rc" -eq 0 ] && cmp -s .claude/agents/evaluator.md "$WORK/t17b-before" && grep -qi "manual review" "$WORK/out"; } \
+  && pass "agent C3: project file with NO frontmatter (but a model: line) → manual review, byte-identical" \
+  || fail "agent C3: frontmatter-less file was merged/altered or not reported (rc=$rc)"
+
+# 17c — agent C3: project file has an OPENING --- but no closing --- (unclosed frontmatter) with a
+# real model: opus inside it. Unclosed frontmatter is not well-formed → manual review, byte-identical.
+mktoolkit
+mkproject t17c
+mkdir -p .claude/agents
+cat > .claude/agents/evaluator.md <<'EOF'
+---
+name: evaluator
+model: opus
+
+Unclosed frontmatter (no second --- delimiter).
+EOF
+cp .claude/agents/evaluator.md "$WORK/t17c-before"
+printf 'y\n' | bash "$SYNC" --toolkit "$TOOLKIT" --yes >"$WORK/out" 2>&1; rc=$?
+{ [ "$rc" -eq 0 ] && cmp -s .claude/agents/evaluator.md "$WORK/t17c-before" && grep -qi "manual review" "$WORK/out"; } \
+  && pass "agent C3: project file with unclosed frontmatter (opening --- only, real model: opus inside) → manual review, byte-identical" \
+  || fail "agent C3: unclosed-frontmatter file was merged/altered or not reported (rc=$rc)"
 
 # 18 — rules_hs normal merge: project's paths: block (including its own comment line) survives
 # verbatim, and the toolkit's body update (description + heading + prose) lands.
@@ -567,6 +665,84 @@ printf 'y\n' | bash "$SYNC" --toolkit "$TOOLKIT" --yes >"$WORK/out" 2>&1; rc=$?
   && ! grep -q "PROJECT_BODY_V1" .claude/rules/high-stakes.md; } \
   && pass "mixed merge (rules/high-stakes.md): paths: block with a blank line in the middle survives whole (no silent narrowing), toolkit's body update lands" \
   || fail "rules/high-stakes.md merge silently narrowed the paths: block at a blank line (rc=$rc)"
+
+# 25a — rules_hs H1: an UNINDENTED `# comment` line sits BETWEEN two paths items. A bare comment is
+# not a top-level key and must NOT terminate the block (pre-H1 it did, silently dropping every item
+# after it). The LATE path (after the comment) must survive the merge, and the toolkit body lands.
+mktoolkit
+mkproject t25a
+mkdir -p .claude/rules
+cat > .claude/rules/high-stakes.md <<'EOF'
+---
+description: PROJECT_BODY_V1 rule
+paths:
+  - "**/project-early-path/**"
+# unindented bare comment inside the paths block
+  - "**/project-late-path/**"
+---
+
+# PROJECT_BODY_V1 heading
+Project rule body v1.
+EOF
+printf 'y\n' | bash "$SYNC" --toolkit "$TOOLKIT" --yes >"$WORK/out" 2>&1; rc=$?
+{ [ "$rc" -eq 0 ] \
+  && grep -qF "project-early-path" .claude/rules/high-stakes.md \
+  && grep -qF "project-late-path" .claude/rules/high-stakes.md \
+  && grep -q "TOOLKIT_BODY_V2" .claude/rules/high-stakes.md \
+  && ! grep -q "PROJECT_BODY_V1" .claude/rules/high-stakes.md \
+  && grep -qi "merged" "$WORK/out"; } \
+  && pass "rules_hs H1: an unindented bare # comment inside the paths block does NOT end it — the late path (after the comment) survives the merge" \
+  || fail "rules_hs H1: unindented comment silently narrowed the paths block, dropping the late path (rc=$rc)"
+
+# 25b — rules_hs H1: a REAL top-level key (has a colon) after the paths block still ends the block
+# correctly. The trailing `tags:` key must NOT be swallowed into the preserved project block (its
+# value must be absent from the merged output), while the project's path is still preserved.
+mktoolkit
+mkproject t25b
+mkdir -p .claude/rules
+cat > .claude/rules/high-stakes.md <<'EOF'
+---
+description: PROJECT_BODY_V1 rule
+paths:
+  - "**/project-key-path/**"
+tags: PROJECT_TRAILING_KEY_VALUE
+---
+
+# PROJECT_BODY_V1 heading
+Project rule body v1.
+EOF
+printf 'y\n' | bash "$SYNC" --toolkit "$TOOLKIT" --yes >"$WORK/out" 2>&1; rc=$?
+{ [ "$rc" -eq 0 ] \
+  && grep -qF "project-key-path" .claude/rules/high-stakes.md \
+  && ! grep -q "PROJECT_TRAILING_KEY_VALUE" .claude/rules/high-stakes.md \
+  && grep -q "TOOLKIT_BODY_V2" .claude/rules/high-stakes.md \
+  && grep -qi "merged" "$WORK/out"; } \
+  && pass "rules_hs H1: a real top-level key (with a colon) after the paths block ends it — the trailing key is not swallowed into the block, the path is still preserved" \
+  || fail "rules_hs H1: block did not end at a real top-level key (rc=$rc)"
+
+# 25c — rules_hs H1: a GARBAGE unindented line inside the block that is neither a comment nor a real
+# key (no colon) is unexpected structure — route to manual review, byte-identical. (Pre-H1 this hit
+# the catch-all `break` and silently narrowed the block instead of flagging it.)
+mktoolkit
+mkproject t25c
+mkdir -p .claude/rules
+cat > .claude/rules/high-stakes.md <<'EOF'
+---
+description: PROJECT_BODY_V1 rule
+paths:
+  - "**/project-path/**"
+GARBAGE unindented non-key non-comment line
+  - "**/project-other/**"
+---
+
+# PROJECT_BODY_V1 heading
+Project rule body v1.
+EOF
+cp .claude/rules/high-stakes.md "$WORK/t25c-before"
+printf 'y\n' | bash "$SYNC" --toolkit "$TOOLKIT" --yes >"$WORK/out" 2>&1; rc=$?
+{ [ "$rc" -eq 0 ] && cmp -s .claude/rules/high-stakes.md "$WORK/t25c-before" && grep -qi "manual review" "$WORK/out"; } \
+  && pass "rules_hs H1: a garbage unindented non-key non-comment line inside the paths block → manual review, byte-identical" \
+  || fail "rules_hs H1: garbage line in the paths block was merged/narrowed or not reported (rc=$rc)"
 
 # ============================================================================================
 # MUST-FIX regression — sync must also cover SKILLS, a SECOND source root (repo-root skills/,

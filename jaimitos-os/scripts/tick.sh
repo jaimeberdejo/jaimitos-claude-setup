@@ -131,6 +131,19 @@ if [ "$SRC" -ne 0 ]; then
 fi
 
 CHANGED=$(git diff --name-only "$RANGE" 2>/dev/null || true)
+# The high-stakes gate's OWN control files are themselves high-stakes. If this phase edits the
+# path allowlist or the matcher library, it could self-exempt (add its own allowlist line) or
+# self-narrow (shrink HIGH_STAKES_RE) the very gate tick.sh then reads — invisible to the keyword
+# match, since neither path is itself in HIGH_STAKES_RE. Force supervised review (exit 3, same as a
+# high-stakes hit) whenever either appears in the phase diff, regardless of the new contents, so
+# unattended autopilot can never remove its own supervision. Exact FULL-LINE match (-xF) so a
+# sibling like `_high-stakes.sh.bak` never trips it.
+GATE_CFG=$(printf '%s\n' "$CHANGED" | grep -xF -e '.claude/high-stakes-path-allowlist' -e '.claude/lib/_high-stakes.sh' || true)
+if [ -n "$GATE_CFG" ]; then
+  echo "tick: ⛔ HIGH-STAKES gate config changed — supervised review required, NOT ticking:" >&2
+  printf '%s\n' "$GATE_CFG" | sed 's/^/    /' >&2
+  exit 3
+fi
 if HS=$(high_stakes_match "$CHANGED"); then
   echo "tick: ⛔ HIGH-STAKES paths changed — supervised review required, NOT ticking:" >&2
   printf '%s\n' "$HS" | sed 's/^/    /' >&2

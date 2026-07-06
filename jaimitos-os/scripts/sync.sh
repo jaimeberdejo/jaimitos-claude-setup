@@ -203,7 +203,7 @@ hs_line_count() {
 # HIGH_STAKES_RE= line substituted in. Returns 1 (outfile untouched/empty, $MIXED_REASON set) if
 # either copy doesn't have EXACTLY ONE such line.
 merge_hs_lib() {
-  local projfile="$1" toolkitfile="$2" outfile="$3" pn tn proj_line
+  local projfile="$1" toolkitfile="$2" outfile="$3" pn tn proj_line sq dq
   pn=$(hs_line_count "$projfile")
   if [ "$pn" -ne 1 ]; then
     MIXED_REASON="project copy has $pn HIGH_STAKES_RE= line(s) (expected exactly 1)"; return 1
@@ -212,25 +212,41 @@ merge_hs_lib() {
   if [ "$tn" -ne 1 ]; then
     MIXED_REASON="toolkit copy has $tn HIGH_STAKES_RE= line(s) (expected exactly 1)"; return 1
   fi
-  proj_line=$(grep -E '^HIGH_STAKES_RE=' "$projfile")
+  proj_line=$(grep -E '^HIGH_STAKES_RE=' "$projfile" | head -1)
+  # C2 shape guard: the value must be self-contained on this ONE physical line. A trailing backslash
+  # (line continuation) or an unbalanced quote means the real value spans further physical lines that
+  # grep did not capture — substituting only the first line would silently TRUNCATE the safety regex.
+  case "$proj_line" in *\\) MIXED_REASON="project HIGH_STAKES_RE= line ends with a backslash (multi-line continuation unsupported — merge by hand)"; return 1 ;; esac
+  sq=$(printf '%s' "$proj_line" | tr -cd "'" | wc -c | tr -d ' ')
+  dq=$(printf '%s' "$proj_line" | tr -cd '"' | wc -c | tr -d ' ')
+  if [ $((sq % 2)) -ne 0 ] || [ $((dq % 2)) -ne 0 ]; then
+    MIXED_REASON="project HIGH_STAKES_RE= line has an unbalanced quote (value likely spans multiple lines — merge by hand)"; return 1
+  fi
   HS_PROJ_LINE="$proj_line" awk '
     /^HIGH_STAKES_RE=/ && !done { print ENVIRON["HS_PROJ_LINE"]; done=1; next }
     { print }
   ' "$toolkitfile" > "$outfile"
+  # C2 syntax guard: never hand back a merged _high-stakes.sh that is not valid bash (a corrupted
+  # value could leave an open quote that swallows the rest of the file). bash -n it before write.
+  if ! bash -n "$outfile" 2>/dev/null; then
+    MIXED_REASON="merged _high-stakes.sh failed a bash -n syntax check (refusing to write)"; return 1
+  fi
 }
 
 # --- shape 2: .claude/agents/*.md — the ^model: frontmatter line (0 or 1; MAY be absent) -------
-model_line_count() {
-  local n
-  n=$(grep -cE '^model:' "$1" 2>/dev/null)
-  printf '%s' "${n:-0}"
-}
-
 # has_wellformed_frontmatter <file>: true if line 1 is exactly "---" and a closing "---" exists.
 has_wellformed_frontmatter() {
   [ "$(sed -n '1p' "$1")" = "---" ] || return 1
   [ "$(grep -c '^---$' "$1" 2>/dev/null)" -ge 2 ] || return 1
 }
+
+# fm_model_lines <file>: print ^model: lines that live INSIDE the frontmatter (between line 1's ---
+# and the next ---). Scoping model: detection here stops a stray body `model:` line being mistaken
+# for config (C3). Assumes has_wellformed_frontmatter already passed.
+fm_model_lines() {
+  awk 'NR==1 && $0=="---"{infm=1; next} infm && $0=="---"{exit} infm && /^model:/{print}' "$1"
+}
+fm_model_line_count() { fm_model_lines "$1" | grep -c . ; }
 
 # merge_agent_model <projfile> <toolkitfile> <outfile>: preserves the PROJECT's model: state
 # (its value, or its absence) onto the toolkit's body. Returns 1 (outfile untouched/empty,
@@ -238,33 +254,42 @@ has_wellformed_frontmatter() {
 # the toolkit lacks would require a frontmatter shape it doesn't have.
 merge_agent_model() {
   local projfile="$1" toolkitfile="$2" outfile="$3" pn tn proj_line
-  pn=$(model_line_count "$projfile")
+  # C3: a model: line is only trustworthy INSIDE a well-formed --- frontmatter block. A stray model:
+  # line in the markdown body, a frontmatter-less file, or unclosed frontmatter must never be treated
+  # as config (that path replaced whole project files while reporting success). Require well-formed
+  # frontmatter in BOTH copies and scope all model: detection to the frontmatter region.
+  has_wellformed_frontmatter "$projfile"    || { MIXED_REASON="project agent file has no well-formed --- frontmatter block"; return 1; }
+  has_wellformed_frontmatter "$toolkitfile" || { MIXED_REASON="toolkit agent file has no well-formed --- frontmatter block"; return 1; }
+  pn=$(fm_model_line_count "$projfile")
   if [ "$pn" -gt 1 ]; then
-    MIXED_REASON="project copy has $pn model: line(s) (expected 0 or 1)"; return 1
+    MIXED_REASON="project copy has $pn model: line(s) in frontmatter (expected 0 or 1)"; return 1
   fi
-  tn=$(model_line_count "$toolkitfile")
+  tn=$(fm_model_line_count "$toolkitfile")
   if [ "$tn" -gt 1 ]; then
-    MIXED_REASON="toolkit copy has $tn model: line(s) (expected 0 or 1)"; return 1
+    MIXED_REASON="toolkit copy has $tn model: line(s) in frontmatter (expected 0 or 1)"; return 1
   fi
-
   if [ "$pn" -eq 1 ] && [ "$tn" -eq 1 ]; then
-    proj_line=$(grep -E '^model:' "$projfile" | head -1)
+    proj_line=$(fm_model_lines "$projfile" | head -1)
     MODEL_LINE="$proj_line" awk '
-      /^model:/ && !done { print ENVIRON["MODEL_LINE"]; done=1; next }
+      NR==1 && $0=="---"{infm=1; print; next}
+      infm && $0=="---"{infm=0; print; next}
+      infm && /^model:/ && !done { print ENVIRON["MODEL_LINE"]; done=1; next }
       { print }
     ' "$toolkitfile" > "$outfile"
   elif [ "$pn" -eq 1 ] && [ "$tn" -eq 0 ]; then
-    if ! has_wellformed_frontmatter "$toolkitfile"; then
-      MIXED_REASON="toolkit copy has no well-formed --- frontmatter block to insert model: into"; return 1
-    fi
-    proj_line=$(grep -E '^model:' "$projfile" | head -1)
+    proj_line=$(fm_model_lines "$projfile" | head -1)
     MODEL_LINE="$proj_line" awk '
       NR==1 { print; next }
       !done && /^---$/ { print ENVIRON["MODEL_LINE"]; print; done=1; next }
       { print }
     ' "$toolkitfile" > "$outfile"
   elif [ "$pn" -eq 0 ] && [ "$tn" -eq 1 ]; then
-    grep -vE '^model:' "$toolkitfile" > "$outfile"
+    awk '
+      NR==1 && $0=="---"{infm=1; print; next}
+      infm && $0=="---"{infm=0; print; next}
+      infm && /^model:/ { next }
+      { print }
+    ' "$toolkitfile" > "$outfile"
   else
     cp "$toolkitfile" "$outfile"
   fi
@@ -294,8 +319,9 @@ paths_block_bounds() {
   while [ "$ln" -lt "$closing" ]; do
     line=$(sed -n "${ln}p" "$f")
     case "$line" in
-      ""|[[:space:]]*) PB_END=$ln ;;   # blank OR indented line belongs to the block
-      *) break ;;                      # a non-indented, non-blank line ends it
+      ""|[[:space:]]*|'#'*) PB_END=$ln ;;   # blank, indented, OR a bare (unindented) comment stays in the block
+      *:*) break ;;                          # a real top-level key (has a colon) ends the block
+      *) MIXED_REASON="unexpected non-key line inside the paths: block (line $ln) — merge by hand"; return 1 ;;
     esac
     ln=$((ln + 1))
   done
