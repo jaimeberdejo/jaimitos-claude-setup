@@ -34,6 +34,7 @@ mktoolkit() {
 
   printf '#!/usr/bin/env bash\necho toolkit-foo\n' > "$TOOLKIT/scripts/foo.sh"
   printf '#!/usr/bin/env bash\necho toolkit-a\n'   > "$TOOLKIT/scripts/a.sh"
+  printf '#!/usr/bin/env bash\necho toolkit-guard\n' > "$TOOLKIT/.claude/hooks/guard.sh"
   printf '#!/usr/bin/env bash\necho toolkit-z\n'   > "$TOOLKIT/.github/scripts/z.sh"
   printf 'name: ci\n'                              > "$TOOLKIT/.github/workflows/y"
   printf 'legacy toolkit doc\n'                     > "$TOOLKIT/toolkit-docs/x"
@@ -78,18 +79,21 @@ mkproject t1-c
 bash "$SYNC" --toolkit "$REPO" --bogus-flag >"$WORK/out" 2>&1; rc=$?
 [ "$rc" -ne 0 ] && pass "unknown argument → nonzero exit" || fail "unknown argument not rejected (rc=$rc)"
 
-# 2 — enumeration parity: excluded dirs/files are never offered; .github/scripts/*.sh and
-# scripts/*.sh ARE (proves sync does NOT blanket-exclude all of .github/*, only workflows/).
+# 2 — enumeration parity: excluded dirs/files are never offered; scripts/*.sh IS offered, and
+# .github/scripts/*.sh is still ENUMERATED (never blanket-excluded, proving sync doesn't treat all
+# of .github/* like install.sh's default) — but since t2 has no .github/ dir, Fix 3's CI opt-in
+# gate reports it skipped rather than offering to add it (see tests 12a/12b for the full matrix).
 mktoolkit
 mkproject t2
 rc=$(runsync --dry-run)
 { [ "$rc" -eq 0 ] \
   && grep -q "scripts/a.sh" "$WORK/out" \
   && grep -q ".github/scripts/z.sh" "$WORK/out" \
+  && grep -qi "skipped (CI not opted in" "$WORK/out" \
   && ! grep -q "toolkit-docs" "$WORK/out" \
   && ! grep -q ".github/workflows" "$WORK/out" \
   && ! grep -q "DS_Store" "$WORK/out"; } \
-  && pass "enumeration mirrors install.sh's exclusions (toolkit-docs/, .github/workflows/, .DS_Store never offered)" \
+  && pass "enumeration mirrors install.sh's exclusions (toolkit-docs/, .github/workflows/, .DS_Store never offered); .github/scripts/z.sh still enumerated but skipped (CI not opted in) with no .github/ dir" \
   || fail "enumeration parity broken"
 
 # 3 — overwrite tier: --yes updates a differing project file to match the toolkit's bytes.
@@ -192,6 +196,64 @@ mkproject t9
 rc=$(runsync --dry-run)
 [ "$rc" -eq 0 ] && pass "empty --toolkit enumeration (0 files) exits cleanly, no 'unbound variable' crash" \
   || fail "empty --toolkit enumeration crashed or errored (rc=$rc)"
+
+# 10 — Fix 1 regression: a destination cp genuinely cannot write to (chmod 444, so cp's own
+# open() fails with EACCES) must be reported as FAILED, must NOT be counted/printed as "updated",
+# and must make sync exit nonzero. Uses the same chmod-444-as-non-root pattern as
+# test-models.sh's permission-preservation tests, which this repo's harness already relies on.
+mktoolkit
+mkproject t10
+mkdir -p scripts
+printf '#!/usr/bin/env bash\necho project-foo\n' > scripts/foo.sh
+chmod 444 scripts/foo.sh
+rc=$(runsync --yes)
+{ [ "$rc" -ne 0 ] \
+  && grep -qi "FAILED: scripts/foo.sh" "$WORK/out" \
+  && ! grep -q "updated: scripts/foo.sh" "$WORK/out" \
+  && ! cmp -s scripts/foo.sh "$TOOLKIT/scripts/foo.sh"; } \
+  && pass "Fix 1: cp failure (read-only destination) → FAILED reported, nonzero exit, not counted as updated" \
+  || fail "cp failure was silently treated as success (rc=$rc)"
+chmod 644 scripts/foo.sh 2>/dev/null || true   # restore write perms so trap cleanup never trips
+
+# 11 — Fix 2 regression: overwriting a mode-644 (non-executable) project scripts/*.sh or
+# .claude/hooks/*.sh with --yes must leave the destination executable afterward — install.sh
+# makes these executable on a fresh install, and sync must restore that bit too, or a fresh
+# checkout re-synced could silently leave a guard hook non-executable (defeating it with no error).
+mktoolkit
+mkproject t11
+mkdir -p scripts .claude/hooks
+printf '#!/usr/bin/env bash\necho project-foo\n'   > scripts/foo.sh
+printf '#!/usr/bin/env bash\necho project-guard\n' > .claude/hooks/guard.sh
+chmod 644 scripts/foo.sh .claude/hooks/guard.sh
+rc=$(runsync --yes)
+{ [ "$rc" -eq 0 ] && [ -x scripts/foo.sh ] && [ -x .claude/hooks/guard.sh ]; } \
+  && pass "Fix 2: overwriting a mode-644 scripts/*.sh and .claude/hooks/*.sh with --yes leaves both executable" \
+  || fail "exec bit not restored after overwrite (rc=$rc)"
+
+# 12a — Fix 3 regression: a toolkit .github/scripts/z.sh, ADDED to a project with NO .github/ dir
+# at all, must be reported as skipped (CI not opted in) and must NOT actually be written.
+mktoolkit
+mkproject t12a
+rc=$(runsync --yes)
+{ [ "$rc" -eq 0 ] \
+  && grep -qi "skipped (CI not opted in" "$WORK/out" \
+  && grep -q ".github/scripts/z.sh" "$WORK/out" \
+  && [ ! -e .github/scripts/z.sh ]; } \
+  && pass "Fix 3: .github/scripts/z.sh NOT added to a project with no .github/ dir; reported CI-not-opted-in skip" \
+  || fail ".github add wrongly offered/applied without CI opt-in (rc=$rc)"
+
+# 12b — Fix 3 counterpart: a project that already opted into CI (has a .github/ dir, even an
+# otherwise-empty one) is unaffected by the gate — the add is offered/applied normally.
+mktoolkit
+mkproject t12b
+mkdir -p .github
+rc=$(runsync --yes)
+{ [ "$rc" -eq 0 ] \
+  && ! grep -qi "CI not opted in" "$WORK/out" \
+  && grep -q "added: .github/scripts/z.sh" "$WORK/out" \
+  && cmp -s .github/scripts/z.sh "$TOOLKIT/.github/scripts/z.sh"; } \
+  && pass "Fix 3 counterpart: project with an existing .github/ dir still gets .github/scripts/z.sh added normally" \
+  || fail ".github add wrongly gated for a project that already opted into CI (rc=$rc)"
 
 echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All sync.sh tests passed."; exit 0
