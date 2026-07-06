@@ -189,6 +189,44 @@ mkevrepo e4; ( cd "$REPO" && bash scripts/test-evidence.sh --allow-no-tests >/de
 { [ "$erc" = 0 ] && [ "$(jq -r .passed "$REPO/.claude/.tick-evidence.json")" = null ]; } \
   && pass "test-evidence: no tests --allow-no-tests → exit0, passed:null" || fail "no-tests allow wrong (rc=$erc)"
 
+# e5 — retry-with-backoff: a command that fails on its FIRST attempt but passes on a later one
+# (a stateful fake command driven by a counter file) must have its failure absorbed as a flake —
+# test-evidence retries before recording red, and records passed:true, run_id==HEAD.
+mkevrepo e5
+cat > "$REPO/flake.sh" <<'FLAKE'
+#!/usr/bin/env bash
+c=$(cat .flake-counter 2>/dev/null || echo 0)
+c=$((c+1))
+echo "$c" > .flake-counter
+[ "$c" -ge 2 ]
+FLAKE
+chmod +x "$REPO/flake.sh"
+( cd "$REPO" && LEAN_TEST_CMD="bash flake.sh" bash scripts/test-evidence.sh >/dev/null 2>&1 ); erc=$?
+{ [ "$erc" = 0 ] && [ "$(jq -r .passed "$REPO/.claude/.tick-evidence.json")" = true ] \
+    && [ "$(jq -r .run_id "$REPO/.claude/.tick-evidence.json")" = "$HEAD" ] \
+    && [ "$(cat "$REPO/.flake-counter" 2>/dev/null || echo 0)" -ge 2 ]; } \
+  && pass "test-evidence: fails once then passes on retry → passed:true (flake absorbed)" \
+  || fail "retry-clears-flake mishandled (rc=$erc, attempts=$(cat "$REPO/.flake-counter" 2>/dev/null || echo 0))"
+
+# e6 — a command that is genuinely ALWAYS red (every attempt fails) must still record
+# passed:false and exit 1 after exhausting its retries — retries absorb a FLAKE, they must
+# NEVER manufacture a false green. The counter proves more than one attempt actually ran.
+mkevrepo e6
+cat > "$REPO/always-red.sh" <<'ALWAYSRED'
+#!/usr/bin/env bash
+c=$(cat .always-red-counter 2>/dev/null || echo 0)
+c=$((c+1))
+echo "$c" > .always-red-counter
+exit 1
+ALWAYSRED
+chmod +x "$REPO/always-red.sh"
+( cd "$REPO" && LEAN_TEST_CMD="bash always-red.sh" bash scripts/test-evidence.sh >/dev/null 2>&1 ); erc=$?
+{ [ "$erc" = 1 ] && [ "$(jq -r .passed "$REPO/.claude/.tick-evidence.json")" = false ] \
+    && [ "$(jq -r .run_id "$REPO/.claude/.tick-evidence.json")" = "$HEAD" ] \
+    && [ "$(cat "$REPO/.always-red-counter" 2>/dev/null || echo 0)" -ge 2 ]; } \
+  && pass "test-evidence: genuinely always-red → retries exhausted, still passed:false (no false green)" \
+  || fail "genuinely-red mishandled (rc=$erc, attempts=$(cat "$REPO/.always-red-counter" 2>/dev/null || echo 0))"
+
 echo ""
 echo "record-grade producer tests"; echo ""
 
