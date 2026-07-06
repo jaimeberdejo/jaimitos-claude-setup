@@ -529,6 +529,36 @@ printf 'y\n' | bash "$SYNC" --toolkit "$TOOLKIT" --yes >"$WORK/out" 2>&1; rc=$?
   && pass ".claude/.high-stakes-default refreshed to the TOOLKIT's new HIGH_STAKES_RE line after a real merge" \
   || fail ".high-stakes-default not refreshed correctly after mixed merge (rc=$rc)"
 
+# 25 — rules_hs regression: a paths: block with a BLANK LINE in the middle (a legal, common
+# YAML formatting style — an early item, a blank line, then more items) must NOT be silently
+# narrowed. paths_block_bounds() must treat the blank line as a block CONTINUATION, not a
+# terminator, so the ENTIRE block (including the entries after the blank line) survives the
+# merge verbatim, while the toolkit's body update still lands.
+mktoolkit
+mkproject t25
+mkdir -p .claude/rules
+cat > .claude/rules/high-stakes.md <<'EOF'
+---
+description: PROJECT_BODY_V1 rule
+paths:
+  - "**/project-early-path/**"
+
+  - "**/project-late-path/**"
+---
+
+# PROJECT_BODY_V1 heading
+Project rule body v1.
+EOF
+printf 'y\n' | bash "$SYNC" --toolkit "$TOOLKIT" --yes >"$WORK/out" 2>&1; rc=$?
+{ [ "$rc" -eq 0 ] \
+  && grep -qF "project-early-path" .claude/rules/high-stakes.md \
+  && grep -qF "project-late-path" .claude/rules/high-stakes.md \
+  && grep -A1 -F "project-early-path" .claude/rules/high-stakes.md | tail -1 | grep -qx "" \
+  && grep -q "TOOLKIT_BODY_V2" .claude/rules/high-stakes.md \
+  && ! grep -q "PROJECT_BODY_V1" .claude/rules/high-stakes.md; } \
+  && pass "mixed merge (rules/high-stakes.md): paths: block with a blank line in the middle survives whole (no silent narrowing), toolkit's body update lands" \
+  || fail "rules/high-stakes.md merge silently narrowed the paths: block at a blank line (rc=$rc)"
+
 echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All sync.sh tests passed."; exit 0
 else echo "$FAILS sync test(s) FAILED."; echo "--- last output ---"; tail -n 20 "$WORK/out" 2>/dev/null; exit 1; fi

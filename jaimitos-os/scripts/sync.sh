@@ -270,8 +270,8 @@ paths_block_bounds() {
   while [ "$ln" -lt "$closing" ]; do
     line=$(sed -n "${ln}p" "$f")
     case "$line" in
-      [[:space:]]*) PB_END=$ln ;;
-      *) break ;;
+      ""|[[:space:]]*) PB_END=$ln ;;   # blank OR indented line belongs to the block
+      *) break ;;                      # a non-indented, non-blank line ends it
     esac
     ln=$((ln + 1))
   done
@@ -434,7 +434,7 @@ done < <(toolkit_files)
         SKIPPED=$((SKIPPED+1))
         ;;
       mixed)
-        echo "  manual review needed (mixed file, not present — value-preserving merge lands in a later step): $rel"
+        echo "  manual review needed (mixed file, not present in project — install or merge by hand): $rel"
         MANUAL=$((MANUAL+1))
         ;;
       unknown)
