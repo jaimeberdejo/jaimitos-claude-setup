@@ -666,6 +666,84 @@ printf 'y\n' | bash "$SYNC" --toolkit "$TOOLKIT" --yes >"$WORK/out" 2>&1; rc=$?
   && pass "mixed merge (rules/high-stakes.md): paths: block with a blank line in the middle survives whole (no silent narrowing), toolkit's body update lands" \
   || fail "rules/high-stakes.md merge silently narrowed the paths: block at a blank line (rc=$rc)"
 
+# 25a — rules_hs H1: an UNINDENTED `# comment` line sits BETWEEN two paths items. A bare comment is
+# not a top-level key and must NOT terminate the block (pre-H1 it did, silently dropping every item
+# after it). The LATE path (after the comment) must survive the merge, and the toolkit body lands.
+mktoolkit
+mkproject t25a
+mkdir -p .claude/rules
+cat > .claude/rules/high-stakes.md <<'EOF'
+---
+description: PROJECT_BODY_V1 rule
+paths:
+  - "**/project-early-path/**"
+# unindented bare comment inside the paths block
+  - "**/project-late-path/**"
+---
+
+# PROJECT_BODY_V1 heading
+Project rule body v1.
+EOF
+printf 'y\n' | bash "$SYNC" --toolkit "$TOOLKIT" --yes >"$WORK/out" 2>&1; rc=$?
+{ [ "$rc" -eq 0 ] \
+  && grep -qF "project-early-path" .claude/rules/high-stakes.md \
+  && grep -qF "project-late-path" .claude/rules/high-stakes.md \
+  && grep -q "TOOLKIT_BODY_V2" .claude/rules/high-stakes.md \
+  && ! grep -q "PROJECT_BODY_V1" .claude/rules/high-stakes.md \
+  && grep -qi "merged" "$WORK/out"; } \
+  && pass "rules_hs H1: an unindented bare # comment inside the paths block does NOT end it — the late path (after the comment) survives the merge" \
+  || fail "rules_hs H1: unindented comment silently narrowed the paths block, dropping the late path (rc=$rc)"
+
+# 25b — rules_hs H1: a REAL top-level key (has a colon) after the paths block still ends the block
+# correctly. The trailing `tags:` key must NOT be swallowed into the preserved project block (its
+# value must be absent from the merged output), while the project's path is still preserved.
+mktoolkit
+mkproject t25b
+mkdir -p .claude/rules
+cat > .claude/rules/high-stakes.md <<'EOF'
+---
+description: PROJECT_BODY_V1 rule
+paths:
+  - "**/project-key-path/**"
+tags: PROJECT_TRAILING_KEY_VALUE
+---
+
+# PROJECT_BODY_V1 heading
+Project rule body v1.
+EOF
+printf 'y\n' | bash "$SYNC" --toolkit "$TOOLKIT" --yes >"$WORK/out" 2>&1; rc=$?
+{ [ "$rc" -eq 0 ] \
+  && grep -qF "project-key-path" .claude/rules/high-stakes.md \
+  && ! grep -q "PROJECT_TRAILING_KEY_VALUE" .claude/rules/high-stakes.md \
+  && grep -q "TOOLKIT_BODY_V2" .claude/rules/high-stakes.md \
+  && grep -qi "merged" "$WORK/out"; } \
+  && pass "rules_hs H1: a real top-level key (with a colon) after the paths block ends it — the trailing key is not swallowed into the block, the path is still preserved" \
+  || fail "rules_hs H1: block did not end at a real top-level key (rc=$rc)"
+
+# 25c — rules_hs H1: a GARBAGE unindented line inside the block that is neither a comment nor a real
+# key (no colon) is unexpected structure — route to manual review, byte-identical. (Pre-H1 this hit
+# the catch-all `break` and silently narrowed the block instead of flagging it.)
+mktoolkit
+mkproject t25c
+mkdir -p .claude/rules
+cat > .claude/rules/high-stakes.md <<'EOF'
+---
+description: PROJECT_BODY_V1 rule
+paths:
+  - "**/project-path/**"
+GARBAGE unindented non-key non-comment line
+  - "**/project-other/**"
+---
+
+# PROJECT_BODY_V1 heading
+Project rule body v1.
+EOF
+cp .claude/rules/high-stakes.md "$WORK/t25c-before"
+printf 'y\n' | bash "$SYNC" --toolkit "$TOOLKIT" --yes >"$WORK/out" 2>&1; rc=$?
+{ [ "$rc" -eq 0 ] && cmp -s .claude/rules/high-stakes.md "$WORK/t25c-before" && grep -qi "manual review" "$WORK/out"; } \
+  && pass "rules_hs H1: a garbage unindented non-key non-comment line inside the paths block → manual review, byte-identical" \
+  || fail "rules_hs H1: garbage line in the paths block was merged/narrowed or not reported (rc=$rc)"
+
 # ============================================================================================
 # MUST-FIX regression — sync must also cover SKILLS, a SECOND source root (repo-root skills/,
 # a SIBLING of the jaimitos-os/ dir --toolkit points at). Before this fix, toolkit_files() only

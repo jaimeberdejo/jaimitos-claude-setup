@@ -319,8 +319,9 @@ paths_block_bounds() {
   while [ "$ln" -lt "$closing" ]; do
     line=$(sed -n "${ln}p" "$f")
     case "$line" in
-      ""|[[:space:]]*) PB_END=$ln ;;   # blank OR indented line belongs to the block
-      *) break ;;                      # a non-indented, non-blank line ends it
+      ""|[[:space:]]*|'#'*) PB_END=$ln ;;   # blank, indented, OR a bare (unindented) comment stays in the block
+      *:*) break ;;                          # a real top-level key (has a colon) ends the block
+      *) MIXED_REASON="unexpected non-key line inside the paths: block (line $ln) — merge by hand"; return 1 ;;
     esac
     ln=$((ln + 1))
   done
