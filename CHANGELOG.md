@@ -23,9 +23,10 @@ uses [Semantic Versioning](https://semver.org/).
   is written without an explicit confirmation and a shown diff (or, for a mixed merge, a diff of
   the proposed merge result); `--dry-run` previews the whole plan; a `cp` failure is tallied as
   FAILED rather than silently reported as updated. Drift is detected by diffing against a LOCAL
-  toolkit checkout passed via `--toolkit <path>` (no shipped manifest yet); `.github/*` files are
-  only synced into a project that already opted into CI. Wired into `doctor.sh` (a small advisory
-  pointing at `sync.sh --dry-run` when `.claude/.jaimitos-os-version` is present) and
+  toolkit checkout passed via `--toolkit <path>` (no shipped manifest yet); `.github/workflows/*`
+  is never synced, and `.github/scripts/*.sh` only into a project that already opted into CI.
+  Wired into `doctor.sh` (a small advisory pointing at `sync.sh --dry-run` when
+  `.claude/.jaimitos-os-version` is present) and
   `.github/scripts/install-smoke.sh`.
 
 ## [2.1.0] — 2026-07-06

@@ -272,9 +272,10 @@ report-only (manual merge) — sync never writes it.
 
 **Current limitation:** sync detects drift by diffing against a LOCAL toolkit checkout you point
 `--toolkit` at — there's no shipped manifest of toolkit versions yet, so you need a clone of
-`jaimitos-claude-setup` on disk to sync from. `.github/*` CI files are only synced if the project
-already opted into CI (i.e. already has a `.github/` directory from a prior `install.sh --with-ci`)
-— sync won't silently add CI to a project that never asked for it.
+`jaimitos-claude-setup` on disk to sync from. `.github/workflows/*` is never synced (excluded from
+enumeration); only `.github/scripts/*.sh` is synced, and only into a project that already has a
+`.github/` dir (i.e. already opted into CI via a prior `install.sh --with-ci`) — sync won't
+silently add CI to a project that never asked for it.
 
 ---
 

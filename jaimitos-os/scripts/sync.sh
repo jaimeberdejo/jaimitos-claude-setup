@@ -58,6 +58,14 @@ if [ ! -f "$TOOLKIT/scripts/install.sh" ] && ! { [ -d "$TOOLKIT/.claude" ] && [ 
 fi
 TOOLKIT="$(cd "$TOOLKIT" 2>/dev/null && pwd)" || { echo "sync: could not resolve --toolkit path" >&2; exit 2; }
 
+# install.sh copies from TWO source roots (install.sh:73-98): the jaimitos-os/ scaffold itself,
+# 1:1 onto the project root (--toolkit points here), AND a separate repo-root skills/ dir — a
+# SIBLING of jaimitos-os/ — mapped onto the project's .claude/skills/<skill>/... . Skills are
+# actively maintained just like jaimitos-os/ itself, so sync must see both roots or a scaffolded
+# project could never receive a skill update. Tolerate its absence (e.g. a --toolkit checkout with
+# no sibling skills/ dir): that's not an error, just nothing to enumerate from that root.
+SKILLS_SRC="$(cd "$TOOLKIT/.." 2>/dev/null && pwd)/skills"
+
 # --- enumeration -------------------------------------------------------------------------------
 # Mirrors install.sh's find+case EXACTLY for toolkit-docs/* and *.DS_Store|*.swp. One deliberate
 # difference from install.sh's DEFAULT (no --with-ci, which excludes ALL of .github/*): sync
@@ -81,6 +89,22 @@ toolkit_files() {
   done < <(find "$TOOLKIT" -type f)
 }
 
+# skills_files: enumerates the SKILLS_SRC root, mirroring install.sh's second copy loop
+# (install.sh:94-98) EXACTLY — `find -mindepth 2 -type f` (files INSIDE a skill dir, which skips
+# the top-level skills/README.md) and skips setup-jaimitos-os/* (the meta/installer skill;
+# install.sh only ever ships it via --global-skills, never per-project, so sync must not offer it
+# either). Prints the SOURCE path relative to SKILLS_SRC (e.g. "adr/SKILL.md") — the caller maps
+# each onto its project-relative DEST path (.claude/skills/<that>) when building FILES/SRCS below,
+# since (unlike jaimitos-os/, where source-relative IS project-relative) the two differ here.
+skills_files() {
+  local srcfile
+  [ -d "$SKILLS_SRC" ] || return 0
+  while IFS= read -r srcfile; do
+    case "${srcfile#"$SKILLS_SRC"/}" in setup-jaimitos-os/*) continue ;; esac
+    printf '%s\n' "${srcfile#"$SKILLS_SRC"/}"
+  done < <(find "$SKILLS_SRC" -mindepth 2 -type f)
+}
+
 # classify_tier <rel-path> → overwrite | never | mixed | unknown. Order matters: the specific
 # mixed files are matched BEFORE the broader overwrite globs (e.g. _high-stakes.sh lives under
 # .claude/lib/*.sh but must classify mixed, not overwrite).
@@ -90,7 +114,7 @@ classify_tier() {
       echo mixed ;;
     .claude/lib/*.sh|.claude/hooks/*.sh|scripts/*.sh|.claude/commands/*.md|.claude/skills/*|.github/scripts/*.sh)
       echo overwrite ;;
-    docs/*|CLAUDE.md|SCAFFOLD.md|.gitignore)
+    docs/*|CLAUDE.md|SCAFFOLD.md|.gitignore|.claude/high-stakes-path-allowlist)
       echo never ;;
     *)
       echo unknown ;;
@@ -315,20 +339,30 @@ echo "  toolkit: $TOOLKIT"
 [ "$DRY_RUN" -eq 1 ] && echo "  mode: dry-run (nothing will be written)"
 echo ""
 
-# Materialize the enumerated file list into an array FIRST (a plain, non-piped loop below), so
-# the main per-file loop's `read -r ans` prompts (via confirm) read from the script's OWN stdin —
-# not from a process-substituted stream that a `while read < <(...)` around the whole loop would
-# otherwise steal.
+# Materialize the enumerated file list into two PARALLEL arrays FIRST (a plain, non-piped loop
+# below), so the main per-file loop's `read -r ans` prompts (via confirm) read from the script's
+# OWN stdin — not from a process-substituted stream that a `while read < <(...)` around the whole
+# loop would otherwise steal. FILES[i] is always the project-relative DEST path (what's checked
+# on disk, classified, and written to); SRCS[i] is the matching absolute SOURCE path to diff/copy
+# from. For jaimitos-os/ files the two are the same path; for skills/ files they differ (source
+# "adr/SKILL.md" → dest ".claude/skills/adr/SKILL.md"), which is why one rel string can no longer
+# serve both roles the way it used to when jaimitos-os/ was the only source root.
 FILES=()
+SRCS=()
 while IFS= read -r rel; do
-  [ -n "$rel" ] && FILES+=("$rel")
+  [ -n "$rel" ] && { FILES+=("$rel"); SRCS+=("$TOOLKIT/$rel"); }
 done < <(toolkit_files)
+while IFS= read -r skillrel; do
+  [ -n "$skillrel" ] && { FILES+=(".claude/skills/$skillrel"); SRCS+=("$SKILLS_SRC/$skillrel"); }
+done < <(skills_files)
 
-# Bash 3.2 quirk: "${FILES[@]}" on a zero-element (but declared) array throws "unbound variable"
-# under `set -u`. Guard with the count form first, which is always safe to expand.
-[ "${#FILES[@]}" -gt 0 ] && for rel in "${FILES[@]}"; do
+# Bash 3.2 quirk: "${FILES[@]}" (or "${!FILES[@]}") on a zero-element (but declared) array throws
+# "unbound variable" under `set -u`. Guard with the count form first, which is always safe to
+# expand. Indexed (not `for rel in`) so SRCS stays in lockstep with FILES.
+[ "${#FILES[@]}" -gt 0 ] && for i in "${!FILES[@]}"; do
+  rel="${FILES[$i]}"
   tier="$(classify_tier "$rel")"
-  toolkitfile="$TOOLKIT/$rel"
+  toolkitfile="${SRCS[$i]}"
 
   if [ -f "$rel" ]; then
     if cmp -s "$rel" "$toolkitfile"; then
@@ -457,18 +491,22 @@ echo "  manual review:    $MANUAL"
 echo "  already current:  $UNCHANGED"
 echo "  failed:           $FAILED"
 
+# A run with ANY FAILED copy must exit nonzero — checked BEFORE the version stamp below, so a
+# failed run never bumps the stamp (that would claim the project is current with a toolkit
+# version it demonstrably didn't fully receive). A clean run where everything was simply declined
+# still stamps below: nothing failed, so the project's still-honestly-at-that-version.
+if [ "$FAILED" -gt 0 ]; then
+  echo "" >&2
+  echo "sync: ⛔ $FAILED file(s) failed to copy — see FAILED lines above." >&2
+  exit 1
+fi
+
 # Stamp the synced-to VERSION (mirrors install.sh:139's write) after a successful non-dry run.
 # VERSION lives at the repo root, next to the jaimitos-os/ scaffold dir (one level above
 # --toolkit). Tolerate its absence, same as install.sh.
 if [ "$DRY_RUN" -eq 0 ]; then
   TOOLKIT_VERSION="$(cat "$TOOLKIT/../VERSION" 2>/dev/null || echo '?')"
   mkdir -p .claude && printf '%s\n' "$TOOLKIT_VERSION" > .claude/.jaimitos-os-version 2>/dev/null || true
-fi
-
-if [ "$FAILED" -gt 0 ]; then
-  echo "" >&2
-  echo "sync: ⛔ $FAILED file(s) failed to copy — see FAILED lines above." >&2
-  exit 1
 fi
 
 exit 0

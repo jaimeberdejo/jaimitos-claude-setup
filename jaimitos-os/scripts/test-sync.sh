@@ -22,16 +22,20 @@ WORK="$(mktemp -d 2>/dev/null || mktemp -d -t leanstack-sync)"
 trap 'rm -rf "$WORK" 2>/dev/null' EXIT
 
 # mktoolkit: fresh fake jaimitos-os checkout with one file per tier, the enumeration-exclusion
-# fixtures (toolkit-docs/, .github/workflows/, .DS_Store), and a repo-root VERSION next to it
+# fixtures (toolkit-docs/, .github/workflows/, .DS_Store), a repo-root VERSION next to it
 # (sync.sh reads <toolkit>/../VERSION, mirroring install.sh's layout: VERSION next to the
-# jaimitos-os/ scaffold dir). Sets the global $TOOLKIT to the scaffold dir path.
+# jaimitos-os/ scaffold dir), and a sibling skills/ dir (sync.sh reads <toolkit>/../skills,
+# mirroring install.sh's SECOND source root, install.sh:26/94-98) with a normal skill, the
+# never-copied top-level README, and the never-per-project setup-jaimitos-os meta-skill. Sets the
+# global $TOOLKIT to the scaffold dir path.
 mktoolkit() {
   rm -rf "$WORK/src"
   TOOLKIT="$WORK/src/jaimitos-os"
   mkdir -p "$TOOLKIT/scripts" "$TOOLKIT/.github/scripts" "$TOOLKIT/.github/workflows" \
            "$TOOLKIT/.claude/lib" "$TOOLKIT/.claude/hooks" "$TOOLKIT/.claude/commands" \
            "$TOOLKIT/.claude/agents" "$TOOLKIT/.claude/rules" "$TOOLKIT/docs" \
-           "$TOOLKIT/toolkit-docs"
+           "$TOOLKIT/toolkit-docs" \
+           "$WORK/src/skills/demo-skill" "$WORK/src/skills/setup-jaimitos-os"
   printf '9.9.9\n' > "$WORK/src/VERSION"
 
   printf '#!/usr/bin/env bash\necho toolkit-foo\n' > "$TOOLKIT/scripts/foo.sh"
@@ -42,9 +46,14 @@ mktoolkit() {
   printf 'legacy toolkit doc\n'                     > "$TOOLKIT/toolkit-docs/x"
   : > "$TOOLKIT/.DS_Store"
   printf '#!/usr/bin/env bash\n# TOOLKIT_HS_BODY_V2\nHIGH_STAKES_RE=toolkit-default\n' > "$TOOLKIT/.claude/lib/_high-stakes.sh"
+  printf '# toolkit allowlist template\n'           > "$TOOLKIT/.claude/high-stakes-path-allowlist"
   printf '{"hooks":{}}\n'             > "$TOOLKIT/.claude/settings.json"
   printf '# Spec\ntoolkit copy\n'     > "$TOOLKIT/docs/SPEC.md"
   printf '# Project\ntoolkit copy\n'  > "$TOOLKIT/CLAUDE.md"
+
+  printf '# Demo skill\nTOOLKIT_SKILL_BODY_V2\n'          > "$WORK/src/skills/demo-skill/SKILL.md"
+  printf 'skills catalog readme (never copied per-project)\n' > "$WORK/src/skills/README.md"
+  printf 'meta/installer skill body (global-only, never per-project)\n' > "$WORK/src/skills/setup-jaimitos-os/SKILL.md"
 
   # Mixed-shape #2 fixtures (Phase 2): agent frontmatter, with and without a model: line —
   # mirrors researcher/planner/executor (no model: = inherit) and evaluator (ships model: sonnet).
@@ -558,6 +567,75 @@ printf 'y\n' | bash "$SYNC" --toolkit "$TOOLKIT" --yes >"$WORK/out" 2>&1; rc=$?
   && ! grep -q "PROJECT_BODY_V1" .claude/rules/high-stakes.md; } \
   && pass "mixed merge (rules/high-stakes.md): paths: block with a blank line in the middle survives whole (no silent narrowing), toolkit's body update lands" \
   || fail "rules/high-stakes.md merge silently narrowed the paths: block at a blank line (rc=$rc)"
+
+# ============================================================================================
+# MUST-FIX regression — sync must also cover SKILLS, a SECOND source root (repo-root skills/,
+# a SIBLING of the jaimitos-os/ dir --toolkit points at). Before this fix, toolkit_files() only
+# walked $TOOLKIT, so a skill update could never reach an already-scaffolded project via sync
+# even though install.sh itself ships skills via its own separate copy loop (install.sh:94-98).
+# ============================================================================================
+
+# 26 — skills coverage/parity: a differing project .claude/skills/<skill>/SKILL.md is offered and
+# (with --yes) updated to match the toolkit's skills/<skill>/SKILL.md source EXACTLY, proving sync
+# maps skills/<skill>/<rest> -> project .claude/skills/<skill>/<rest> and diffs/copies from the
+# CORRECT (skills-root) source, not the jaimitos-os/ tree. skills/README.md (top-level, never
+# copied — install.sh's own find -mindepth 2 skips it) and skills/setup-jaimitos-os/* (global-only
+# meta-skill, install.sh:92-96) must never be offered at all, per install.sh's own exclusions.
+mktoolkit
+mkproject t26
+mkdir -p .claude/skills/demo-skill
+printf '# Demo skill\nPROJECT_SKILL_BODY_V1\n' > .claude/skills/demo-skill/SKILL.md
+rc=$(runsync --yes)
+{ [ "$rc" -eq 0 ] \
+  && grep -q "updated: .claude/skills/demo-skill/SKILL.md" "$WORK/out" \
+  && cmp -s .claude/skills/demo-skill/SKILL.md "$WORK/src/skills/demo-skill/SKILL.md" \
+  && ! grep -q "PROJECT_SKILL_BODY_V1" .claude/skills/demo-skill/SKILL.md \
+  && ! grep -q "skills/README.md" "$WORK/out" \
+  && ! grep -q "setup-jaimitos-os" "$WORK/out" \
+  && [ ! -e .claude/skills/README.md ] \
+  && [ ! -e .claude/skills/setup-jaimitos-os ]; } \
+  && pass "MUST-FIX: sync also syncs SKILLS (2nd source root) — differing project skill updated from the toolkit's skills/ source; skills/README.md and setup-jaimitos-os/* never offered" \
+  || fail "skills source not synced, or README/setup-jaimitos-os wrongly considered (rc=$rc)"
+
+# ============================================================================================
+# Minor fix 2 — the version stamp must only be written on a NON-FAILED run.
+# ============================================================================================
+
+# 27 — a run where a copy genuinely FAILS (same chmod-444-unwritable-destination fixture as test
+# 10) must NOT bump/write .claude/.jaimitos-os-version — it stays at whatever it was before the
+# run (proves the stamp write moved to AFTER the FAILED check, not before it).
+mktoolkit
+mkproject t27
+mkdir -p scripts .claude
+printf '#!/usr/bin/env bash\necho project-foo\n' > scripts/foo.sh
+chmod 444 scripts/foo.sh
+printf '0.0.0\n' > .claude/.jaimitos-os-version
+rc=$(runsync --yes)
+{ [ "$rc" -ne 0 ] \
+  && grep -qi "FAILED: scripts/foo.sh" "$WORK/out" \
+  && [ "$(cat .claude/.jaimitos-os-version)" = "0.0.0" ]; } \
+  && pass "version stamp NOT bumped after a run with a FAILED copy (stays at its prior value, not the toolkit's 9.9.9)" \
+  || fail "version stamp was bumped despite a FAILED copy (rc=$rc)"
+chmod 644 scripts/foo.sh 2>/dev/null || true   # restore write perms so trap cleanup never trips
+
+# ============================================================================================
+# Minor fix 3 — .claude/high-stakes-path-allowlist is project-owned (git-tracked) and must
+# classify as `never`, not `unknown`.
+# ============================================================================================
+
+# 28 — a differing .claude/high-stakes-path-allowlist is reported skipped/project-owned (never
+# tier), left byte-identical even with --yes, and is NOT reported as manual review/unclassified.
+mktoolkit
+mkproject t28
+mkdir -p .claude
+printf '# project-customized allowlist\ndocs/adr/ADR-001-foo.md: money substring only\n' > .claude/high-stakes-path-allowlist
+rc=$(runsync --yes)
+{ [ "$rc" -eq 0 ] \
+  && grep -q "project-customized allowlist" .claude/high-stakes-path-allowlist \
+  && grep -qi "skipped (project-owned): .claude/high-stakes-path-allowlist" "$WORK/out" \
+  && ! grep -qi "manual review needed (unclassified): .claude/high-stakes-path-allowlist" "$WORK/out"; } \
+  && pass ".claude/high-stakes-path-allowlist classifies as never tier: skipped (project-owned), byte-identical, not reported as unclassified" \
+  || fail ".claude/high-stakes-path-allowlist misclassified or altered (rc=$rc)"
 
 echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All sync.sh tests passed."; exit 0
