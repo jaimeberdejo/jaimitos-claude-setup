@@ -39,9 +39,10 @@ expect_cmd() {
   actual=$(resolve_test_cmd 2>/dev/null || true)
   if [ "$actual" = "$expected" ]; then
     printf "  ✓ %s -> '%s'\n" "$desc" "$actual"
+    return 0
   else
     printf "  ✗ %s -> got '%s', expected '%s'\n" "$desc" "$actual" "$expected"
-    FAILS=$((FAILS+1))
+    return 1
   fi
 }
 
@@ -50,9 +51,10 @@ expect_unresolved() {
   actual=$(resolve_test_cmd 2>/dev/null || true)
   if [ -z "$actual" ]; then
     printf "  ✓ %s -> (unresolved, as expected)\n" "$desc"
+    return 0
   else
     printf "  ✗ %s -> got '%s', expected unresolved\n" "$desc" "$actual"
-    FAILS=$((FAILS+1))
+    return 1
   fi
 }
 
@@ -67,7 +69,7 @@ echo "\$LEAN_TEST_CMD always wins, regardless of what's on disk or PATH:"
   PATH="$BIN:$PATH"
   export LEAN_TEST_CMD PATH
   expect_cmd "LEAN_TEST_CMD override" "custom runner"
-)
+) || FAILS=$((FAILS+1))
 
 echo ""
 echo "uv-managed project: uv.lock + tests/ + uv on PATH -> uv run pytest, NOT bare pytest,"
@@ -79,7 +81,7 @@ echo "even though a bare pytest is ALSO on PATH (the exact regression this guard
   PATH="$BIN:$PATH"
   export PATH
   expect_cmd "uv.lock present, uv on PATH" "uv run pytest -q"
-)
+) || FAILS=$((FAILS+1))
 
 echo ""
 echo "poetry-managed project: poetry.lock + tests/ + poetry on PATH -> poetry run pytest:"
@@ -90,7 +92,7 @@ echo "poetry-managed project: poetry.lock + tests/ + poetry on PATH -> poetry ru
   PATH="$BIN:$PATH"
   export PATH
   expect_cmd "poetry.lock present, poetry on PATH" "poetry run pytest -q"
-)
+) || FAILS=$((FAILS+1))
 
 echo ""
 echo "uv.lock present but uv NOT on PATH -> degrades gracefully to bare pytest, doesn't fail:"
@@ -103,7 +105,7 @@ echo "uv.lock present but uv NOT on PATH -> degrades gracefully to bare pytest, 
   PATH="$NOUV:/usr/bin:/bin"
   export PATH
   expect_cmd "uv.lock present, uv absent, pytest present" "pytest -q"
-)
+) || FAILS=$((FAILS+1))
 
 echo ""
 echo "uv.lock present but no test_*.py/tests/ signal at all -> not routed through pytest"
@@ -115,7 +117,7 @@ echo "just because a lockfile happens to exist:"
   PATH="$BIN:/usr/bin:/bin"
   export PATH
   expect_unresolved "uv.lock with no pytest-suite signal"
-)
+) || FAILS=$((FAILS+1))
 
 echo ""
 echo "No lockfiles at all: existing baseline behavior preserved (tests/ + bare pytest):"
@@ -126,7 +128,7 @@ echo "No lockfiles at all: existing baseline behavior preserved (tests/ + bare p
   PATH="$BIN:$PATH"
   export PATH
   expect_cmd "plain tests/ dir, no lockfile" "pytest -q"
-)
+) || FAILS=$((FAILS+1))
 
 echo ""
 echo "test_*.py files (no tests/ dir) also still trigger detection:"
@@ -137,7 +139,7 @@ echo "test_*.py files (no tests/ dir) also still trigger detection:"
   PATH="$BIN:$PATH"
   export PATH
   expect_cmd "bare test_*.py, no tests/ dir" "pytest -q"
-)
+) || FAILS=$((FAILS+1))
 
 echo ""
 echo "package.json test script, no Python signals at all -> npm test:"
@@ -148,7 +150,7 @@ echo "package.json test script, no Python signals at all -> npm test:"
   PATH="$BIN:$PATH"
   export PATH
   expect_cmd "package.json with a test script" "npm test --silent"
-)
+) || FAILS=$((FAILS+1))
 
 echo ""
 echo "Nothing resolvable at all:"
@@ -158,7 +160,7 @@ echo "Nothing resolvable at all:"
   PATH="/usr/bin:/bin"
   export PATH
   expect_unresolved "empty project, no tools on PATH"
-)
+) || FAILS=$((FAILS+1))
 
 echo ""
 echo "LEAN_TEST_CMD env var UNSET but .claude/settings.json env block sets it ->"
@@ -171,7 +173,7 @@ echo "resolver reads it from the file (env-propagation-failure fallback):"
   PATH="$BIN:$PATH"
   export PATH
   expect_cmd "settings.json env.LEAN_TEST_CMD, no env var" "settings-json runner"
-)
+) || FAILS=$((FAILS+1))
 
 echo ""
 echo "LEAN_TEST_CMD env var SET still wins over a DIFFERING settings.json value"
@@ -184,7 +186,7 @@ echo "(explicit env override keeps precedence over the file fallback):"
   PATH="$BIN:$PATH"
   export LEAN_TEST_CMD PATH
   expect_cmd "env var beats settings.json" "env var runner"
-)
+) || FAILS=$((FAILS+1))
 
 echo ""
 echo "No .claude/settings.json at all -> falls through to existing uv.lock/pytest behavior:"
@@ -195,7 +197,7 @@ echo "No .claude/settings.json at all -> falls through to existing uv.lock/pytes
   PATH="$BIN:$PATH"
   export PATH
   expect_cmd "no settings.json, uv.lock present" "uv run pytest -q"
-)
+) || FAILS=$((FAILS+1))
 
 echo ""
 echo "settings.json present but its env block has NO LEAN_TEST_CMD key -> existing"
@@ -208,7 +210,7 @@ echo "uv.lock/pytest behavior unchanged (jq yields empty, degrades silently):"
   PATH="$BIN:$PATH"
   export PATH
   expect_cmd "settings.json without LEAN_TEST_CMD key" "uv run pytest -q"
-)
+) || FAILS=$((FAILS+1))
 
 echo ""
 echo "settings.json present but malformed JSON -> degrades silently to existing behavior"
@@ -221,7 +223,7 @@ echo "(no jq error noise on stdout, no crash):"
   PATH="$BIN:$PATH"
   export PATH
   expect_cmd "malformed settings.json" "uv run pytest -q"
-)
+) || FAILS=$((FAILS+1))
 
 echo ""
 echo "settings.json has no top-level env block at all -> jq's // empty yields nothing,"
@@ -234,7 +236,7 @@ echo "falls through unchanged:"
   PATH="$BIN:$PATH"
   export PATH
   expect_cmd "settings.json with no env block" "uv run pytest -q"
-)
+) || FAILS=$((FAILS+1))
 
 echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All test-cmd resolver tests passed."; exit 0
