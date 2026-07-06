@@ -48,8 +48,9 @@ your-repo/
 │   ├── record-grade.sh            # single writer of the evaluator grade file (HEAD-bound; refuses non-PASS)
 │   ├── close-milestone.sh         # gated milestone archive (refuses on open items / findings)
 │   ├── doctor.sh                  # health check — run before unattended runs
+│   ├── models.sh                  # deterministic get/set for each /phase stage's model (see Part 4)
 │   ├── run-guard-tests.sh         # the single behavioral-test list both CI workflows call
-│   └── test-*.sh                  # behavioral guard tests (tick, secret-scan, high-stakes, hooks, …)
+│   └── test-*.sh                  # behavioral guard tests (tick, secret-scan, high-stakes, models, hooks, …)
 └── .claude/
     ├── settings.json              # wires hooks → events + permissions.deny (secret reads/exfil)
     ├── commands/

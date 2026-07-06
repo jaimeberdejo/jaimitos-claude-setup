@@ -6,6 +6,47 @@ uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **`scripts/models.sh` could silently corrupt an agent's `model:` frontmatter line instead of
+  rejecting an unsafe value.** The raw value was spliced directly into a `sed` replacement string
+  and into `awk -v` — both treat certain characters specially: `&`/`/`/`\` have meaning inside a
+  sed replacement, and POSIX `awk -v` escape-processes assignments, so a literal `\n`/`\b` in the
+  input became a real newline/backspace byte written straight into the YAML frontmatter block. In
+  every case the script still printed `"Updated:"` and exited 0. Found via a dedicated adversarial
+  red-team test campaign fuzzing `models.sh` with sed/awk metacharacters — the original TDD suite
+  never tried a value containing one. Fixed by escaping the value before it becomes sed
+  replacement text and passing it to awk via `ENVIRON` instead of `-v` (not escape-processed);
+  values now round-trip byte-for-byte regardless of content.
+- **Two more silent-false-success paths in the same function**, found by the same campaign: a
+  missing closing `---` silently no-op'd instead of refusing, and mutating a deleted role file
+  printed an error to stderr but still exited 0 (occasionally leaving a stray `.tmp` file behind).
+  Both now fail loudly before any write is attempted, via an up-front file-existence +
+  well-formed-frontmatter check.
+- A `chmod 444` role file lost its original permissions after a `models.sh` update (the temp-file
+  swap reset to the process umask). The original mode is now preserved on both the insert and
+  replace code paths.
+- `.claude/commands/models.md` didn't mention the `CLAUDE_CODE_SUBAGENT_MODEL` override warning,
+  and `models.sh`'s own usage header didn't document that a repeated key in one invocation
+  resolves last-occurrence-wins (already the behavior, just undocumented) — both now stated
+  explicitly.
+- `planner.md`'s Constraints section read "src/tests/" (a single nested path) instead of the
+  comma-separated "src/, tests/" convention used identically in `CLAUDE.md` and `executor.md`.
+- `.claude/commands/phase.md`'s heading-matching rule could read as one run-on clause, risking a
+  spurious "ambiguous, which one?" stop even when one candidate is an unambiguous exact match —
+  now states explicitly that an exact full-line match is checked first and wins outright.
+- `.github/scripts/install-smoke.sh` didn't check for `scripts/test-models.sh` alongside the other
+  four new per-stage-model files, so a future install regression dropping just that file would
+  only be caught by manual inspection.
+
+  (New regression coverage added to `scripts/test-models.sh` for metacharacter round-tripping on
+  both code paths, malformed/missing frontmatter delimiters, a deleted role file, and permission
+  preservation — all previously undertested. Found via an exhaustive multi-agent adversarial test
+  campaign — 197 designed tests across 10 specialized red-team agents — run against the
+  already-shipped per-stage-model feature below; every gate this toolkit depends on — `tick.sh`,
+  `record-grade.sh`, `test-evidence.sh`, the evaluator's grading contract, and the secret-scan and
+  high-stakes gates — was independently re-confirmed byte-identical to before the feature, i.e.
+  none of this touched or weakened them.)
+
 ### Added
 - **`/phase`'s four stages (research/plan/execute/verify) now delegate to their own subagents**
   (`.claude/agents/researcher.md`, `planner.md`, `executor.md`, joining the existing
