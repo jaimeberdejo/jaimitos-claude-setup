@@ -111,6 +111,17 @@ rc=$(runclose "$REPO" --name v5)
   && pass "Ownership-gaps heading with only '-' placeholder → closes silently (no notice)" \
   || fail "placeholder-only section wrongly produced a notice, or close blocked (rc=$rc)"
 
+# 9 — a differently-named heading that merely shares the '## Ownership gaps' PREFIX (e.g.
+# '## Ownership gaps and blockers') must NOT be mistaken for the canonical section — the match
+# must be an exact whole-line match, not a prefix match. A non-empty entry under it must produce
+# NO notice, since it isn't the section the notice is documented to surface.
+mkrepo m9 "$DONE"
+printf '\n## Ownership gaps and blockers\n- something unresolved\n' >> "$REPO/docs/STATE.md"
+rc=$(runclose "$REPO" --name v6)
+{ [ "$rc" = 0 ] && ! grep -q "Ownership gaps" "$WORK/out"; } \
+  && pass "differently-named heading is not prefix-matched as '## Ownership gaps' (no notice)" \
+  || fail "prefix-matched a differently-named heading, or close wrongly blocked (rc=$rc)"
+
 echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All milestone closure tests passed."; exit 0
 else echo "$FAILS milestone test(s) FAILED."; echo "--- last output ---"; tail -n 15 "$WORK/out" 2>/dev/null; exit 1; fi

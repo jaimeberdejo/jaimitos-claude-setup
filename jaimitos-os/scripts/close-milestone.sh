@@ -40,9 +40,9 @@ grep -qE '^[[:space:]]*- \[ \] ' "$ROADMAP" 2>/dev/null && refuse "open items re
 # teach-backs are recorded there) so they don't silently accumulate across milestones. This never
 # blocks the close — plain echo to stderr, no exit — and section-absent is treated exactly like
 # section-empty: the scaffold ships with no '## Ownership gaps' heading by default.
-if [ -f "$STATE" ] && grep -q '^## Ownership gaps' "$STATE" 2>/dev/null; then
+if [ -f "$STATE" ] && grep -qx '## Ownership gaps' "$STATE" 2>/dev/null; then
   open_gaps=$(awk '
-    /^## Ownership gaps/ { inphase=1; next }
+    $0=="## Ownership gaps" { inphase=1; next }
     /^## / && inphase { inphase=0 }
     inphase && /^[[:space:]]*-[[:space:]]*[^[:space:]]/ { c++ }
     END { print c+0 }
