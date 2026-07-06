@@ -47,7 +47,9 @@ grep -q "Jaimitos OS — the scaffold" README.md && bad "scaffold README content
 # Core scaffold + shared libs present.
 for f in CLAUDE.md .claude/settings.json scripts/autopilot.sh \
          .claude/lib/_secret-scan.sh .claude/lib/_high-stakes.sh \
-         .claude/commands/autopilot-parallel.md; do
+         .claude/commands/autopilot-parallel.md \
+         .claude/commands/models.md scripts/models.sh \
+         .claude/agents/researcher.md .claude/agents/planner.md .claude/agents/executor.md; do
   [ -f "$f" ] && ok "installed $f" || bad "missing $f"
 done
 # Skills installed per-project — but the installer/meta skill is NOT.
