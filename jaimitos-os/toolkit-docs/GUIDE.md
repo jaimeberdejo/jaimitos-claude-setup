@@ -373,7 +373,17 @@ roadmap empty, safety-capped).
 **`autopilot.sh` flags:** worktree isolation is **the default** (a bad run can't touch your
 checkout) · `--no-worktree` (opt out — run IN-PLACE, mutating your current checkout; warned loudly)
 · `--pr` (push + open a PR, never touches main; secret-scanned before any push) · `--allow-dirty`
-(skip the clean-tree preflight).
+(skip the clean-tree preflight) · `--dangerously-skip-permissions` (see below).
+
+> **Headless autopilot currently assumes `--dangerously-skip-permissions`.** A *truly* unattended
+> run needs it: the default `--permission-mode acceptEdits` cannot, without a TTY, approve the
+> `.claude/` state-writes or the Bash calls (test suite, `git`) that a phase requires, so it stalls.
+> A *narrower* scoped profile was investigated and is **not currently possible** — `.claude/` is a
+> Claude-Code protected path whose writes are denied in every mode except bypass, even with an
+> explicit `permissions.allow` rule, and `/phase` writes `.claude/.phase-base`/`.phase-ready` from
+> inside the session. So headless == bypass == **sandbox-only**: run it in a container with **no
+> production credentials** (the real boundary from Part 2). The in-session `/autopilot` and
+> `/phase` keep the interactive permission prompts and don't need the flag.
 
 ### What the headless script adds over the in-session loops
 Both loops share the tick gate; the **headless** `scripts/autopilot.sh` adds *isolation* on top:
@@ -613,7 +623,13 @@ is," not a stale document phases have quietly outgrown.
 When every phase is `- [x]`, run the `milestone` skill (it calls `scripts/close-milestone.sh` — a
 **gated** archive that refuses while any open item or unresolved `NEXT_FINDINGS.md` remains, then
 archives the roadmap and resets STATE for the next batch). `/wrap` nudges you toward it when it
-notices a fully-ticked roadmap, but never archives on its own.
+notices a fully-ticked roadmap, but never archives on its own. Closing a milestone and bumping
+`VERSION`/tagging is its own explicit checkpoint — never infer it from an ambiguous "go
+ahead"/"resume"/"continue" reply to an unrelated question, even if the phase that reply ticked
+happened to be the roadmap's last one; state plainly what's about to close and wait for a clear
+yes. `close-milestone.sh` also now surfaces (non-fatally) any open `## Ownership gaps` entries
+in `docs/STATE.md` at close time — read them aloud before continuing; the milestone still
+closes either way.
 
 ---
 

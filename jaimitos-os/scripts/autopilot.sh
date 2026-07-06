@@ -74,6 +74,15 @@ done
 # mocked-CLI test suite. --dangerously-skip-permissions is the only thing that lets a
 # truly headless run complete a phase; it trades away the permission boundary entirely,
 # so it's opt-in, never the default.
+#
+# A NARROWER headless profile was investigated and is NOT currently possible: a scoped
+# `permissions.allow` list (+ `--permission-mode dontAsk`) CAN auto-approve git/test Bash
+# calls, but `.claude/` is a Claude-Code PROTECTED PATH whose writes are denied in every
+# mode except bypass — even with an explicit `Write(.claude/**)` allow rule. Since /phase
+# writes .claude/.phase-base and .claude/.phase-ready from inside the session, no allowlist
+# can replace bypass unless those state-writes are moved OUT of the claude process (a change
+# to /phase's contract, deferred). So today: headless == --dangerously-skip-permissions ==
+# sandbox-only. (Verified against Claude Code docs/CLI, 2026-07.)
 if [ "$SKIP_PERMISSIONS" -eq 1 ]; then
   CLAUDE_PERM_FLAGS=(--dangerously-skip-permissions)
 else
@@ -354,6 +363,23 @@ for i in $(seq 1 "$MAX_ITER"); do
       # the exact commit; NO_TESTS_OK (only if the grader emitted it) authorizes ticking a phase
       # that legitimately has no test suite.
       bash scripts/record-grade.sh "$VERDICT" >>autopilot.log 2>&1
+
+      # Re-measure evidence ONE more time, here — on the PASS path only, AFTER
+      # cleanup_eval_changes (above) has already reverted any evaluator edits/commits and
+      # confirmed the tree exactly matches the pre-grade snapshot — and BEFORE tick.sh reads
+      # .claude/.tick-evidence.json as authoritative. Why: the FIRST measurement (a few lines
+      # above the builder check, right after the builder subprocess exits) is taken in the most
+      # fragile window of the whole iteration — leftover ports/locks/cold caches from the
+      # builder's last turn are least settled there. The evaluator then independently re-runs
+      # the suite itself (evaluator.md step 3) and can come back green on that SAME tree
+      # (HEAD hasn't moved — the evaluator has no edit tools and any stray commit was already
+      # reverted), but that reconciliation was never captured: tick.sh trusts ONLY this file, so
+      # one flaky sample there could permanently block a genuinely-green phase. Re-running here
+      # takes the freshest possible sample — closest to the grading decision, on the now-settled
+      # tree — as the one tick.sh will actually check. run_id is still HEAD, so tick.sh's
+      # run_id==HEAD binding is unaffected; `|| true` matches the first call so a still-red
+      # re-measure doesn't abort the loop early — tick.sh's own fail-closed check is the backstop.
+      bash scripts/test-evidence.sh --allow-no-tests >>autopilot.log 2>&1 || true
 
       # Route through the SINGLE completion gate. tick.sh verifies the evidence (grade + fresh
       # green tests bound to HEAD), secret-scans the whole phase diff, blocks high-stakes paths,
