@@ -37,6 +37,18 @@ WITH_CI=0
 ALLOW_SUBDIR=0
 for arg in "$@"; do
   case "$arg" in
+    -h|--help)
+      # Universal --help, matching the operational scripts (models.sh/sync.sh/tick.sh/…). A genuinely
+      # unknown flag still fails closed (exit 2) via the catch-all below — help must not mask a typo.
+      echo "usage: install.sh [TARGET_DIR] [--force] [--global-skills] [--with-ci] [--allow-subdir]"
+      echo "  Drops the jaimitos-os scaffold + skills into TARGET_DIR (default: current dir)."
+      echo "    --force          overwrite existing scaffold files (default: skip files that exist)"
+      echo "    --global-skills  also install skills into ~/.claude/skills"
+      echo "    --with-ci        also copy the CI workflow (.github/workflows/jaimitos-os-ci.yml)"
+      echo "    --allow-subdir   allow installing into a SUBDIRECTORY of an existing git repo (scripts"
+      echo "                     resolve paths from the git root, so expect them to misbehave)"
+      echo "  The repo README is NEVER copied; the scaffold note ships as SCAFFOLD.md. Idempotent."
+      exit 0 ;;
     --force)         FORCE=1 ;;
     --global-skills) GLOBAL_SKILLS=1 ;;
     --with-ci)       WITH_CI=1 ;;
