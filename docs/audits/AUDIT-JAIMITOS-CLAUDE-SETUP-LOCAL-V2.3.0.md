@@ -1,5 +1,9 @@
 # Audit — jaimitos-claude-setup / jaimitos-os v2.3.0 (LOCAL working tree)
 
+> **⚠ Archived audit — superseded by v2.3.1 (2026-07-07).** This snapshot audited v2.3.0; post-release
+> hardening and the release-coherence reconciliation (tag vs `master` drift) shipped as **v2.3.1**.
+> Preserved for the record.
+
 **Auditor:** Claude (release-level adversarial audit)
 **Date:** 2026-07-07
 **Scope:** the local folder `/Users/jaimeberdejosanchez/projects/Claude_SETUP` exactly as it sits on disk — local git state, local tags, local files. GitHub was not treated as authoritative and was not cloned.

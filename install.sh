@@ -150,7 +150,7 @@ while IFS= read -r srcfile; do
   skillrel="${srcfile#"$SKILLS_SRC"/}"
   case "$skillrel" in setup-jaimitos-os/*) continue ;; esac
   copy_file ".claude/skills/$skillrel" "$srcfile"
-done < <(find "$SKILLS_SRC" -mindepth 2 -type f)   # mindepth 2 = inside skill dirs; skips top-level README/OWNERSHIP
+done < <(find "$SKILLS_SRC" -mindepth 2 -type f)   # mindepth 2 = inside skill dirs; skips the top-level skills/README.md
 
 # 3. Optional global skills install.
 if [ "$GLOBAL_SKILLS" -eq 1 ]; then

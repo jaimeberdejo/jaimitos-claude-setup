@@ -4,6 +4,43 @@ All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/); this project
 uses [Semantic Versioning](https://semver.org/).
 
+## [2.3.1] — 2026-07-07
+
+Release-coherence + follow-up hardening from the post-`v2.3.0` audit. `v2.3.0` was tagged and pushed;
+several behavioral fixes then landed on `master` **after** that tag while `VERSION` still read `2.3.0`,
+so a tag-pinned checkout silently got a slightly older, less-hardened tree under the same version
+string. This release reconciles that: `VERSION` → `2.3.1`, cut from current `master`, with the post-tag
+work recorded below. The existing `v2.3.0` tag is left untouched (immutable — already published).
+
+### Fixed
+- **Headless autopilot gate integrity now also protects the four staged agent prompts.** `autopilot.sh`
+  byte-compares `.claude/agents/{researcher,planner,executor,evaluator}.md` against the trusted launch
+  checkout alongside the gate-control scripts, so a builder that rewrote the evaluator's grading
+  contract (or any stage prompt) mid-phase forces supervised review instead of silently steering its
+  own grade. (Was: only scripts/libs/allowlist were integrity-checked.)
+- **`tick.sh` evidence-JSON validation hardened** to `jq -e 'type'` (some bundled `jq` treat `jq empty`
+  as a no-op), and **resolvable non-ancestor `.phase-base` values** are now covered by the strict-
+  ancestor guard + a regression test — a forged base that resolves to a real but unrelated commit is
+  fail-closed, not just an empty/`==HEAD` base.
+- **`install.sh` answers `-h`/`--help`** like every other operational script (prints usage, exits 0).
+- **`/resume` surfaces whether the next open phase is loopable or supervised** (reads its `Mode:` line)
+  so the operator picks `/autopilot` vs a supervised `/phase` correctly.
+
+### Added — coverage
+- **Full shipped-skill manifest checks.** `install-smoke.sh` now asserts every project skill installs
+  with its `SKILL.md` (was: only `roadmap`), and `doctor.sh` validates the same manifest against a real
+  installed tree (`.claude/skills/<name>/SKILL.md`) so a dropped/renamed skill is caught loudly instead
+  of shipping silently. `test-doctor.sh` gains a regression case proving a dropped skill is detected.
+
+### Changed — docs
+- Corrected release-state documentation and ignored local maintainer scratch-note patterns
+  (`*-MISSION-PROMPT.md`, `HANDOFF-*.md`, `REDTEAM-*.md`, `CHANGES-LAST-*.md`).
+- Removed the stale `OWNERSHIP` reference in `install.sh`'s skill-copy comment (only `skills/README.md`
+  exists at that level).
+- Added "archived / superseded by v2.3.1" banners to the v2.3-era audit reports under `docs/audits/`
+  whose release-state statements (unreleased / unpushed / origin at v2.2.0) were true when written and
+  are no longer current. Their findings are preserved verbatim.
+
 ## [2.3.0] — 2026-07-07
 
 Trust-boundary & maintenance hardening milestone closing the P1/P2 backlog from the v2.2 adversarial

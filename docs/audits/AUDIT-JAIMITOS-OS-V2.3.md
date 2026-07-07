@@ -1,5 +1,11 @@
 # Adversarial Quality Audit — jaimitos-os v2.3
 
+> **⚠ Archived audit — superseded by v2.3.1 (2026-07-07).** Release-state statements below (e.g.
+> "code-complete-but-unreleased", "local, unpushed", "origin at v2.2.0", "safe to push only with
+> approval") were TRUE when written, during the pre-release audit. v2.3.0 was subsequently released,
+> tagged, and pushed; post-release hardening then shipped as **v2.3.1**. The findings are preserved
+> verbatim for the historical record — only this banner was added.
+
 **Scope:** everything introduced across v2.1.0, v2.2.0, v2.2.1, and the code-complete-but-unreleased v2.3.0
 (`trust-boundary & maintenance hardening`).
 **Method:** 11 parallel adversarial sub-agents, each working read-only against the repo and running destructive
