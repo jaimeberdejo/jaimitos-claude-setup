@@ -91,7 +91,7 @@ heading="${1:-}"
 # Exact FULL-LINE match (-x): every downstream awk block consumes the heading via `$0==ph`, so a
 # mere substring that isn't a standalone `## ` line would pass here yet match nothing later. Make
 # the existence check agree with the consumption — refuse loudly instead of failing silently.
-grep -qxF "$heading" "$ROADMAP" || refuse "phase heading not found as an exact line in roadmap: '$heading'"
+grep -qxF -e "$heading" "$ROADMAP" || refuse "phase heading not found as an exact line in roadmap: '$heading'"
 
 HEAD=$(git rev-parse HEAD 2>/dev/null) || refuse "not a git repo / no HEAD"
 command -v jq >/dev/null 2>&1 || refuse "jq required to read evidence"
@@ -194,8 +194,8 @@ fi
 
 # Mode: supervised — the author flagged this phase as human-on-the-loop. Enforce it (the tag
 # used to be advisory/unparsed): refuse to auto-tick, same supervised exit as a high-stakes hit.
-PHASE_MODE=$(awk -v ph="$heading" '
-  $0==ph {inphase=1; next}
+PHASE_MODE=$(PH="$heading" awk '
+  $0==ENVIRON["PH"] {inphase=1; next}
   /^## / && inphase {inphase=0}
   inphase && /^[[:space:]]*Mode:/ {print tolower($0); exit}
 ' "$ROADMAP")
@@ -206,8 +206,8 @@ case "$PHASE_MODE" in
 esac
 
 # --- 6. target phase still has an open item ---
-open_in_phase=$(awk -v ph="$heading" '
-  $0==ph {inphase=1; next}
+open_in_phase=$(PH="$heading" awk '
+  $0==ENVIRON["PH"] {inphase=1; next}
   /^## / && inphase {inphase=0}
   inphase && /- \[ \]/ {c++}
   END {print c+0}
@@ -216,8 +216,8 @@ open_in_phase=$(awk -v ph="$heading" '
 
 # --- 7. tick, then verify the count strictly dropped ---
 before=$(grep -c '\- \[ \]' "$ROADMAP" 2>/dev/null)
-awk -v ph="$heading" '
-  $0==ph {inphase=1; print; next}
+PH="$heading" awk '
+  $0==ENVIRON["PH"] {inphase=1; print; next}
   /^## / && inphase {inphase=0}
   inphase {gsub(/- \[ \]/, "- [x]")}
   {print}

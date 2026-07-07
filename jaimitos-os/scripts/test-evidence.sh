@@ -77,9 +77,12 @@ fi
 # file's `passed` value as the SOLE authority (it never re-checks), so a single transient
 # failure sampled here would permanently block a genuinely-green phase. Re-run the resolved
 # command up to TEST_EVIDENCE_RETRIES additional times before giving up; record passed:true as
-# soon as ANY attempt is green (a majority/any-green vote over one fragile sample). A suite that
-# is genuinely red fails EVERY attempt, so it still records passed:false — retries absorb a
-# flake, they never manufacture a false green. Small, clearly-named constants so this is tunable.
+# soon as ANY attempt is green (a majority/any-green vote over one fragile sample). For an IDEMPOTENT
+# suite this only absorbs a flake — a genuinely-red suite fails every attempt and still records
+# passed:false. CAVEAT (M8): for a NON-IDEMPOTENT suite — one whose earlier run mutates state so a later
+# run passes (a leaked DB row, a created file, a freed port) — any-green CAN mask a real first-attempt
+# failure. Keep test suites idempotent; this is an "absorb the fragile-window flake" heuristic, NOT a
+# guarantee against a state-dependent false green. Small, clearly-named constants so this is tunable.
 TEST_EVIDENCE_RETRIES=2      # extra attempts after the first (total attempts = 1 + this)
 TEST_EVIDENCE_RETRY_SLEEP=1  # seconds to wait between attempts
 
