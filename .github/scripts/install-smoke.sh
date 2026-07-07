@@ -45,11 +45,18 @@ grep -q "Jaimitos OS — the scaffold" README.md && bad "scaffold README content
 # CI absent by default.
 [ -e .github/workflows/jaimitos-os-ci.yml ] && bad "CI copied without --with-ci" || ok "CI absent by default"
 # Core scaffold + shared libs present.
-for f in CLAUDE.md .claude/settings.json scripts/autopilot.sh scripts/sync.sh \
-         .claude/lib/_secret-scan.sh .claude/lib/_high-stakes.sh \
-         .claude/commands/autopilot-parallel.md \
-         .claude/commands/models.md scripts/models.sh scripts/test-models.sh \
-         .claude/agents/researcher.md .claude/agents/planner.md .claude/agents/executor.md \
+# M13: check the full shipped manifest (was a sample — missed evaluator.md, phase/resume/wrap/autopilot
+# commands, _test-cmd.sh, test-sync.sh, etc.). doctor.sh on the installed tree (below) is the broader
+# backstop; this explicit list keeps the smoke test self-describing about what a complete install is.
+for f in CLAUDE.md .claude/settings.json \
+         scripts/autopilot.sh scripts/tick.sh scripts/test-evidence.sh scripts/record-grade.sh \
+         scripts/models.sh scripts/sync.sh scripts/doctor.sh scripts/run-guard-tests.sh \
+         scripts/close-milestone.sh scripts/next-adr.sh scripts/lint-roadmap.sh \
+         scripts/test-models.sh scripts/test-sync.sh scripts/test-tick.sh scripts/test-test-cmd.sh \
+         .claude/lib/_secret-scan.sh .claude/lib/_high-stakes.sh .claude/lib/_test-cmd.sh \
+         .claude/agents/researcher.md .claude/agents/planner.md .claude/agents/executor.md .claude/agents/evaluator.md \
+         .claude/commands/resume.md .claude/commands/wrap.md .claude/commands/phase.md \
+         .claude/commands/autopilot.md .claude/commands/autopilot-parallel.md .claude/commands/models.md \
          .claude/high-stakes-path-allowlist; do
   [ -f "$f" ] && ok "installed $f" || bad "missing $f"
 done
@@ -76,6 +83,19 @@ if ( cd "$TMP" && bash scripts/test-hooks.sh ) >/dev/null 2>&1; then
   ok "installed tree passes scripts/test-hooks.sh"
 else
   bad "installed tree FAILED scripts/test-hooks.sh"
+fi
+
+# M13: run doctor.sh on the installed tree — its own manifest (REQUIRED_SCRIPTS/REQUIRED_LIBS + all
+# agents/commands/hooks) is the comprehensive backstop against a shipped-file regression this smoke
+# test would otherwise miss. A fresh install is UNCONFIGURED (CLAUDE.md placeholders) so doctor exits 0
+# with warnings; we assert only that it finds NO missing files.
+if [ -x "$TMP/scripts/doctor.sh" ]; then
+  DOC_OUT="$( ( cd "$TMP" && bash scripts/doctor.sh ) 2>&1 || true )"
+  if printf '%s\n' "$DOC_OUT" | grep -q "✗ missing"; then
+    bad "doctor.sh reports missing files on a fresh install: $(printf '%s\n' "$DOC_OUT" | grep '✗ missing' | head -3 | tr '\n' ';')"
+  else
+    ok "doctor.sh on the installed tree reports no missing scaffold/scripts/libs/agents/commands"
+  fi
 fi
 
 # Brownfield: a target that already has its OWN .claude/settings.json must be PRESERVED and the
