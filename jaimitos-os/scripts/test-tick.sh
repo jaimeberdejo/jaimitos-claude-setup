@@ -359,6 +359,34 @@ PASS" ) >/dev/null 2>&1
 grep -q "no_tests_ok=0" "$REPO/.claude/.phase-grade" 2>/dev/null \
   && pass "record-grade: mid-sentence NO_TESTS_OK ignored (leading-token only)" || fail "record-grade substring bypass NOT closed"
 
+# 15 — a RESOLVABLE but NON-ANCESTOR .phase-base (divergent branch) → fail-closed refuse.
+# Guards tick.sh's `git merge-base --is-ancestor` check. Case 13 covers an UNRESOLVABLE sha (caught by
+# rev-parse --verify) and 14c covers ==HEAD (caught by the !=HEAD guard); NEITHER exercises a real commit
+# on divergent history — the exact input the ancestor guard exists for. Grade+evidence are made valid so
+# tick reaches the base check (they're verified first); the refusal must name "ancestor" so this only
+# passes when THAT guard fires (dropping the guard lets tick scan an arbitrary B..C range and tick → red).
+REPO="$WORK/t15"; rm -rf "$REPO"; mkdir -p "$REPO/.claude/lib" "$REPO/scripts" "$REPO/docs"
+cp "$TICK" "$REPO/scripts/tick.sh"; cp "$HS_LIB" "$REPO/.claude/lib/_high-stakes.sh"; cp "$SS_LIB" "$REPO/.claude/lib/_secret-scan.sh"
+printf '## Phase 1 — Work\n\n- [ ] do the work\n' > "$REPO/docs/ROADMAP.md"
+printf 'next: work\n' > "$REPO/docs/STATE.md"
+printf '.claude/.phase-base\n.claude/.phase-grade\n.claude/.tick-evidence.json\nNEXT_FINDINGS.md\n' > "$REPO/.gitignore"
+( cd "$REPO" && git init -q && git config user.email t@t.t && git config user.name t && git config gc.auto 0 \
+    && git add -A && git commit -q -m A \
+    && A=$(git rev-parse HEAD) \
+    && printf 'more\n' >> docs/ROADMAP.md && git add -A && git commit -q -m C \
+    && MAIN=$(git rev-parse --abbrev-ref HEAD) \
+    && git checkout -q "$A" \
+    && printf 'sidework\n' > side.txt && git add side.txt && git commit -q -m B \
+    && B=$(git rev-parse HEAD) \
+    && git checkout -q "$MAIN" \
+    && printf '%s\n' "$B" > .claude/.phase-base )
+HEAD=$(git -C "$REPO" rev-parse HEAD)
+good_grade t15; good_evidence t15
+rc=$(runtick "$REPO" "## Phase 1 — Work")
+{ [ "$rc" = 1 ] && ! ticked "$REPO" && grep -qi 'ancestor' "$WORK/out"; } \
+  && pass "non-ancestor .phase-base (divergent branch) → fail-closed refuse (ancestor guard)" \
+  || fail "non-ancestor base not refused by the ancestor guard (rc=$rc)"
+
 echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All tick gate + evidence tests passed."; exit 0
 else echo "$FAILS tick test(s) FAILED."; echo "--- last tick output ---"; tail -n 20 "$WORK/out" 2>/dev/null; exit 1; fi

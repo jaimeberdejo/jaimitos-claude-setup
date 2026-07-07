@@ -106,7 +106,11 @@ g_notests=$(grep -E '^no_tests_ok=' "$GRADE" | head -1 | cut -d= -f2- || true)
 
 # --- 3. fresh test evidence ---
 [ -f "$EVIDENCE" ] || refuse "missing test evidence ($EVIDENCE) — run scripts/test-evidence.sh"
-jq empty "$EVIDENCE" >/dev/null 2>&1 || refuse "test evidence is not valid JSON"
+# `jq empty` was observed to be a no-op on some bundled jq builds (audit M4 — same as doctor.sh):
+# it accepts malformed input, so the run_id bind below is the only thing catching bad JSON. Use
+# `jq -e 'type'` instead — it emits the value's type and sets a non-zero exit on unparseable input
+# (`type` always yields a non-null/non-false string on valid JSON, so this never false-rejects).
+jq -e 'type' "$EVIDENCE" >/dev/null 2>&1 || refuse "test evidence is not valid JSON"
 e_run=$(jq -r '.run_id // ""' "$EVIDENCE")
 e_passed=$(jq -r '.passed' "$EVIDENCE" 2>/dev/null || echo "missing")
 [ "$e_run" = "$HEAD" ] || refuse "test evidence is stale (evidence run_id '$e_run' != HEAD '$HEAD')"
