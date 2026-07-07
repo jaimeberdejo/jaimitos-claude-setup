@@ -116,5 +116,35 @@ grep -q "SUBDIRECTORY" "$WORK/h4.out" && pass "H4: doctor reports a subdirectory
   && pass "H4: doctor exits non-zero with NO wall of false 'missing'" || fail "H4: subdir doctor gave misleading output (rc=$h4rc)"
 
 echo ""
+echo "Skills manifest: doctor flags a dropped/renamed shipped skill (install-smoke owns the full check)"
+echo ""
+# The scaffold ($SC) does NOT contain .claude/skills/ — skills are a separate source root the installer
+# pulls from the wrapper repo's skills/ dir. Simulate a real per-project install here so doctor's skills
+# check has something to validate. If that source is absent (e.g. test-doctor.sh re-run from an installed
+# project without the sibling skills/), skip — install-smoke covers the manifest in that context.
+SKILLS_SRC="$SC/../skills"
+if [ -d "$SKILLS_SRC" ]; then
+  mkscaffold "$WORK/skills"
+  mkdir -p "$WORK/skills/.claude/skills"
+  for skdir in "$SKILLS_SRC"/*/; do
+    sk="$(basename "$skdir")"
+    [ "$sk" = "setup-jaimitos-os" ] && continue   # --global-skills only, never per-project
+    cp -R "$skdir" "$WORK/skills/.claude/skills/$sk"
+  done
+  ( cd "$WORK/skills" && bash scripts/doctor.sh > "$WORK/skills.ok.out" 2>&1 )
+  grep -q "✗ missing .claude/skills" "$WORK/skills.ok.out" \
+    && fail "skills: doctor false-flags a complete shipped-skill set" \
+    || pass "skills: a complete shipped-skill set passes doctor (no false missing)"
+  # Drop one shipped skill → doctor must flag it by name and exit non-zero (not a silent 'All good').
+  rm -rf "$WORK/skills/.claude/skills/adr"
+  ( cd "$WORK/skills" && bash scripts/doctor.sh > "$WORK/skills.bad.out" 2>&1 ); skrc=$?
+  { grep -q "missing .claude/skills/adr/SKILL.md" "$WORK/skills.bad.out" && [ "$skrc" -ne 0 ] && ! grep -q "All good" "$WORK/skills.bad.out"; } \
+    && pass "skills: doctor flags a dropped skill (adr) by name and exits non-zero" \
+    || fail "skills: a dropped skill was not detected (rc=$skrc)"
+else
+  pass "skills: SKIP doctor-side check ($SKILLS_SRC absent — install-smoke owns the manifest here)"
+fi
+
+echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All doctor --fix tests passed."; exit 0
 else echo "$FAILS doctor test(s) FAILED."; tail -n 15 "$WORK/out" 2>/dev/null; exit 1; fi

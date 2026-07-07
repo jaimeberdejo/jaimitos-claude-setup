@@ -63,6 +63,10 @@ done
 # run-guard-tests.sh has its own drift guard for those.
 REQUIRED_SCRIPTS="autopilot.sh tick.sh test-evidence.sh record-grade.sh models.sh sync.sh doctor.sh close-milestone.sh next-adr.sh lint-roadmap.sh run-guard-tests.sh"
 REQUIRED_LIBS="_secret-scan _high-stakes _test-cmd"
+# Shipped project skills (install.sh copies each into .claude/skills/<name>/). setup-jaimitos-os is the
+# installer/meta skill — it is --global-skills only, never per-project, so it is NOT listed here. Keep in
+# sync with .github/scripts/install-smoke.sh (the authoritative post-install manifest gate).
+REQUIRED_SKILLS="roadmap milestone adr ship-check scope-guard explain-diff unstick teach-back mapme quizme"
 
 echo "jaimitos-os doctor"
 [ -f .claude/.jaimitos-os-version ] && echo "jaimitos-os version: $(cat .claude/.jaimitos-os-version)"
@@ -108,6 +112,20 @@ for c in resume wrap phase autopilot autopilot-parallel models; do
   [ -f ".claude/commands/$c.md" ] && ok ".claude/commands/$c.md" || bad "missing .claude/commands/$c.md"
 done
 [ -f .claude/rules/high-stakes.md ] && ok ".claude/rules/high-stakes.md" || bad "missing .claude/rules/high-stakes.md"
+echo ""
+
+echo "Skills (.claude/skills/ — a dropped/renamed skill silently loses that workflow):"
+# Checked only when .claude/skills/ exists: an installed project always has it (install.sh populates
+# it), so an incomplete set here means a real drop/rename regression → hard fail. A bare scaffold with
+# no skills dir at all (e.g. the toolkit's own tree) isn't an install, so we don't false-flag it — the
+# authoritative full-manifest gate is install-smoke.sh, which runs against a real install.
+if [ -d .claude/skills ]; then
+  for sk in $REQUIRED_SKILLS; do
+    [ -f ".claude/skills/$sk/SKILL.md" ] && ok ".claude/skills/$sk/SKILL.md" || bad "missing .claude/skills/$sk/SKILL.md"
+  done
+else
+  warn "no .claude/skills/ directory — skills not installed here (install.sh populates it; install-smoke owns the full check)"
+fi
 echo ""
 
 echo "Model configuration (which model each /phase stage uses; set via /models):"
