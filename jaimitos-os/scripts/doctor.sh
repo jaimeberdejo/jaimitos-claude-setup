@@ -9,6 +9,13 @@
 
 set -uo pipefail
 
+# Answer -h/--help BEFORE anything else (including the subdir check below and the git-root cd) so
+# `doctor.sh --help` always prints usage and exits 0, regardless of where it's run from. (The arg loop
+# further down also handles --help, e.g. after `--fix`.)
+case "${1:-}" in
+  -h|--help) echo "usage: doctor.sh [--fix]   (--fix applies safe, local, idempotent repairs)"; exit 0 ;;
+esac
+
 # H4: the operational scripts (this one included) resolve paths from `git rev-parse --show-toplevel`.
 # If jaimitos-os was installed in a SUBDIRECTORY of a repo, that toplevel is the repo ROOT — not where
 # .claude/ and docs/ actually live — so every check below would false-"missing". Detect the mismatch
