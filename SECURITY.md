@@ -61,6 +61,25 @@ prompt) only *asks* a model to comply.
   examples. If you don't edit them to match your real auth/migration/money/delete dirs, a
   loop can auto-tick and commit those paths. Editing only the advisory rule (not the enforced
   regex) silently disables enforcement — `doctor.sh` warns when the default is untouched.
+- **The high-stakes path allowlist is an auditable escape hatch, not a bypass.**
+  `.claude/high-stakes-path-allowlist` clears **exact-path false positives** in the path matcher
+  (e.g. an ADR whose name merely contains "money") — git-tracked, one path per line, each requiring a
+  non-empty reason. It is purely subtractive: the enforced `HIGH_STAKES_RE` and the content scanner are
+  untouched, a bare/reasonless entry suppresses nothing, and `doctor.sh` lists every active suppression.
+  A phase **cannot** self-exempt by adding its own allowlist entry: editing the allowlist — or
+  `_high-stakes.sh`, or `scripts/tick.sh` — inside a phase forces supervised review (`tick.sh` exit 3),
+  regardless of the new contents.
+- **Under headless autopilot, the gate's own code and scan window are orchestrator-trusted.**
+  `tick.sh` and `_high-stakes.sh` run from the builder's worktree, and the scan runs over
+  `${phase-base}..HEAD` where `.claude/.phase-base` is builder-written — both untrusted under
+  `--dangerously-skip-permissions`. `scripts/autopilot.sh` closes that: it derives the phase base in its
+  OWN trusted shell (overwriting the builder's file before the evaluator, strict-ancestor-validated by
+  `tick.sh` via `TICK_BASE`), and byte-compares each gate-control file against the trusted launch
+  checkout before running the gate — so a builder can neither forge `.phase-base` to hide a commit nor
+  neuter `tick.sh`/`_high-stakes.sh` in its worktree and still get an auto-tick or push. This is enforced
+  and tested; the executor's forbidden-writes rule is advisory on top of it. It still assumes a
+  sandboxed, no-credentials environment — a builder with arbitrary shell access can tamper with its own
+  worktree or exfiltrate, and we do not claim otherwise.
 - **Autopilot is for low-stakes, reversible code only.** Worktree isolation and the kill-switch
   reduce blast radius; they do not make irreversible actions safe. Set a hard budget cap as the
   outer backstop.
