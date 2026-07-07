@@ -10,8 +10,8 @@ Trust-boundary & maintenance hardening milestone closing the P1/P2 backlog from 
 audit (`AUDIT-JAIMITOS-OS-V2.2.md`) plus the stronger `.phase-base` forgery bypass surfaced in the
 v2.2.1 re-audit. No new features, no guardrail weakening — every fix makes a failure mode fail closed /
 route to manual review / force supervised, and each ships a regression test that fails on pre-fix code
-and passes after. Released at the explicit human checkpoint: `VERSION` bumped to `2.3.0` and tagged
-`v2.3.0` locally (push held as a separate checkpoint).
+and passes after. Released at the explicit human checkpoint: `VERSION` bumped to `2.3.0`, tagged
+`v2.3.0`, merged to `master`, and pushed to origin (branch + annotated tag).
 
 ### Fixed — trust boundary
 - **`.phase-base` forgery / forgeable orchestrator state (the centerpiece).** Under headless

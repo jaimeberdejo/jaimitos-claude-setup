@@ -44,5 +44,9 @@ node_modules/
 # Local audit report (not shipped)
 AUDIT.md
 
-# Scratch mission prompt containing a live API key — never commit
-MODELCOSTGUARD-MISSION-PROMPT.md
+# Maintainer scratch / handoff / mission notes — working-tree only, never commit.
+# (Mission prompts may embed live API keys; handoff/redteam/changes notes are ephemeral.)
+*-MISSION-PROMPT.md
+HANDOFF-*.md
+REDTEAM-*.md
+CHANGES-LAST-*.md
