@@ -45,6 +45,11 @@ while [ $# -gt 0 ]; do
       TOOLKIT="$2"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
     --yes)     YES=1; shift ;;
+    -h|--help)
+      echo "usage: sync.sh --toolkit <path> [--dry-run] [--yes]"
+      echo "  Pull later jaimitos-os toolkit fixes into an ALREADY-scaffolded project from a local toolkit"
+      echo "  checkout, conservatively (four-tier classifier; mixed always prompts). See header for tiers."
+      exit 0 ;;
     *) echo "sync: unknown argument '$1'" >&2; exit 2 ;;
   esac
 done

@@ -150,6 +150,14 @@ is_valid_value() {
   return 0
 }
 
+case "${1:-}" in
+  -h|--help)
+    echo "usage: models.sh                        show current model config for all 4 /phase stages"
+    echo "       models.sh <role>=<model> ...      set one or more (role: research|plan|exec|eval|all)"
+    echo "       models.sh reset                   restore each role's shipped default (eval=sonnet, rest inherit)"
+    exit 0 ;;
+esac
+
 # Fail-safe: refuse to operate on any role file that's already corrupted (more than one
 # model: line), rather than silently picking or overwriting one and masking the corruption.
 for r in research plan exec eval; do

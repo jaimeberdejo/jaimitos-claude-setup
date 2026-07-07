@@ -48,6 +48,12 @@ HS_BLOCKED=0          # set to 1 if a high-stakes phase tripped the gate (never 
 SKIP_PERMISSIONS=0    # --dangerously-skip-permissions opts INTO bypassing all permission checks
 for arg in "$@"; do
   case "$arg" in
+    -h|--help)
+      echo "usage: autopilot.sh [COUNT] [--allow-dirty] [--no-worktree] [--pr] [--dangerously-skip-permissions]"
+      echo "  COUNT: N | N-M | all|max (default 15). Headless loop: builds each roadmap phase in a fresh"
+      echo "  process, grades it with an independent evaluator, and ticks via scripts/tick.sh. See the"
+      echo "  header of this script for the full flag reference and safety notes."
+      exit 0 ;;
     --allow-dirty) ALLOW_DIRTY=1 ; continue ;;
     --worktree)    USE_WORKTREE=1 ; continue ;;            # explicit (already the default)
     --no-worktree) USE_WORKTREE=0 ; continue ;;            # opt out of isolation

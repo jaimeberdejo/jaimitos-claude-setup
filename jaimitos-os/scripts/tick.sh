@@ -76,6 +76,14 @@ update_state() {
 }
 
 # --- 1. target heading ---
+case "${1:-}" in
+  -h|--help)
+    echo "usage: tick.sh [\"<exact phase heading>\"]   (defaults to .claude/.phase-ready)"
+    echo "  The single roadmap-completion gate: ticks ONLY on a recorded evaluator PASS + fresh green"
+    echo "  test evidence bound to HEAD + a clean secret scan + no high-stakes changes. Exit: 0 ticked,"
+    echo "  1 refused, 3 high-stakes/supervised. Env TICK_BASE (trusted) overrides .claude/.phase-base."
+    exit 0 ;;
+esac
 heading="${1:-}"
 [ -z "$heading" ] && heading=$(cat .claude/.phase-ready 2>/dev/null || true)
 [ -z "$heading" ] && refuse "no phase heading (pass one, or write .claude/.phase-ready)"

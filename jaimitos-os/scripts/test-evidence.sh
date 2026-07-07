@@ -26,6 +26,11 @@ ALLOW_NO_TESTS=0
 for a in "$@"; do
   case "$a" in
     --allow-no-tests) ALLOW_NO_TESTS=1 ;;
+    -h|--help)
+      echo "usage: test-evidence.sh [--allow-no-tests]"
+      echo "  Authoritative producer of .claude/.tick-evidence.json (test result bound to HEAD). Exit 0"
+      echo "  tests passed (or no-tests with --allow-no-tests); 1 red, or no-tests without the flag."
+      exit 0 ;;
     *) echo "test-evidence: unknown argument '$a'" >&2; exit 1 ;;
   esac
 done
