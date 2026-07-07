@@ -89,6 +89,20 @@ BF_OUT="$(bash "$REPO/install.sh" "$BF" 2>&1)"
 case "$BF_OUT" in *"NOT merged"*) ok "brownfield: install warns jaimitos-os hooks not wired" ;; *) bad "brownfield: NO warning that hooks were left unwired" ;; esac
 rm -rf "$BF"
 
+# H4: refuse installing into a SUBDIRECTORY of an existing git repo (one-repo-per-project assumption);
+# --allow-subdir overrides (with a loud warning). A fresh non-git dir is unaffected (tested above).
+SUB="$(mktemp -d)" && ( cd "$SUB" && git init -q && git config user.email t@t.t && git config user.name t )
+mkdir -p "$SUB/pkg"
+H4_OUT="$(bash "$REPO/install.sh" "$SUB/pkg" 2>&1)"; H4_RC=$?
+{ [ "$H4_RC" -ne 0 ] && case "$H4_OUT" in *SUBDIRECTORY*) true ;; *) false ;; esac; } \
+  && ok "H4: install refuses a subdirectory of a git repo (clear message, non-zero)" || bad "H4: subdir install not refused"
+[ -e "$SUB/pkg/.claude/settings.json" ] && bad "H4: subdir refusal still wrote files" || ok "H4: subdir refusal wrote nothing"
+H4_OUT2="$(bash "$REPO/install.sh" "$SUB/pkg" --allow-subdir 2>&1)"; H4_RC2=$?
+{ [ "$H4_RC2" -eq 0 ] && [ -f "$SUB/pkg/.claude/settings.json" ]; } \
+  && ok "H4: --allow-subdir proceeds (installs into the subdir)" || bad "H4: --allow-subdir did not proceed"
+case "$H4_OUT2" in *SUBDIRECTORY*) ok "H4: --allow-subdir still warns loudly" ;; *) bad "H4: --allow-subdir did not warn" ;; esac
+rm -rf "$SUB"
+
 echo ""
 if [ "$FAILS" -eq 0 ]; then echo "install smoke test: PASS"; exit 0
 else echo "install smoke test: $FAILS failure(s)"; exit 1; fi

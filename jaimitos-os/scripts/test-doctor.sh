@@ -103,5 +103,18 @@ mkscaffold "$WORK/ok"
   && pass "control: pristine scaffold reports no missing load-bearing files" || fail "control: manifest false-positived on a pristine scaffold (rc=$okrc)"
 
 echo ""
+echo "H4: jaimitos-os installed in a SUBDIRECTORY of a repo → doctor reports it clearly, not a wall of missing"
+echo ""
+# An OUTER git repo with the scaffold in a subdir (NOT at the git root). doctor resolves paths from the
+# git root, so it must detect the mismatch and say so, not emit a wall of false 'missing'.
+OUTER="$WORK/outer"; rm -rf "$OUTER"; mkdir -p "$OUTER/sub"
+( cd "$OUTER" && git init -q && git config user.email t@t.t && git config user.name t )
+cp -R "$SC/." "$OUTER/sub/"; chmod +x "$OUTER/sub/scripts/"*.sh 2>/dev/null
+( cd "$OUTER/sub" && bash scripts/doctor.sh > "$WORK/h4.out" 2>&1 ); h4rc=$?
+grep -q "SUBDIRECTORY" "$WORK/h4.out" && pass "H4: doctor reports a subdirectory install clearly" || fail "H4: subdir install not reported"
+{ [ "$h4rc" -ne 0 ] && ! grep -q "All good" "$WORK/h4.out" && [ "$(grep -c '✗ missing' "$WORK/h4.out")" -eq 0 ]; } \
+  && pass "H4: doctor exits non-zero with NO wall of false 'missing'" || fail "H4: subdir doctor gave misleading output (rc=$h4rc)"
+
+echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All doctor --fix tests passed."; exit 0
 else echo "$FAILS doctor test(s) FAILED."; tail -n 15 "$WORK/out" 2>/dev/null; exit 1; fi

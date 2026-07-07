@@ -8,6 +8,31 @@
 # (that needs ./install.sh --force) and never touches the high-stakes fingerprint.
 
 set -uo pipefail
+
+# H4: the operational scripts (this one included) resolve paths from `git rev-parse --show-toplevel`.
+# If jaimitos-os was installed in a SUBDIRECTORY of a repo, that toplevel is the repo ROOT — not where
+# .claude/ and docs/ actually live — so every check below would false-"missing". Detect the mismatch
+# (this script's own scaffold dir vs the git root) and say so plainly instead of a wall of missing.
+# Compare PHYSICAL paths (pwd -P): git prints the symlink-resolved toplevel (e.g. /private/var/… on
+# macOS) while `cd && pwd` is logical (/var/…) — a raw string compare would false-trip on the symlink
+# and refuse a perfectly-fine git-root install.
+DOCTOR_SCAFFOLD="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+DOCTOR_GIT_TOP_RAW="$(git -C "$DOCTOR_SCAFFOLD" rev-parse --show-toplevel 2>/dev/null || true)"
+if [ -n "$DOCTOR_GIT_TOP_RAW" ]; then
+  DOCTOR_GIT_TOP="$(cd "$DOCTOR_GIT_TOP_RAW" && pwd -P)"
+  if [ "$DOCTOR_GIT_TOP" != "$DOCTOR_SCAFFOLD" ]; then
+    echo "jaimitos-os doctor"
+    echo ""
+    echo "  ✗ jaimitos-os is installed in a SUBDIRECTORY, not at the git root:"
+    echo "      scaffold:  $DOCTOR_SCAFFOLD"
+    echo "      git root:  $DOCTOR_GIT_TOP"
+    echo "  The operational scripts resolve paths from the git root, so they look for .claude/ and docs/"
+    echo "  in the wrong place. jaimitos-os assumes ONE repo per project. Reinstall at the git root"
+    echo "  (bash install.sh \"$DOCTOR_GIT_TOP\"), or use a separate repo for this project."
+    exit 1
+  fi
+fi
+
 cd "$(git rev-parse --show-toplevel 2>/dev/null || echo .)" || exit 1
 
 PROBLEMS=0
