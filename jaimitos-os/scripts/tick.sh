@@ -18,8 +18,11 @@
 # Side effects: ticks ROADMAP. (Phase 2B adds: update the docs/STATE.md machine block.)
 # Does NOT commit, push, open a PR, run the evaluator, or archive — the CALLER owns those.
 #
-# Usage: bash scripts/tick.sh ["<exact phase heading>"]   (defaults to .claude/.phase-ready)
-# Exit:  0 = ticked · 1 = refused (stop) · 3 = high-stakes (supervised; caller must NOT push)
+# Usage: bash scripts/tick.sh ["<exact phase heading>"] [--supervised-approved] [--note "<why>"]
+#        (heading defaults to .claude/.phase-ready). A "Mode: supervised" phase ticks ONLY with an
+#        explicit human --supervised-approved (recorded, HEAD-bound, in .claude/.supervised-approval);
+#        this clears the supervised refusal alone and relaxes no other gate.
+# Exit:  0 = ticked · 1 = refused (stop) · 3 = high-stakes / unapproved-supervised (caller must NOT push)
 set -uo pipefail
 cd "$(git rev-parse --show-toplevel 2>/dev/null || echo .)" || exit 1
 
@@ -75,16 +78,61 @@ update_state() {
   rm -f "$blockfile" 2>/dev/null || true
 }
 
-# --- 1. target heading ---
-case "${1:-}" in
-  -h|--help)
-    echo "usage: tick.sh [\"<exact phase heading>\"]   (defaults to .claude/.phase-ready)"
-    echo "  The single roadmap-completion gate: ticks ONLY on a recorded evaluator PASS + fresh green"
-    echo "  test evidence bound to HEAD + a clean secret scan + no high-stakes changes. Exit: 0 ticked,"
-    echo "  1 refused, 3 high-stakes/supervised. Env TICK_BASE (trusted) overrides .claude/.phase-base."
-    exit 0 ;;
-esac
-heading="${1:-}"
+APPROVAL=".claude/.supervised-approval"
+# supervised_approval_valid <heading>: the gate for a "Mode: supervised" phase. Returns 0 (valid) iff
+# a human explicitly approved THIS phase at THIS commit. It is NOT a bypass of any other gate — the
+# grade, evidence, secret, gate-config and high-stakes checks all run ABOVE the supervised block and
+# exit before it, so a valid approval only clears the supervised-mode refusal, nothing else. Two ways
+# to be valid:
+#   • --supervised-approved passed on THIS run → WRITE the approval file (same key=value shape as
+#     .phase-grade), binding it to HEAD + the exact heading + a UTC stamp + the optional --note, then
+#     accept and fall through to the normal open-item + count-drop tick.
+#   • else → READ .claude/.supervised-approval and accept ONLY if it is well-formed AND title == the
+#     heading being ticked AND run_id == HEAD (same freshness idiom as the grade check: a new commit
+#     makes a prior approval stale). Missing / malformed / title-mismatch / stale → invalid (fail closed).
+supervised_approval_valid() {
+  local h="$1"
+  if [ "$SUPERVISED_APPROVED" -eq 1 ]; then
+    mkdir -p .claude
+    {
+      echo "run_id=$HEAD"
+      echo "title=$h"
+      echo "approved_at=$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo unknown)"
+      echo "note=$APPROVAL_NOTE"
+    } > "$APPROVAL"
+    return 0
+  fi
+  [ -f "$APPROVAL" ] || return 1
+  local a_run a_title
+  a_run=$(grep -E '^run_id=' "$APPROVAL" | head -1 | cut -d= -f2- || true)
+  a_title=$(grep -E '^title=' "$APPROVAL" | head -1 | cut -d= -f2- || true)
+  [ -n "$a_run" ] || return 1
+  [ "$a_title" = "$h" ] || return 1
+  [ "$a_run" = "$HEAD" ] || return 1
+  return 0
+}
+
+# --- 1. args: an optional positional heading + supervised-approval flags (loop mirrors close-milestone.sh) ---
+SUPERVISED_APPROVED=0
+APPROVAL_NOTE=""
+heading=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h|--help)
+      echo "usage: tick.sh [\"<exact phase heading>\"] [--supervised-approved] [--note \"<why>\"]"
+      echo "  The single roadmap-completion gate: ticks ONLY on a recorded evaluator PASS + fresh green"
+      echo "  test evidence bound to HEAD + a clean secret scan + no high-stakes changes. A phase marked"
+      echo "  'Mode: supervised' ALSO needs --supervised-approved, which records an auditable, HEAD-bound"
+      echo "  approval in .claude/.supervised-approval (it does NOT relax any other gate). Heading defaults"
+      echo "  to .claude/.phase-ready. Exit: 0 ticked, 1 refused, 3 high-stakes/supervised. Env TICK_BASE"
+      echo "  (trusted) overrides .claude/.phase-base."
+      exit 0 ;;
+    --supervised-approved) SUPERVISED_APPROVED=1; shift ;;
+    --note) shift; APPROVAL_NOTE="${1:-}"; [ $# -gt 0 ] && shift ;;
+    -*) echo "tick: unknown option '$1' (try -h)" >&2; exit 1 ;;
+    *) [ -z "$heading" ] && heading="$1"; shift ;;
+  esac
+done
 [ -z "$heading" ] && heading=$(cat .claude/.phase-ready 2>/dev/null || true)
 [ -z "$heading" ] && refuse "no phase heading (pass one, or write .claude/.phase-ready)"
 [ -f "$ROADMAP" ] || refuse "missing $ROADMAP"
@@ -205,8 +253,17 @@ PHASE_MODE=$(PH="$heading" awk '
 ' "$ROADMAP")
 case "$PHASE_MODE" in
   *supervised*)
-    echo "tick: ⛔ phase is marked 'Mode: supervised' — human review required, NOT auto-ticking." >&2
-    exit 3 ;;
+    # Everything above (grade, evidence, secret, gate-config, high-stakes path+content) has already
+    # run and would have exited before reaching here — so this approval clears ONLY the supervised
+    # refusal, never any other gate. Valid approval → fall through to the open-item + tick logic below.
+    if supervised_approval_valid "$heading"; then
+      echo "tick: 'Mode: supervised' phase has a valid human approval bound to HEAD — proceeding." >&2
+    else
+      echo "tick: ⛔ phase is marked 'Mode: supervised' — human review required, NOT auto-ticking." >&2
+      echo "tick:    to approve THIS phase at THIS commit, a human runs:" >&2
+      echo "tick:      bash scripts/tick.sh --supervised-approved \"$heading\" --note \"<why it's safe>\"" >&2
+      exit 3
+    fi ;;
 esac
 
 # --- 6. target phase still has an open item ---
@@ -231,7 +288,7 @@ if [ "$after" -ge "$before" ]; then
   refuse "tick changed no items under '$heading' (roadmap left unchanged)"
 fi
 
-rm -f .claude/.phase-ready .claude/.phase-grade 2>/dev/null || true
+rm -f .claude/.phase-ready .claude/.phase-grade .claude/.supervised-approval 2>/dev/null || true
 update_state "$heading"
 echo "tick: ✓ ticked '$heading' ($((before - after)) item(s))"
 exit 0

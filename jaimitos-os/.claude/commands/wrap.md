@@ -16,6 +16,9 @@ Close out this session:
    d. Run the gate: `bash scripts/tick.sh "<exact phase heading>"`. It verifies the grade +
       fresh green tests + a clean secret scan + no high-stakes changes, then ticks the roadmap
       and updates the STATE auto-block. If it REFUSES, surface the reason — do not tick by hand.
+      If the phase is `Mode: supervised`, `tick.sh` refuses until you add `--supervised-approved`
+      (and optionally `--note "<why it's safe>"`) to explicitly, auditably approve THIS phase at
+      THIS commit — that flag clears only the supervised refusal; every other gate still applies.
    If a phase is "built, awaiting grade," leave it unchecked and say so.
 
 3. If any real architectural decision was made, append a 4-line ADR to a new file

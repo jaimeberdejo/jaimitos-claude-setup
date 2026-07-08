@@ -48,9 +48,12 @@ silently fall through to another phase. This is for targeted and parallel work (
      (do this in both cases — it is cheap and idempotent for the same phase).
    - If this phase's `Mode:` line says `supervised`, say so plainly before continuing — you are
      about to build it under direct human review (that's what plain `/phase`, unlike `/autopilot`,
-     is for), and its tick will need a manual `/wrap` afterward; `scripts/tick.sh` will refuse to
-     auto-tick it regardless. This is informational, not a stop — building supervised phases
-     interactively is the sanctioned path for them.
+     is for). Its tick needs an EXPLICIT human approval afterward: a human runs
+     `bash scripts/tick.sh --supervised-approved "<exact heading>" --note "<why it's safe>"`, which
+     records an auditable, HEAD-bound approval; `scripts/tick.sh` refuses to auto-tick a supervised
+     phase without it (and that approval clears only the supervised refusal — grade, evidence,
+     secret and high-stakes gates all still apply). This is informational, not a stop — building
+     supervised phases interactively is the sanctioned path for them.
 3. **Research (only if the phase needs it) — delegated to the `researcher` subagent.** If the
    phase uses an unfamiliar API, library, or pattern, or touches code you haven't read, invoke
    the `researcher` subagent (Task tool) with a prompt containing: the phase's exact heading, its

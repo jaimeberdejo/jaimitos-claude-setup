@@ -45,6 +45,7 @@ test-results.json
 .claude/.phase-base
 .claude/.phase-ready
 .claude/.phase-grade
+.claude/.supervised-approval
 GI
   ( cd "$REPO" && git init -q && git config user.email t@t.t && git config user.name t \
       && git config gc.auto 0 && git add -A && git commit -q -m init \
@@ -245,6 +246,61 @@ rc=$(runtick_base "$REPO" "")
 mkrepo t14f; good_grade t14f; good_evidence t14f; rc=$(runtick "$REPO")
 { [ "$rc" = 0 ] && ticked "$REPO"; } \
   && pass "TICK_BASE absent → .phase-base file path intact (/wrap)" || fail "file fallback broke (rc=$rc)"
+
+echo ""
+echo "supervised-approval tests (v2.4.0)"; echo ""
+# A "Mode: supervised" phase ticks ONLY with an explicit, HEAD-bound human approval, and that approval
+# clears the supervised refusal ALONE — every gate above it (grade, evidence, secret, high-stakes,
+# heading existence) still fires first. Approval staleness / mismatch / malformation all fail closed.
+
+# S1 — supervised phase, NO approval → exit 3 (refused, not ticked). (Baseline: same as old behaviour.)
+mkrepo s1; printf 'Mode: supervised\n' >> "$REPO/docs/ROADMAP.md"; good_grade s1; good_evidence s1
+rc=$(runtick "$REPO")
+{ [ "$rc" = 3 ] && ! ticked "$REPO"; } && pass "supervised, no approval → exit 3 (refused)" || fail "supervised no-approval mishandled (rc=$rc)"
+
+# S2 — supervised phase + --supervised-approved → writes a HEAD-bound approval and ticks.
+mkrepo s2; printf 'Mode: supervised\n' >> "$REPO/docs/ROADMAP.md"; good_grade s2; good_evidence s2
+rc=$(runtick "$REPO" --supervised-approved --note "reviewed the auth flow by hand")
+{ [ "$rc" = 0 ] && ticked "$REPO"; } && pass "supervised + --supervised-approved → ticks" || fail "valid supervised approval did not tick (rc=$rc)"
+
+# S3 — an approval made at an OLD commit is STALE after a new commit (run_id != HEAD) → refuses.
+mkrepo s3; printf 'Mode: supervised\n' >> "$REPO/docs/ROADMAP.md"
+OLD=$(git -C "$REPO" rev-parse HEAD); PR=$(cat "$REPO/.claude/.phase-ready")
+printf 'run_id=%s\ntitle=%s\napproved_at=x\nnote=ok\n' "$OLD" "$PR" > "$REPO/.claude/.supervised-approval"
+( cd "$REPO" && git commit -q --allow-empty -m "advance HEAD after approval" )
+HEAD=$(git -C "$REPO" rev-parse HEAD); good_grade s3; good_evidence s3; rc=$(runtick "$REPO")
+{ [ "$rc" = 3 ] && ! ticked "$REPO"; } && pass "stale approval (old SHA after a new commit) → refuses" || fail "stale approval mishandled (rc=$rc)"
+
+# S4 — an approval whose title is for a DIFFERENT phase → refuses (title must match the heading).
+mkrepo s4; printf 'Mode: supervised\n' >> "$REPO/docs/ROADMAP.md"; good_grade s4; good_evidence s4
+printf 'run_id=%s\ntitle=## Phase 2 — Other\napproved_at=x\nnote=ok\n' "$HEAD" > "$REPO/.claude/.supervised-approval"
+rc=$(runtick "$REPO")
+{ [ "$rc" = 3 ] && ! ticked "$REPO"; } && pass "approval for a different title → refuses" || fail "wrong-title approval mishandled (rc=$rc)"
+
+# S5 — a malformed approval file (no run_id/title fields) → refuses (fail-closed).
+mkrepo s5; printf 'Mode: supervised\n' >> "$REPO/docs/ROADMAP.md"; good_grade s5; good_evidence s5
+printf 'garbage not an approval\n' > "$REPO/.claude/.supervised-approval"; rc=$(runtick "$REPO")
+{ [ "$rc" = 3 ] && ! ticked "$REPO"; } && pass "malformed approval → refuses (fail-closed)" || fail "malformed approval mishandled (rc=$rc)"
+
+# S6 — approval must NOT bypass the SECRET gate: a supervised phase with a planted secret + the flag
+# still fails at the secret scan (which runs ABOVE the supervised block) → exit 1, not ticked.
+mkrepo s6 src/cfg.py 'AWS="AKIAIOSFODNN7EXAMPLE"'; printf 'Mode: supervised\n' >> "$REPO/docs/ROADMAP.md"
+good_grade s6; good_evidence s6; rc=$(runtick "$REPO" --supervised-approved --note "approve")
+{ [ "$rc" = 1 ] && ! ticked "$REPO"; } && pass "approval does NOT bypass the secret gate (exit 1)" || fail "approval bypassed secret gate (rc=$rc)"
+
+# S7 — approval must NOT bypass the HIGH-STAKES path gate: supervised phase touching a high-stakes
+# path + the flag still exits 3 AT the high-stakes gate (above the supervised block) and never ticks.
+mkrepo s7 auth/login.py 'def login(): return True'; printf 'Mode: supervised\n' >> "$REPO/docs/ROADMAP.md"
+good_grade s7; good_evidence s7; rc=$(runtick "$REPO" --supervised-approved --note "approve")
+{ [ "$rc" = 3 ] && ! ticked "$REPO" && grep -q "HIGH-STAKES paths changed" "$WORK/out"; } \
+  && pass "approval does NOT bypass the high-stakes path gate (exit 3 at high-stakes, not ticked)" || fail "approval bypassed high-stakes gate (rc=$rc)"
+
+# S8 — approval must NOT invent a phase: --supervised-approved with a heading absent from ROADMAP is
+# refused by the heading-existence check (above everything) → exit 1, not ticked, no approval written.
+mkrepo s8; printf 'Mode: supervised\n' >> "$REPO/docs/ROADMAP.md"; good_grade s8; good_evidence s8
+rc=$(runtick "$REPO" --supervised-approved "## Phase 99 — Nope" --note "approve")
+{ [ "$rc" = 1 ] && ! ticked "$REPO" && [ ! -f "$REPO/.claude/.supervised-approval" ]; } \
+  && pass "approval for a heading absent from ROADMAP → refuses (exit 1, no approval written)" || fail "approval invented a heading (rc=$rc)"
 
 echo ""
 echo "test-evidence producer tests"; echo ""
