@@ -21,6 +21,33 @@ drifts past its tag — the coherence lesson from v2.3.1).
 - **`mapme`** now diffs its regenerated `docs/ARCHITECTURE.md` against an existing one and confirms
   before overwriting, instead of silently clobbering a hand-authored doc.
 
+### Fixed — headless autopilot child containment (v2.4.0 candidate)
+- **`scripts/autopilot.sh` now contains its builder/evaluator children** instead of running them
+  foreground with no timeout. A real headless dogfood (the SessionLens round) found a wedged
+  `--dangerously-skip-permissions` run spawning ~9–13 concurrent `claude` processes that `AGENT_STOP`
+  and `SIGTERM` could not stop (only `kill -9`), with an empty `autopilot.log`. Each child now runs
+  BACKGROUNDED as its own process-group leader under a Bash-3.2 watchdog (macOS has no
+  `timeout(1)`): the parent polls every `AUTOPILOT_POLL_INTERVAL` (default 5s) for a wall-clock
+  timeout (`AUTOPILOT_CHILD_TIMEOUT`, default 20m), for `AGENT_STOP` **during** the child run (not
+  just between iterations), and for loss of the run lock; a breach tree-kills the child
+  (`TERM`→2s→`KILL`, depth-first `pgrep -P` + process-group kill) and **fails closed** if it survives
+  `SIGKILL`. `INT`/`TERM` to the parent kill the child tree first; any watchdog abort sets
+  `RUN_ABORTED`, which blocks the tick and joins the no-push guard (an aborted branch stays local even
+  with `--pr`). The child's stdout is captured to the log, fixing the empty-`autopilot.log` symptom,
+  and the resolved log path is printed at loop start. `/autopilot-parallel` does **not** inherit this
+  containment yet and now carries a caution to prefer `/autopilot` or the headless script.
+
+### Added — supervised phase approval (v2.4.0 candidate)
+- **`Mode: supervised` phases are no longer un-tickable.** They previously hit `tick.sh` `exit 3`
+  unconditionally with no approval path, so a roadmap containing one could never close via
+  `close-milestone.sh`. `tick.sh` gains `--supervised-approved [--note "<why>"]`, which records an
+  auditable, HEAD-bound approval in `.claude/.supervised-approval` (valid iff `title` == the heading
+  **and** `run_id` == HEAD; stale/mismatched/malformed all fail closed). The override replaces **only**
+  the supervised block — grade, evidence, secret, gate-config and high-stakes checks all run above it,
+  so approval clears the supervised refusal and nothing else. `close-milestone.sh` now classifies the
+  first open phase (supervised-awaiting-approval / unresolved-finding / plain-unfinished) so a
+  supervised block is actionable, and the `milestone` skill Mode B documents the flow.
+
 ## [2.3.1] — 2026-07-07
 
 Release-coherence + follow-up hardening from the post-`v2.3.0` audit. `v2.3.0` was tagged and pushed;

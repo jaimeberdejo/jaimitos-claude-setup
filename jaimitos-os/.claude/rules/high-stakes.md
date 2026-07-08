@@ -77,5 +77,19 @@ regex at its shipped default (a sign the enforced gate was never pointed at your
   content marker (`high-stakes-ok: <reason>`, inline on a diff line) is a completely
   separate, content-only mechanism and is unaffected by this file, and vice versa.
   `scripts/doctor.sh` reports active allowlist entries so a suppression is never hidden.
+- **Over-broad match blocking a legitimate phase? Fix `HIGH_STAKES_RE` in a commit BEFORE that
+  phase's base — never inside it.** Editing `_high-stakes.sh` (or the path allowlist) *within* a
+  phase is itself gated: `tick.sh` forces supervised review (exit 3) on any in-phase change to the
+  gate's own config, so a phase can't self-narrow the regex that guards it. If the shipped regex is
+  genuinely too broad for your repo, tighten it as its own small, reviewed commit that lands BEFORE
+  you set the blocked phase's `.claude/.phase-base` — then the fix is already inside the phase's scan
+  floor, not part of the phase diff. (Fixing it inside the phase just converts one refusal into
+  another.)
+- **Tag the code that TOUCHES the sensitive data, not code that merely sits NEAR a sensitive feature.**
+  High-stakes is about blast radius on the actual data/effect, not proximity to a scary word. A
+  stats-only export or a read-only dashboard that aggregates already-safe numbers is NOT high-stakes
+  just because it lives beside a PII pipeline; the **redaction/anonymization path that reads the raw
+  PII** IS. Point `HIGH_STAKES_RE` (and any `supervised` phase) at the mutation / redaction / egress
+  code, and use the allowlist for benign neighbors that only trip the keyword match.
 
 If a task in these paths is ambiguous, STOP and ask rather than guessing.
