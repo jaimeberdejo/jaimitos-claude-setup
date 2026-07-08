@@ -38,7 +38,37 @@ refuse() { echo "close-milestone: REFUSED — $1" >&2; exit 1; }
 # ("> `- [ ]` = todo, `- [x]` = done. ..."), which is permanently present at the top of every
 # roadmap it generates and would otherwise ALWAYS false-positive as "open items remain."
 grep -qE '^[[:space:]]*- \[[ xX]\] ' "$ROADMAP" 2>/dev/null || refuse "no phases in $ROADMAP — nothing to close."
-grep -qE '^[[:space:]]*- \[ \] ' "$ROADMAP" 2>/dev/null && refuse "open items remain in $ROADMAP — finish or remove them first."
+# Open items remain → classify the FIRST open phase so the refusal is actionable, not a flat "open
+# items remain". Three cases: (a) a supervised phase awaiting explicit human approval (name it +
+# point at tick.sh --supervised-approved — the new v2.4.0 path so a supervised phase is no longer a
+# dead end), (b) an unresolved evaluator finding (NEXT_FINDINGS.md) gating it, (c) plain unfinished
+# work. The heading anchor + Mode: awk mirror tick.sh's own parse.
+if grep -qE '^[[:space:]]*- \[ \] ' "$ROADMAP" 2>/dev/null; then
+  first_open=$(awk '/^## /{h=$0} /^[[:space:]]*- \[ \] /{if(h!=""){print h; exit}}' "$ROADMAP")
+  first_mode=$(PH="$first_open" awk '
+    $0==ENVIRON["PH"] {inphase=1; next}
+    /^## / && inphase {inphase=0}
+    inphase && /^[[:space:]]*Mode:/ {print tolower($0); exit}
+  ' "$ROADMAP")
+  case "$first_mode" in
+    *supervised*)
+      echo "close-milestone: the first open phase is SUPERVISED and awaiting human approval:" >&2
+      echo "close-milestone:   ${first_open#\#\# }" >&2
+      echo "close-milestone:   approve + tick it with:" >&2
+      echo "close-milestone:     bash scripts/tick.sh --supervised-approved \"$first_open\" --note \"<why it's safe>\"" >&2
+      refuse "a supervised phase is unticked — approve it (command above), then close." ;;
+    *)
+      if [ -f NEXT_FINDINGS.md ]; then
+        echo "close-milestone: an unresolved evaluator finding (NEXT_FINDINGS.md) is blocking the first open phase:" >&2
+        echo "close-milestone:   ${first_open#\#\# }" >&2
+        refuse "resolve NEXT_FINDINGS.md and finish the open phase, then close."
+      else
+        echo "close-milestone: the first open phase still has unfinished work:" >&2
+        echo "close-milestone:   ${first_open#\#\# }" >&2
+        refuse "open items remain in $ROADMAP — finish or remove them first."
+      fi ;;
+  esac
+fi
 [ -f NEXT_FINDINGS.md ] && refuse "NEXT_FINDINGS.md exists (an unresolved evaluator finding) — resolve it first."
 
 # Non-fatal notice: surface open '## Ownership gaps' entries in docs/STATE.md (skipped/incomplete

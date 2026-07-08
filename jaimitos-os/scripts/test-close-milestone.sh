@@ -122,6 +122,30 @@ rc=$(runclose "$REPO" --name v6)
   && pass "differently-named heading is not prefix-matched as '## Ownership gaps' (no notice)" \
   || fail "prefix-matched a differently-named heading, or close wrongly blocked (rc=$rc)"
 
+# 10 — first open phase is SUPERVISED (v2.4.0): close still refuses, but the message classifies it as
+# supervised-awaiting-approval, names the phase, and points at tick.sh --supervised-approved (so a
+# supervised phase is no longer a milestone dead end — it just needs an explicit human approval first).
+SUP_OPEN='## Phase 1 — Auth
+
+- [ ] wire login
+Mode: supervised'
+mkrepo m10 "$SUP_OPEN"; rc=$(runclose "$REPO")
+{ [ "$rc" = 1 ] && [ ! -d "$REPO/docs/archive" ] && grep -q "SUPERVISED and awaiting" "$WORK/out" \
+    && grep -q -- "--supervised-approved" "$WORK/out" && grep -q "Phase 1 — Auth" "$WORK/out"; } \
+  && pass "open supervised phase → can't close; message names it + the --supervised-approved path" \
+  || fail "supervised-phase classifier message missing or close wrongly allowed (rc=$rc)"
+
+# 11 — an approved+ticked supervised phase is '- [x]' and no longer blocks the close (nothing special
+# about a supervised phase once it is legitimately ticked).
+SUP_DONE='## Phase 1 — Auth
+
+- [x] wire login
+Mode: supervised'
+mkrepo m11 "$SUP_DONE"; rc=$(runclose "$REPO" --name v7)
+{ [ "$rc" = 0 ] && [ -f "$REPO/docs/archive/ROADMAP-v7.md" ] && grep -q 'Phase 1 — Auth' "$REPO/docs/archive/ROADMAP-v7.md"; } \
+  && pass "approved+ticked supervised phase (- [x]) no longer blocks → closes" \
+  || fail "ticked supervised phase wrongly blocked the close (rc=$rc)"
+
 echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All milestone closure tests passed."; exit 0
 else echo "$FAILS milestone test(s) FAILED."; echo "--- last output ---"; tail -n 15 "$WORK/out" 2>/dev/null; exit 1; fi

@@ -68,13 +68,24 @@ Closure is **gated by a script** — you do NOT archive by hand, and there is no
    bash scripts/close-milestone.sh        # or: --name <label> to set the archive suffix
    ```
    It REFUSES (exit 1, with the reason) if any `- [ ]` item is still open, if `NEXT_FINDINGS.md`
-   exists (an unresolved evaluator finding), or if the roadmap has no phases. If it refuses,
-   resolve the listed items first — do not work around it. It may also print a non-fatal
-   `NOTE — ... Ownership gaps ...` line — that never blocks the close, but read the listed
+   exists (an unresolved evaluator finding), or if the roadmap has no phases. When items are open it
+   classifies the **first** open phase so the refusal is actionable:
+   - **Supervised phase awaiting approval** — it names the phase and prints the exact command to
+     approve+tick it: `bash scripts/tick.sh --supervised-approved "<heading>" --note "<why it's safe>"`.
+     A `Mode: supervised` phase is no longer a dead end: build it with plain `/phase` under human
+     review, approve it with that command (which records an auditable, HEAD-bound approval and
+     relaxes no other gate), then re-run the close.
+   - **Unresolved evaluator finding** (`NEXT_FINDINGS.md`) — resolve it and finish the open phase.
+   - **Plain unfinished work** — finish or remove the open items.
+   If it refuses, resolve the listed items first — do not work around it. It may also print a
+   non-fatal `NOTE — ... Ownership gaps ...` line — that never blocks the close, but read the listed
    `## Ownership gaps` entries from `docs/STATE.md` aloud to the user before continuing. On
    success it `git mv`s `docs/ROADMAP.md` → `docs/archive/ROADMAP-<label>.md` (label = `--name`,
    else a `VERSION` file, else the latest git tag, else the date), writes a fresh empty
    `docs/ROADMAP.md`, and resets the `docs/STATE.md` auto-block.
+   > **Follow-up (not yet implemented):** closing a *slice* of a milestone (archiving only some
+   > phases while leaving others open) is out of scope here — `close-milestone.sh` is all-or-nothing.
+   > Track it separately if you need partial closure.
 2. Author the next scope into the fresh `docs/ROADMAP.md` — either re-run the **`roadmap`** skill
    on an updated `docs/SPEC.md` (preferred when scope changed), or hand-write phases as in Mode A.
 3. Update the prose "## Now / ## Next action" in `docs/STATE.md` to point at the first new phase.
