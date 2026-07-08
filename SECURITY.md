@@ -54,8 +54,12 @@ prompt) only *asks* a model to comply.
   test suite — a real unattended run needs this flag to complete even one phase. That is exactly
   why it must be confined to a sandbox/container with **no production credentials**: with it on,
   neither `permissions.deny` nor any interactive prompt stands between the builder and anything
-  your OS user can touch. Prefer `acceptEdits` (the default, no flag needed) whenever a human is
-  at the terminal to approve prompts.
+  your OS user can touch. Each builder/evaluator child does now run under a watchdog — a per-child
+  wall-clock timeout plus a parent-polled `AGENT_STOP` that kills the whole child tree — so a
+  wedged headless `claude` subtree is contained rather than spawning a runaway; but that is a
+  *liveness/containment* fix, not a security boundary, and does nothing to relax the sandbox-only
+  rule. Prefer `acceptEdits` (the default, no flag needed) whenever a human is at the terminal to
+  approve prompts.
 - **The high-stakes gate only protects paths YOU point it at.** Out of the box,
   `HIGH_STAKES_RE` in `_high-stakes.sh` and `paths:` in `high-stakes.md` are generic
   examples. If you don't edit them to match your real auth/migration/money/delete dirs, a
@@ -90,8 +94,9 @@ prompt) only *asks* a model to comply.
   is outside the window; (2) a forged/narrowed in-session `.phase-base` (a valid later ancestor) can shrink
   that window. Both are acceptable because `/wrap` is **human-supervised**; for **unattended** operation use
   **headless `scripts/autopilot.sh`**, which is the hardened path.
-- **Autopilot is for low-stakes, reversible code only.** Worktree isolation and the kill-switch
-  reduce blast radius; they do not make irreversible actions safe. Set a hard budget cap as the
-  outer backstop.
+- **Autopilot is for low-stakes, reversible code only.** Worktree isolation, the kill-switch (now
+  parent-polled *during* each child run, not just between iterations), and the per-child watchdog
+  timeout reduce blast radius; they do not make irreversible actions safe. Set a hard budget cap as
+  the outer backstop.
 
 In short: the guards here make mistakes *visible and bounded*. Containment is on you.

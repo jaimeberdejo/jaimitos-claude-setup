@@ -11,6 +11,10 @@ Loop until the count target is met OR `docs/ROADMAP.md` has no `- [ ]` items:
 1. **Check controls first, every iteration.** `AGENT_STOP` file → STOP and tell me. No unchecked
    items → STOP (roadmap complete). `NEXT_FINDINGS.md` exists → read and address it before anything
    else. (The steer.sh hook surfaces any `STEER.md` I write mid-run — act on it when it appears.)
+   This in-session loop checks controls *between* iterations; the headless `scripts/autopilot.sh`
+   additionally polls `AGENT_STOP` *during* each builder/evaluator child run and enforces a
+   per-child wall-clock timeout (`AUTOPILOT_CHILD_TIMEOUT`), so a wedged child there can't ignore
+   the stop signal or block the loop forever.
 
 2. **Check the next phase's `Mode:` line BEFORE building it — do not wait for `tick.sh` to catch
    this at the end.** Identify the next phase exactly as `/phase` would (the first phase with

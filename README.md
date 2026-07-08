@@ -190,7 +190,7 @@ Seven deterministic shell hooks plus three shared libs:
 |---|---|---|
 | `session-start.sh` | start/resume/clear/compact | Injects capped state: `STATE`, open roadmap tasks, findings pointer, architecture overview, recent commits. |
 | `steer.sh` | prompt/tool | If `STEER.md` exists, injects it once as additional context and removes it. |
-| `kill-switch.sh` | every tool call | Blocks tools when `AGENT_STOP` exists. |
+| `kill-switch.sh` | every tool call | Blocks tools when `AGENT_STOP` exists (in-session). Headless `scripts/autopilot.sh` also parent-polls `AGENT_STOP` *during* each child run and kills the child tree, so a wedged child can't ignore it. |
 | `format-on-edit.sh` | after edits | Best-effort format-only pass for touched Python/JS/TS files. |
 | `test-gate.sh` | stop | Optional green-suite gate via `LEAN_TEST_GATE=warn|block`; default is off. |
 | `commit-on-stop.sh` | stop | Auto-checkpoint dirty work after a staged secret scan. |
@@ -234,13 +234,18 @@ like the test suite, so a truly unattended run needs this flag to complete even 
 it ONLY in a sandboxed container with no production credentials. The script detects a blocked
 builder deterministically (a missing `.claude/.phase-ready` after it exits) and stops with this
 exact guidance rather than silently burning a grading pass on a phase that was never attempted.
+Each builder/evaluator child now runs under a watchdog (a per-child wall-clock timeout plus a
+parent-polled `AGENT_STOP` that kills the whole child tree), so a wedged headless `claude` subtree
+is contained instead of spawning a runaway — but that is a *liveness* fix, not a *security* one:
+under bypass the child can still run anything your OS user can, which is why sandbox-only stands.
 
 **The guardrails:** verifiable signal · bounded stop · bounded retries (3-strike thrash cap) ·
 blast-radius limit · independent verifier before roadmap ticking · the single `scripts/tick.sh`
-completion gate · evaluator-change cleanup in the headless script · high-stakes gate
-(auth/money/migrations → supervised stop, never auto-ticked) · secret-scan before commit/push ·
-kill-switch · budget cap *(operator-set in your Claude/gateway config — the one guardrail the stack
-can't enforce for you)*.
+completion gate · evaluator-change cleanup in the headless script · per-child watchdog (wall-clock
+timeout + parent-polled `AGENT_STOP`, so a wedged builder/evaluator subtree is contained, not left
+to run away) · high-stakes gate (auth/money/migrations → supervised stop, never auto-ticked) ·
+secret-scan before commit/push · kill-switch · budget cap *(operator-set in your Claude/gateway
+config — the one guardrail the stack can't enforce for you)*.
 
 **One shared completion gate.** All ticking — `/wrap`, `/autopilot`, and `scripts/autopilot.sh` —
 routes through `scripts/tick.sh`. Nothing marks a phase done without it: it requires a recorded
@@ -309,7 +314,10 @@ the **advisory** layer (`CLAUDE.md`, `rules/`, the evaluator prompt) only asks a
   phase base in its OWN trusted shell, overwrites the file before the evaluator, and passes it to
   `tick.sh` (which strict-ancestor-validates it), so a forged `.phase-base` can't shrink the scan window
   to hide a commit. `--dangerously-skip-permissions` still removes the interactive permission boundary
-  entirely: run it **only** in a sandboxed container with no production credentials. We don't claim
+  entirely: run it **only** in a sandboxed container with no production credentials. (The child
+  watchdog — per-child timeout + parent-polled `AGENT_STOP` that kills the child tree — contains a
+  *wedged* subtree so it can't run away, but that's liveness, not security; it doesn't relax
+  sandbox-only.) We don't claim
   protection we don't enforce — a fully-malicious builder with arbitrary shell access can still tamper
   with its own worktree or exfiltrate; the executor's forbidden-writes rule is advisory (a model can
   ignore it), the real protection is the orchestrator's trusted re-derivation + integrity checks.

@@ -5,6 +5,15 @@ assert independence (no shared files, no logical dependency) before running this
 during integration is the closest thing to an after-the-fact safety check, not a guarantee. If you
 are not confident two phases are independent, use `/autopilot N` or `/phase` one at a time instead.
 
+> **⚠ Caution — prefer `/autopilot N` or headless `scripts/autopilot.sh` until this command inherits
+> child containment.** The v2.4.0 per-child watchdog (a wall-clock timeout plus a parent-polled
+> `AGENT_STOP` that kills the whole child tree) lives in `scripts/autopilot.sh`. This command's
+> parallel builds run as in-session worktree **Agent** calls, which do **not** inherit that
+> containment: a spawned build has no `AGENT_STOP` check of its own and can't be killed mid-build
+> cleanly (see **Controls** below). Until parallel builds gain the same watchdog, treat this command
+> as experimental — use it only for small, closely-watched batches, and reach for `/autopilot` or
+> the headless script whenever you need the kill-switch/timeout guarantees.
+
 **Expect a `docs/STATE.md` conflict even between genuinely independent phases — this is normal,
 not a sign the phases actually interfere.** Every `/phase` run rewrites STATE.md's free-text
 narrative line (outside the `<!-- lean:auto:begin -->` markers) to say "Phase N built, awaiting
@@ -93,7 +102,10 @@ whatever order the builds finished in:
 - `AGENT_STOP`: checked once in preflight (before spawning any builds) and again before EACH
   phase's integration step in the Step C loop. It is NOT checked mid-build inside a spawned
   worktree agent — that agent is running its own `/phase`, which has no `AGENT_STOP` check of its
-  own either (same as today). If `AGENT_STOP` appears while builds are in flight, let the in-flight
+  own either (same as today), and it does **not** inherit the headless script's per-child watchdog
+  (wall-clock timeout + parent-polled `AGENT_STOP` that kills the child tree): that containment
+  landed in `scripts/autopilot.sh` only, which is why the caution at the top steers you there when
+  you need those guarantees. If `AGENT_STOP` appears while builds are in flight, let the in-flight
   builds finish (you cannot half-kill a running Agent call cleanly), then stop before Step C's
   integration begins, and report which phases finished building but were never integrated (their
   branches/worktrees are left in place).

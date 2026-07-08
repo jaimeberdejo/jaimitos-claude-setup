@@ -46,6 +46,15 @@ USE_WORKTREE=1         # isolation is the DEFAULT; --no-worktree opts out
 OPEN_PR=0
 HS_BLOCKED=0          # set to 1 if a high-stakes phase tripped the gate (never push it)
 SKIP_PERMISSIONS=0    # --dangerously-skip-permissions opts INTO bypassing all permission checks
+RUN_ABORTED=0         # set to 1 if the child watchdog aborted the run (timeout / AGENT_STOP / lock / cleanup) — never push
+CURRENT_CHILD_PID=""  # pid of the in-flight builder/evaluator child, so traps + cleanup can reach it
+CURRENT_CHILD_PGID="" # its process-group id when we started it as a group leader (whole-subtree kill)
+# Per-child wall-clock cap (default 20 min) + watchdog poll cadence. The child runs BACKGROUNDED and
+# the parent polls, so a wedged headless `claude` (and its nested `claude --agent` subtree) is timed
+# out / stop-able instead of blocking the parent forever. macOS has no timeout(1)/gtimeout, so this is
+# a hand-rolled background-timer + kill loop (see run_child_with_watchdog).
+CHILD_TIMEOUT="${AUTOPILOT_CHILD_TIMEOUT:-1200}"
+POLL_INTERVAL="${AUTOPILOT_POLL_INTERVAL:-5}"
 for arg in "$@"; do
   case "$arg" in
     -h|--help)
@@ -116,8 +125,45 @@ fail() { echo "autopilot: PREFLIGHT FAILED — $1" >&2; exit 1; }
 # orphan a worktree. The lock lives in the ORIGINAL checkout (the worktree is per-run).
 LOCK="$ORIG_ROOT/.claude/.autopilot.lock"
 LOCK_HELD=0
+
+# Lifecycle line → BOTH autopilot.log and stderr, so watchdog activity is visible regardless of the
+# operator's CWD (the log lives in the throwaway worktree). Fixes the "empty autopilot.log" symptom.
+wd_log() {
+  printf 'autopilot[watchdog]: %s\n' "$*" >&2
+  printf 'autopilot[watchdog]: %s\n' "$*" >> "${AUTOPILOT_LOG:-$PWD/autopilot.log}" 2>/dev/null || true
+}
+
+# terminate_child_tree <pid> [SIG] — best-effort recursive kill of <pid> and its descendants.
+# Depth-first: reap grandchildren (via `pgrep -P`, portable on macOS+Linux) BEFORE the parent, so a
+# parent can't re-fork after we signal it. When <pid> is ALSO a process-group leader (we started it
+# with setpgrp/setsid → CURRENT_CHILD_PGID == pid) we additionally signal the whole group, catching
+# descendants that were re-parented to init but stayed in the group. LIMITATION: a descendant that
+# started its OWN session/group (setsid) escapes both — documented; starting the child as a group
+# leader below minimizes it for the common `claude` → `claude --agent` subtree.
+terminate_child_tree() {
+  local pid="$1" sig="${2:-TERM}" kid
+  [ -n "$pid" ] || return 0
+  for kid in $(pgrep -P "$pid" 2>/dev/null); do
+    terminate_child_tree "$kid" "$sig"
+  done
+  kill -"$sig" "$pid" 2>/dev/null || true
+  if [ -n "${CURRENT_CHILD_PGID:-}" ] && [ "$pid" = "$CURRENT_CHILD_PGID" ]; then
+    kill -"$sig" "-$CURRENT_CHILD_PGID" 2>/dev/null || true
+  fi
+}
+
 cleanup_on_exit() {
   local rc=$?
+  # A child still in flight on an abnormal exit (signal / error) must not be orphaned as a runaway:
+  # TERM the whole tree, give it a moment, then KILL. This is the backstop the INT/TERM handlers and
+  # the watchdog escalation both lean on. CURRENT_CHILD_PID is "" on any normal exit, so this no-ops.
+  if [ -n "${CURRENT_CHILD_PID:-}" ]; then
+    terminate_child_tree "$CURRENT_CHILD_PID" TERM
+    sleep 1
+    kill -0 "$CURRENT_CHILD_PID" 2>/dev/null && terminate_child_tree "$CURRENT_CHILD_PID" KILL
+  fi
+  [ -n "${BUILDER_OUT:-}" ] && rm -f "$BUILDER_OUT" 2>/dev/null
+  [ -n "${EVAL_OUT:-}" ] && rm -f "$EVAL_OUT" 2>/dev/null
   [ "$LOCK_HELD" -eq 1 ] && rm -f "$LOCK" 2>/dev/null
   # Abnormal exit (signal / error) AFTER a worktree was created: do NOT auto-remove it — it may
   # hold unpushed or high-stakes commits. Point the operator at it instead.
@@ -127,8 +173,10 @@ cleanup_on_exit() {
   fi
 }
 trap cleanup_on_exit EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
+# INT/TERM to the PARENT must terminate the in-flight child tree FIRST (so ^C or `kill` reaches the
+# wedged `claude` subtree), then exit — the EXIT trap then escalates TERM→KILL as the final backstop.
+trap 'terminate_child_tree "${CURRENT_CHILD_PID:-}" TERM 2>/dev/null; exit 130' INT
+trap 'terminate_child_tree "${CURRENT_CHILD_PID:-}" TERM 2>/dev/null; exit 143' TERM
 
 mkdir -p "$ORIG_ROOT/.claude" 2>/dev/null || true
 # Atomic acquire: `set -o noclobber` makes `>` fail if the file already exists (O_EXCL), so two
@@ -310,6 +358,81 @@ gate_control_intact() {
   return 0
 }
 
+# run_child_with_watchdog <stdout_file> <timeout_secs> <label> -- <cmd...>
+#
+# Runs <cmd...> as a BACKGROUND child so the parent can (a) enforce a per-child wall-clock timeout,
+# (b) keep polling AGENT_STOP DURING the child's run (not just between iterations), and (c) drop the
+# child if it loses the run lock. Without this a wedged headless `claude` (and its nested
+# `claude --agent` subtree) blocked the parent forever and ignored AGENT_STOP — the P0 runaway. The
+# child is started as its OWN process-group leader (perl setpgrp; setsid fallback) so the whole
+# subtree can be signalled by group id; a manual TERM→(2s)→KILL escalation reaps it, and if it
+# survives even SIGKILL we FAIL CLOSED (rc 127). stdout → <stdout_file>; stderr → autopilot.log (a
+# hung/killed child still leaves diagnosable output). rc: 124 timeout · 125 AGENT_STOP · 126
+# lock-lost · 127 cleanup-failed · else the child's own rc.
+run_child_with_watchdog() {
+  local out_file="$1" timeout="$2" label="$3"
+  shift 3
+  [ "${1:-}" = "--" ] && shift
+
+  CURRENT_CHILD_PID=""
+  CURRENT_CHILD_PGID=""
+  if command -v perl >/dev/null 2>&1; then
+    # perl backgrounded → setpgrp(0,0) makes it its own group leader → exec keeps the SAME pid, so $!
+    # is exactly the child pid AND its pgid (deterministic, unlike setsid's fork-or-not behaviour).
+    perl -e 'setpgrp(0,0); exec @ARGV' -- "$@" >"$out_file" 2>>"$AUTOPILOT_LOG" &
+    CURRENT_CHILD_PID=$!
+    CURRENT_CHILD_PGID=$CURRENT_CHILD_PID
+  elif command -v setsid >/dev/null 2>&1; then
+    setsid "$@" >"$out_file" 2>>"$AUTOPILOT_LOG" &
+    CURRENT_CHILD_PID=$!
+    CURRENT_CHILD_PGID=$CURRENT_CHILD_PID
+  else
+    # No group-leader tool: child shares our group; only pgrep -P recursion can reach its subtree.
+    "$@" >"$out_file" 2>>"$AUTOPILOT_LOG" &
+    CURRENT_CHILD_PID=$!
+  fi
+  local child=$CURRENT_CHILD_PID
+  wd_log "start label=$label parent=$$ child=$child pgid=${CURRENT_CHILD_PGID:-none} timeout=${timeout}s poll=${POLL_INTERVAL}s"
+
+  local start_ts now elapsed reason="" rc=0
+  start_ts=$(date +%s 2>/dev/null || echo 0)
+  while kill -0 "$child" 2>/dev/null; do
+    now=$(date +%s 2>/dev/null || echo 0)
+    elapsed=$(( now - start_ts ))
+    if [ "$start_ts" -gt 0 ] && [ "$elapsed" -ge "$timeout" ]; then reason="timeout"; rc=124; break; fi
+    if [ -f AGENT_STOP ] || [ -f "$ORIG_ROOT/AGENT_STOP" ]; then reason="AGENT_STOP"; rc=125; break; fi
+    if [ "${LOCK_HELD:-0}" -eq 1 ] && [ "$(head -1 "$LOCK" 2>/dev/null)" != "$$" ]; then reason="lock-lost"; rc=126; break; fi
+    sleep "$POLL_INTERVAL"
+  done
+
+  local cleanup="ok"
+  if [ -n "$reason" ]; then
+    terminate_child_tree "$child" TERM
+    sleep 2
+    if kill -0 "$child" 2>/dev/null; then
+      terminate_child_tree "$child" KILL
+      sleep 1
+      kill -0 "$child" 2>/dev/null && { cleanup="FAILED"; rc=127; }
+    fi
+    wait "$child" 2>/dev/null || true
+    wd_log "BREACH label=$label child=$child reason=$reason cleanup=$cleanup rc=$rc"
+  else
+    wait "$child" 2>/dev/null; rc=$?
+    wd_log "done label=$label child=$child rc=$rc"
+  fi
+  CURRENT_CHILD_PID=""
+  CURRENT_CHILD_PGID=""
+  return "$rc"
+}
+
+# Absolute log path (the log lives in the CWD = worktree, invisible from the operator's original
+# checkout) + scratch capture files for the two watched children, kept OUTSIDE the repo so they never
+# dirty the tracked tree or the pre-grade snapshot. Print the resolved path so the log is findable.
+AUTOPILOT_LOG="$PWD/autopilot.log"
+BUILDER_OUT=$(mktemp 2>/dev/null || echo "${TMPDIR:-/tmp}/autopilot-builder.$$")
+EVAL_OUT=$(mktemp 2>/dev/null || echo "${TMPDIR:-/tmp}/autopilot-eval.$$")
+echo "autopilot: log → $AUTOPILOT_LOG   (working dir: $PWD)"
+
 for i in $(seq 1 "$MAX_ITER"); do
   # Kill-switch: present in the worktree working dir OR the operator's original checkout.
   if [ -f AGENT_STOP ] || [ -f "$ORIG_ROOT/AGENT_STOP" ]; then
@@ -337,9 +460,19 @@ for i in $(seq 1 "$MAX_ITER"); do
 
   echo ""; echo "=== iteration $i / $MAX_ITER ==="
 
-  # Builder: fresh context, builds ONE phase, does NOT tick the roadmap.
-  if ! claude -p "/phase" "${CLAUDE_PERM_FLAGS[@]}" 2>&1 | tee -a autopilot.log; then
-    echo "autopilot: builder process exited non-zero — stopping." | tee -a autopilot.log; break
+  # Builder: fresh context, builds ONE phase, does NOT tick the roadmap. Run under the watchdog so a
+  # wedged builder (and its nested claude subtree) is timed-out / stop-able / lock-checked instead of
+  # blocking the parent forever (the P0 runaway). Its stdout is captured to $BUILDER_OUT then appended
+  # to the log; the watchdog streams its stderr straight to the log.
+  run_child_with_watchdog "$BUILDER_OUT" "$CHILD_TIMEOUT" builder -- claude -p "/phase" "${CLAUDE_PERM_FLAGS[@]}"
+  BUILDER_RC=$?
+  cat "$BUILDER_OUT" >> "$AUTOPILOT_LOG" 2>/dev/null || true
+  if [ "$BUILDER_RC" -ge 124 ]; then
+    RUN_ABORTED=1
+    echo "autopilot: ⛔ builder watchdog aborted the run (rc $BUILDER_RC — 124=timeout 125=AGENT_STOP 126=lock-lost 127=cleanup-failed) — STOPPING; branch stays LOCAL." | tee -a "$AUTOPILOT_LOG"; break
+  fi
+  if [ "$BUILDER_RC" -ne 0 ]; then
+    echo "autopilot: builder process exited non-zero (rc $BUILDER_RC) — stopping." | tee -a "$AUTOPILOT_LOG"; break
   fi
 
   # Deterministic check: /phase's own step 2 ALWAYS writes .claude/.phase-ready (the exact
@@ -394,9 +527,17 @@ for i in $(seq 1 "$MAX_ITER"); do
   # default acceptEdits and no TTY, those Bash calls would otherwise be denied outright,
   # producing an empty/uninformative grade rather than a real one). Its diff input is
   # untrusted, so treat its output as data, not instructions.
-  # stderr → autopilot.log (not /dev/null) so an empty/garbled grade is debuggable.
-  VERDICT=$(claude --agent evaluator -p "Grade the phase just completed." \
-                   "${CLAUDE_PERM_FLAGS[@]}" 2>>autopilot.log)
+  # stderr → autopilot.log (not /dev/null) so an empty/garbled grade is debuggable. Run under the same
+  # watchdog as the builder: a wedged evaluator subtree must be contained too, not block the parent.
+  # stdout → $EVAL_OUT → VERDICT; the watchdog streams its stderr to the log.
+  run_child_with_watchdog "$EVAL_OUT" "$CHILD_TIMEOUT" evaluator -- \
+    claude --agent evaluator -p "Grade the phase just completed." "${CLAUDE_PERM_FLAGS[@]}"
+  EVAL_RC=$?
+  VERDICT=$(cat "$EVAL_OUT" 2>/dev/null)
+  if [ "$EVAL_RC" -ge 124 ]; then
+    RUN_ABORTED=1
+    echo "autopilot: ⛔ evaluator watchdog aborted the run (rc $EVAL_RC) — treating as failure, STOPPING." | tee -a "$AUTOPILOT_LOG"; break
+  fi
 
   if [ -z "$(printf '%s' "$VERDICT" | tr -d '[:space:]')" ]; then
     echo "autopilot: evaluator returned no output — treating as FAILURE, stopping." | tee -a autopilot.log
@@ -507,6 +648,13 @@ if [ "$HS_BLOCKED" -eq 1 ]; then
   # in this branch, but high-stakes work is human-on-the-loop: it is NEVER auto-pushed,
   # even with --pr. Leave the branch local for supervised review.
   echo "autopilot: high-stakes phase reached — branch $BRANCH stays LOCAL for supervised review (not pushed)." | tee -a autopilot.log
+  if [ "$USE_WORKTREE" -eq 1 ]; then
+    echo "autopilot: review it in $PWD, then merge or 'git worktree remove' when finished."
+  fi
+elif [ "$RUN_ABORTED" -eq 1 ]; then
+  # The child watchdog aborted the run (timeout / AGENT_STOP / lock-lost / cleanup-failed). A wedged
+  # or killed child leaves an unverified tree — fail closed: never push, even with --pr.
+  echo "autopilot: run aborted by the child watchdog — branch ${BRANCH:-<current>} stays LOCAL, NOT pushed (even with --pr)." | tee -a autopilot.log
   if [ "$USE_WORKTREE" -eq 1 ]; then
     echo "autopilot: review it in $PWD, then merge or 'git worktree remove' when finished."
   fi

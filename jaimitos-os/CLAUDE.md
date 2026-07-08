@@ -46,7 +46,11 @@
 - `/phase`'s four stages (research/plan/execute/verify) each run as their own subagent; pin any
   of them to a specific model via `/models` (or `scripts/models.sh`) — set once, applies until changed.
 - `touch AGENT_STOP` halts the loop at the next tool call (it can't claw back a call already
-  in flight). Write STEER.md to redirect a running loop.
+  in flight). Under headless `scripts/autopilot.sh` the parent also polls `AGENT_STOP` *during*
+  each builder/evaluator child run and kills the child process tree — so a wedged child can't
+  ignore it (it used to be checked only between iterations). Each child also has a wall-clock
+  watchdog timeout (`AUTOPILOT_CHILD_TIMEOUT`, default 20 min). Write STEER.md to redirect a
+  running loop.
 - **Closing a milestone (`close-milestone.sh`) and bumping `VERSION`/tagging are their own
   checkpoint, separate from ticking a phase.** Never infer authorization for them from a
   broader "go ahead" / "resume" / "continue" reply to an unrelated question — even when the

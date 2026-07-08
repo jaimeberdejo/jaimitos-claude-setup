@@ -59,6 +59,23 @@ if [ "$is_eval" = 1 ]; then
   esac
   exit 0
 fi
+# Emit a stdout marker so the watchdog's stdout-capture (→ autopilot.log) is observably non-empty
+# (empty-log regression guard) and every builder invocation is greppable in the log.
+echo "builder-stub: BUILDER_MODE=${BUILDER_MODE:-highstakes} pid=$$"
+# Watchdog fixtures (v2.4.0): a builder that never returns (hang) or that spawns a child then blocks
+# (spawn_hang). pids are recorded OUTSIDE the repo so the test can assert the WHOLE tree was reaped.
+# `sleep 120` (not "infinite") self-terminates if a bug ever orphaned it — the watchdog kills it long
+# before then (short AUTOPILOT_CHILD_TIMEOUT); it must outlive the timeout+escalation grace, not the test.
+if [ "${BUILDER_MODE:-}" = "hang" ]; then
+  echo "$$" > "${WD_CHILD_PIDFILE:-/dev/null}"
+  exec sleep 120
+fi
+if [ "${BUILDER_MODE:-}" = "spawn_hang" ]; then
+  sleep 120 &
+  echo "$!" > "${WD_GRANDCHILD_PIDFILE:-/dev/null}"
+  echo "$$" > "${WD_CHILD_PIDFILE:-/dev/null}"
+  wait
+fi
 # Builder: record refs like /phase does, then write+commit per BUILDER_MODE.
 # BUILDER_MODE=blocked simulates a builder that exits 0 (the process itself didn't
 # crash) but was blocked from writing its phase markers or committing — the exact
@@ -138,8 +155,15 @@ GI
 # LEAN_TEST_CMD=true gives test-evidence.sh a green suite (stub repos have no real tests),
 # so the tick gate's fresh-green-evidence requirement is satisfied for the control-flow tests.
 # The evidence gate's own refuse paths (red/stale/missing/null) are covered in test-tick.sh.
-run() { local r="$1"; shift; ( cd "$r" && PATH="$BIN:$PATH" LEAN_TEST_CMD=true bash scripts/autopilot.sh "$@" ) >"$WORK/out" 2>&1; echo $?; }
+# A short default poll cadence keeps the watchdog responsive without each test eating a full 5s
+# production interval; an already-exported AUTOPILOT_POLL_INTERVAL (or _CHILD_TIMEOUT) wins.
+run() { local r="$1"; shift; ( cd "$r" && PATH="$BIN:$PATH" LEAN_TEST_CMD=true AUTOPILOT_POLL_INTERVAL="${AUTOPILOT_POLL_INTERVAL:-0.2}" bash scripts/autopilot.sh "$@" ) >"$WORK/out" 2>&1; echo $?; }
+# run_bg <repo> <flags...>: start autopilot BACKGROUNDED with the stubs (exported env inherited); sets
+# AP_PID to autopilot's own bash pid (via exec) so the caller can signal it, then `wait "$AP_PID"`.
+run_bg() { local r="$1"; shift; ( cd "$r" && exec env PATH="$BIN:$PATH" LEAN_TEST_CMD=true AUTOPILOT_POLL_INTERVAL="${AUTOPILOT_POLL_INTERVAL:-0.2}" bash scripts/autopilot.sh "$@" ) >"$WORK/out" 2>&1 & AP_PID=$!; }
 ticked()   { ! grep -q '\- \[ \] do the work' "$1/docs/ROADMAP.md"; }   # 0 if ticked
+# 0 if the pid recorded in <file> is gone (killed/reaped). Fail-closed: an empty file reads as alive.
+pid_dead() { local p; p=$(cat "$1" 2>/dev/null || echo ""); [ -n "$p" ] && ! kill -0 "$p" 2>/dev/null; }
 # Pipe-free substring test. NEVER use `cmd | grep -q` under `set -o pipefail`: grep -q
 # closes the pipe on first match, cmd dies with SIGPIPE, and pipefail reports failure
 # even though the match succeeded — a real intermittent flake.
@@ -334,6 +358,87 @@ done
 [ -n "$GCF_AG" ] && [ -z "$missing_ag" ] \
   && pass "gate-control list covers all four staged agent prompts" \
   || fail "gate-control list MISSING agent prompt(s):$missing_ag"
+
+echo ""
+echo "P0 watchdog containment tests (v2.4.0)"; echo ""
+# run_child_with_watchdog must contain a wedged/child-spawning/stop-signalled builder — timed out,
+# tree-killed, AGENT_STOP honoured DURING the run (not just between iterations), and never pushed on
+# abort — instead of blocking the parent forever (the headless ~9–13-process runaway). Short
+# AUTOPILOT_CHILD_TIMEOUT keeps them fast; the fake `claude` hang/spawn_hang modes record child pids.
+
+# 21 — normal exit: a clean builder+evaluator run STILL proceeds under the watchdog (happy path) and
+#      the watchdog logs its start/done lifecycle lines to autopilot.log.
+mkrepo r21; BUILDER_MODE=clean EVAL_MODE=pass; export BUILDER_MODE EVAL_MODE; run "$REPO" 1 --no-worktree --allow-dirty >/dev/null
+ticked "$REPO" && pass "watchdog normal exit → phase still ticks (happy path intact)" || fail "watchdog broke the happy path (not ticked)"
+{ grep -q "autopilot\[watchdog\]: start label=builder" "$REPO/autopilot.log" && grep -q "autopilot\[watchdog\]: done label=builder" "$REPO/autopilot.log"; } \
+  && pass "watchdog logs builder start/done lifecycle lines" || fail "watchdog lifecycle lines missing from autopilot.log"
+
+# 22 — infinite-sleep builder → the watchdog TIMES OUT, kills it, sets RUN_ABORTED, and never ticks
+#      (no grading pass on a phase that never finished).
+mkrepo r22; rm -f "$WORK/pid22"; export BUILDER_MODE=hang EVAL_MODE=pass WD_CHILD_PIDFILE="$WORK/pid22" AUTOPILOT_CHILD_TIMEOUT=2
+run "$REPO" 1 --no-worktree --allow-dirty >/dev/null
+unset WD_CHILD_PIDFILE AUTOPILOT_CHILD_TIMEOUT
+grep -q "watchdog aborted the run" "$WORK/out" && pass "hang builder → watchdog aborts (timeout)" || fail "hang builder not aborted"
+pid_dead "$WORK/pid22" && pass "hang builder process reaped (killed)" || fail "hang builder still alive after timeout"
+ticked "$REPO" && fail "hang builder → phase ticked (must not)" || pass "hang builder → phase not ticked"
+
+# 23 — builder that SPAWNS a child then blocks: the WHOLE subtree is reaped (depth-first pgrep kill +
+#      process-group kill), not just the parent — the runaway left ~9–13 orphaned claude children.
+#      LIMITATION: a grandchild that started its own session (setsid) could still escape; depth-first
+#      kill (grandchild before parent) avoids the re-parent race for the common claude subtree.
+mkrepo r23; rm -f "$WORK/pid23" "$WORK/gpid23"
+export BUILDER_MODE=spawn_hang EVAL_MODE=pass WD_CHILD_PIDFILE="$WORK/pid23" WD_GRANDCHILD_PIDFILE="$WORK/gpid23" AUTOPILOT_CHILD_TIMEOUT=2
+run "$REPO" 1 --no-worktree --allow-dirty >/dev/null
+unset WD_CHILD_PIDFILE WD_GRANDCHILD_PIDFILE AUTOPILOT_CHILD_TIMEOUT
+pid_dead "$WORK/pid23"  && pass "spawn_hang: parent child reaped" || fail "spawn_hang: parent child survived"
+pid_dead "$WORK/gpid23" && pass "spawn_hang: GRANDCHILD reaped (whole subtree killed)" || fail "spawn_hang: grandchild orphaned (tree not killed)"
+ticked "$REPO" && fail "spawn_hang → phase ticked" || pass "spawn_hang → phase not ticked"
+
+# 24 — AGENT_STOP created DURING a child run (not at an iteration boundary) → the parent's watchdog
+#      poll sees it and kills the child WITHOUT needing a tool hook. Backgrounded so we can drop
+#      AGENT_STOP mid-run; a long timeout guarantees this is the STOP path, not a timeout.
+mkrepo r24; rm -f "$WORK/pid24"; export BUILDER_MODE=hang EVAL_MODE=pass WD_CHILD_PIDFILE="$WORK/pid24" AUTOPILOT_CHILD_TIMEOUT=30
+run_bg "$REPO" 1 --no-worktree --allow-dirty
+n=0; while [ ! -s "$WORK/pid24" ] && [ "$n" -lt 100 ]; do sleep 0.1; n=$((n+1)); done
+touch "$REPO/AGENT_STOP"
+wait "$AP_PID" 2>/dev/null || true
+unset WD_CHILD_PIDFILE AUTOPILOT_CHILD_TIMEOUT
+grep -q "reason=AGENT_STOP" "$WORK/out" && pass "AGENT_STOP mid-run → watchdog stop reason logged" || fail "AGENT_STOP mid-run not detected by watchdog"
+pid_dead "$WORK/pid24" && pass "AGENT_STOP mid-run → child killed (no tool-hook needed)" || fail "AGENT_STOP mid-run left the child alive"
+ticked "$REPO" && fail "AGENT_STOP mid-run → phase ticked" || pass "AGENT_STOP mid-run → phase not ticked"
+
+# 25 — SIGTERM to the PARENT during a child run → the TERM handler terminates the child tree first,
+#      leaving no orphan (the runaway ignored TERM to the parent).
+mkrepo r25; rm -f "$WORK/pid25"; export BUILDER_MODE=hang EVAL_MODE=pass WD_CHILD_PIDFILE="$WORK/pid25" AUTOPILOT_CHILD_TIMEOUT=30
+run_bg "$REPO" 1 --no-worktree --allow-dirty
+n=0; while [ ! -s "$WORK/pid25" ] && [ "$n" -lt 100 ]; do sleep 0.1; n=$((n+1)); done
+kill -TERM "$AP_PID" 2>/dev/null
+wait "$AP_PID" 2>/dev/null || true
+unset WD_CHILD_PIDFILE AUTOPILOT_CHILD_TIMEOUT
+pid_dead "$WORK/pid25" && pass "SIGTERM to parent → child tree terminated (no orphan)" || fail "SIGTERM to parent left an orphaned child"
+
+# 26 — concurrent invocation refused by the existing PID lock (containment must not regress it).
+mkrepo r26; mkdir -p "$REPO/.claude"; echo "$$" > "$REPO/.claude/.autopilot.lock"
+BUILDER_MODE=clean EVAL_MODE=pass; export BUILDER_MODE EVAL_MODE; rc=$(run "$REPO" 1 --no-worktree --allow-dirty)
+{ [ "$rc" = 1 ] && grep -q "another autopilot run is active" "$WORK/out" && ! ticked "$REPO"; } \
+  && pass "concurrent run refused by the lock (no second autopilot)" || fail "concurrency lock regressed (rc=$rc)"
+
+# 27 — RUN_ABORTED (watchdog breach) must PREVENT both tick and push: a hang builder with --pr must not
+#      reach the tick gate and must not push / open a PR. NOTE: rc=127 (survives SIGKILL) can't be
+#      reproduced with a real killable process; a timeout breach (rc 124, same RUN_ABORTED no-push
+#      path) exercises the identical fail-closed guard.
+mkrepo r27; rm -f "$WORK/pid27"; export BUILDER_MODE=hang EVAL_MODE=pass WD_CHILD_PIDFILE="$WORK/pid27" AUTOPILOT_CHILD_TIMEOUT=2
+run "$REPO" 1 --pr >/dev/null
+unset WD_CHILD_PIDFILE AUTOPILOT_CHILD_TIMEOUT
+grep -q "stays LOCAL, NOT pushed" "$WORK/out" && pass "watchdog abort → branch stays local (no push)" || fail "watchdog abort did not block push"
+grep -qE "pushing .* and opening a PR|STUB-GH-INVOKED" "$WORK/out" && fail "watchdog abort → PUSH/PR entered (P0)" || pass "watchdog abort → no push / no PR"
+ticked "$REPO" && fail "watchdog abort → phase ticked" || pass "watchdog abort → phase not ticked"
+
+# 28 — empty-log regression: the child's stdout is captured and appended to autopilot.log, so a run
+#      that produced output leaves a NON-EMPTY, diagnosable log (the runaway left autopilot.log empty).
+mkrepo r28; BUILDER_MODE=clean EVAL_MODE=pass; export BUILDER_MODE EVAL_MODE; run "$REPO" 1 --no-worktree --allow-dirty >/dev/null
+{ [ -s "$REPO/autopilot.log" ] && grep -q "builder-stub:" "$REPO/autopilot.log"; } \
+  && pass "autopilot.log non-empty and captures the child's stdout (empty-log fix)" || fail "autopilot.log empty or missing child output"
 
 echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All autopilot gate tests passed."; exit 0
