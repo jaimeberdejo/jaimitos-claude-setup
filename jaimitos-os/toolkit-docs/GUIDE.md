@@ -42,6 +42,9 @@ your-repo/
 │   ├── FAILURES.md                # archived NEEDS_WORK history (written on resolution)
 │   ├── plans/                     # per-phase plans /phase writes (research notes + tasks)
 │   └── decisions/                 # ADRs, one terse file each
+├── sandbox/
+│   ├── Dockerfile.autopilot       # minimal no-credentials container for unattended runs
+│   └── run-autopilot-sandboxed.sh # THE supported unattended path (repo-only mount, key-only env)
 ├── scripts/
 │   ├── autopilot.sh               # fresh-context HEADLESS loop w/ guardrails (overnight)
 │   ├── tick.sh                    # THE completion gate — the only thing that flips - [ ] → - [x]
@@ -53,7 +56,8 @@ your-repo/
 │   ├── run-guard-tests.sh         # the single behavioral-test list both CI workflows call
 │   └── test-*.sh                  # behavioral guard tests (tick, secret-scan, high-stakes, models, hooks, …)
 └── .claude/
-    ├── settings.json              # wires hooks → events + permissions.deny (secret reads/exfil)
+    ├── .jaimitos-manifest         # sha256 of every toolkit-owned file as shipped (sync.sh's primitive)
+    ├── settings.json              # wires hooks → events + permissions.deny (secret reads)
     ├── commands/
     │   ├── resume.md              # /resume    — orient at session start
     │   ├── wrap.md                # /wrap      — close out + tick via the gate + update docs
@@ -82,11 +86,12 @@ your-repo/
     │   ├── _secret-scan.sh        # SHARED: filename+content secret scan (commit-on-stop + tick + autopilot)
     │   ├── _high-stakes.sh        # SHARED: high-stakes path list + content matcher (the supervised gate)
     │   └── _test-cmd.sh           # SHARED: resolves the project test command (test-gate + test-evidence)
-    └── skills/                    # 10 workflow/ownership skills (see skills/README.md; NOT copied here:
+    └── skills/                    # 17 per-project skills (see skills/README.md; NOT copied here:
                                     #   setup-jaimitos-os is the global-only installer meta-skill)
-        ├── roadmap/ · milestone/ · adr/                              # planning
-        ├── ship-check/ · scope-guard/ · explain-diff/ · unstick/     # review + debugging (report-only x3)
-        └── teach-back/ · mapme/ · quizme/                            # ownership
+        ├── grill/ · to-spec/ · roadmap/ · milestone/ · adr/ · glossary/   # think → spec → plan
+        ├── design-twice/ · tdd/ · diagnose/ · merge-conflicts/            # engineering
+        ├── ship-check/ · scope-guard/ · explain-diff/ · unstick/          # review + debugging (report-only x3)
+        └── teach-back/ · mapme/ · quizme/                                 # ownership
 ```
 
 > **Canonical source:** the repo-root `README.md` is the master map; this GUIDE is the single
@@ -210,9 +215,11 @@ Then:
    expected pre-SPEC, not a problem (an empty folder has no real stack or sensitive dirs to point
    at yet — `doctor.sh` warns, it doesn't fail). Then
    `git add -A && git commit -m "chore: scaffold jaimitos-os"`.
-2. **Think → SPEC.** Plan mode: `"grill me on <the idea>"` (or `/grill-me` — see [Part 11](#part-11--synergy-with-external-skills)),
-   then `"write that to docs/SPEC.md"` with a **measurable** success criterion. This is where the
-   real stack gets decided (the SPEC's Constraints section).
+2. **Think → SPEC.** `"grill me on <the idea>"` fires the bundled `grill` skill — a relentless
+   one-question-per-turn interview, each question carrying its own recommendation — and when the
+   answers converge, `"to spec"` (the `to-spec` skill) freezes them into `docs/SPEC.md` with a
+   **measurable** success criterion and confirmed test seams. This is where the real stack gets
+   decided (the SPEC's Constraints section).
 3. **SPEC → ROADMAP (auto-fills CLAUDE.md too).** Run the `roadmap` skill
    (`"turn the spec into a roadmap"`). Before writing `docs/ROADMAP.md`, it checks `CLAUDE.md` for
    left-over placeholders and fills the test/lint/run commands from the SPEC you just wrote — no
@@ -1020,47 +1027,51 @@ packs slot in. Two ground rules keep them from fighting the stack:
   **never as a competing loop.** Every skill should answer one question: *am I a step, or a spine?*
   Steps compose; a second spine collides.
 
-### grill-me / grill-with-docs (mattpocock/skills)
-`npx skills@latest add mattpocock/skills`. `/grill-me` interrogates a plan until every branch of the
-decision tree is resolved; `/grill-with-docs` does the same **and** builds a domain model + updates docs.
-
-**Where it fits:** *upstream of the `roadmap` skill.* The roadmap skill refuses a spec without a
-measurable success criterion — grilling is what manufactures that criterion. The full new-project
-pipeline, with grill-me as the thinking stage:
+### The skills pack and the pipeline (since v2.5.0 the "grill" stage is bundled)
+Seven skills adapted from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT) now ship
+WITH the toolkit — `grill`, `to-spec`, `glossary`, `design-twice`, `tdd`, `diagnose`,
+`merge-conflicts` — rewritten docs-centric (no external tracker, artifacts under `docs/`, ADRs in
+the 4-line `docs/decisions/` format). You no longer install a separate pack for the thinking
+stage. How they wire into the spine:
 
 ```
-  install                setup-jaimitos-os skill (or install.sh)
+  GRILL      grill skill        ← one question per turn, each with a recommendation,
+     ↓                            until the goal + the ONE measurable metric + non-goals are crisp
+  SPEC       to-spec skill      → docs/SPEC.md  (what/why · MEASURABLE criterion · non-goals ·
+     ↓                            constraints · CONFIRMED test seams)
+  ROADMAP    roadmap skill      → docs/ROADMAP.md  (ordered phases: Done when + Mode;
+     ↓                            fills CLAUDE.md's commands from the SPEC)
+  BUILD      /phase ×N          planner applies design-twice on non-trivial phases
+     │                            ("Alternative considered:" → feeds the adr skill);
+     │                          executor follows the tdd skill (pre-agreed seams from SPEC/plan);
+     │                          evaluator grades against the SAME tdd anti-pattern list
      ↓
-  GRILL   ── plan mode ──  /grill-me      ← interrogate until the goal + the ONE measurable
-                           (or "grill me on <idea>")   success metric + non-goals are crisp
-     ↓
-  SPEC                     write docs/SPEC.md   (what/why · MEASURABLE criterion · non-goals · constraints)
-     ↓
-  ROADMAP                  roadmap skill  →  docs/ROADMAP.md   (ordered phases: Done when + Mode;
-                           also fills CLAUDE.md's commands from the SPEC, reminds re: HIGH_STAKES_RE)
-     ↓
-  BUILD                    /phase → review → teach-back → /wrap → /clear   ×N   →   ship
+  STUCK?     diagnose           ← a bug to reproduce (build the red-capable loop first)
+             unstick            ← 3+ attempts circling one assumption (reset the approach)
+  MERGE      merge-conflicts    ← /autopilot-parallel integration, or any stopped merge/rebase
+  VOCAB      glossary           → docs/GLOSSARY.md, injected (capped) every session start
 ```
 
 The `roadmap` step is the gate that makes grilling non-optional: a vague spec yields unverifiable
-phases, and unverifiable phases are exactly what the evaluator and the `tick.sh` gate can't pass. So
-grilling *manufactures the verifiable signal the whole autonomy chain runs on* — garbage-in at GRILL
-means phases your loop can never grade. `/grill-me` is the rigorous, install-once upgrade of the
-built-in `"grill me on <idea>"` prompt pattern ([Part 8, case 6](#6-start-a-brand-new-project-from-scratch)).
+phases, and unverifiable phases are exactly what the evaluator and the `tick.sh` gate can't pass.
+Grilling *manufactures the verifiable signal the whole autonomy chain runs on*.
 
-- **New milestone (same spine, one level up):** `milestone skill archives the done roadmap → /grill-me
-  the next batch → SPEC → roadmap`. Whether it's project zero or milestone five, it's `think → spec → roadmap`.
-- **Watch for:** aim `/grill-with-docs` at `docs/SPEC.md` / `docs/ARCHITECTURE.md` so it feeds the
-  source-of-truth layout instead of a parallel one (it overlaps the stack's own `mapme`).
+- **New milestone (same spine, one level up):** the `milestone` skill archives the done roadmap →
+  `grill` the next batch → `to-spec` → `roadmap`. Whether it's project zero or milestone five,
+  it's `think → spec → roadmap`.
+- **Still want Matt's originals** (`grill-with-docs`, the tracker-centric flow)?
+  `npx skills@latest add mattpocock/skills` works alongside — just aim its doc-writing at
+  `docs/SPEC.md`/`docs/ARCHITECTURE.md` so it feeds the source-of-truth layout, and keep this
+  stack's loop as the only spine.
 
 ### superpowers (the discipline pack)
 A broad pack of process skills. Map each to a stage of the loop rather than adopting it wholesale:
 
 | superpowers skill | Where it slots into jaimitos-os |
 |---|---|
-| `brainstorming` | Before the spec — same slot as grill-me; explore intent before `roadmap`. |
-| `test-driven-development` | Reinforces the stack's TDD working agreement; the stack layers the *deterministic* `test-gate` + evidence on top. |
-| `systematic-debugging` | When a phase stalls (the 3-strike cap trips) — pairs with the stack's `unstick`. |
+| `brainstorming` | Before the spec — same slot as the bundled `grill`; explore intent before `roadmap`. |
+| `test-driven-development` | Same slot as the bundled `tdd` skill; the stack layers the *deterministic* `test-gate` + evidence on top. |
+| `systematic-debugging` | When a phase stalls (the 3-strike cap trips) — same slot as the bundled `diagnose` + `unstick`. |
 | `using-git-worktrees` | Manual isolation; the headless `autopilot.sh` already does this for loops. |
 | `verification-before-completion` | Philosophically identical to the evaluator's default-FAIL + the `tick.sh` evidence gate ("evidence before assertions"). |
 | `requesting-code-review` / `receiving-code-review` | Downstream of a phase; complements `ship-check` + the evaluator. |
@@ -1072,10 +1083,12 @@ systems will fight over the same files and the same "done." Use superpowers for 
 doesn't cover (brainstorming, debugging, review, verification discipline) and let `/phase` own the build.
 
 ### Don't forget the built-in layer
-Before reaching outside, the 11 bundled skills already cover most of the loop: `roadmap`/`milestone`
-(planning), `adr`/`mapme` (knowledge), `ship-check`/`scope-guard`/`explain-diff` (review),
-`teach-back`/`quizme` (ownership), `unstick` (debugging reset). External packs are for *depth in one
-area*, not replacements — reach for them when the built-in skill isn't enough, not by default.
+Before reaching outside, the bundled skills (17 per-project — see `skills/README.md`) already
+cover most of the loop: `grill`/`to-spec`/`roadmap`/`milestone` (think → spec → plan),
+`design-twice`/`tdd`/`diagnose`/`merge-conflicts` (engineering), `adr`/`glossary`/`mapme`
+(knowledge), `ship-check`/`scope-guard`/`explain-diff` (review), `teach-back`/`quizme`
+(ownership), `unstick` (debugging reset). External packs are for *depth in one area*, not
+replacements — reach for them when the built-in skill isn't enough, not by default.
 
 ### The one rule, compressed
 **Steps compose; spines collide.** Grill, brainstorm, debug, review — steps, wire them in freely. A
@@ -1103,17 +1116,23 @@ COMMANDS     /resume       orient at session start
              /models       show/set which model each /phase stage uses (thin wrapper around scripts/models.sh)
              @evaluator     grade a phase independently
 
-SKILLS       workflow:   roadmap · milestone · adr · ship-check · scope-guard · explain-diff · unstick
-             ownership:  teach-back · mapme · quizme
-             installer:  setup-jaimitos-os (install + customize)
+SKILLS       workflow:    grill · to-spec · roadmap · milestone · adr · glossary
+                          · ship-check · scope-guard · explain-diff · unstick
+             engineering: design-twice · tdd · diagnose · merge-conflicts
+             ownership:   teach-back · mapme · quizme
+             installer:   setup-jaimitos-os (install + customize; global-only)
 
-AUTOPILOT    bash scripts/autopilot.sh [N|N-M|all] [--no-worktree] [--pr] [--allow-dirty]
+AUTOPILOT    bash sandbox/run-autopilot-sandboxed.sh [N|N-M|all] [--pr]   ← unattended (supported path)
+             bash scripts/autopilot.sh [N|N-M|all] [--no-worktree] [--pr] [--allow-dirty]
                             [--dangerously-skip-permissions]
              (worktree isolation is the DEFAULT; --no-worktree runs in-place)
              (--dangerously-skip-permissions REQUIRED for a real unattended/no-TTY run to
               complete a phase — acceptEdits alone can't approve .claude/ writes or Bash
-              test-suite calls headlessly; sandboxed container + no prod credentials only)
+              test-suite calls headlessly; the sandbox wrapper supplies the container it demands)
              touch AGENT_STOP   halt   ·   rm AGENT_STOP   resume   ·   echo … > STEER.md   redirect
+
+SYNC         bash scripts/sync.sh --toolkit <path> [--dry-run|--yes|--restore <p>]
+             pre-2.5.0 project: … --adopt-manifest once (baseline; writes only the manifest)
 
 THE GATE     scripts/tick.sh is the ONLY ticker. Needs: evaluator PASS + fresh green tests +
              clean secret scan + no high-stakes + not Mode:supervised. Fails closed.

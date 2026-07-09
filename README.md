@@ -201,14 +201,33 @@ Seven deterministic shell hooks plus three shared libs:
 
 ## Skills (`skills/`)
 
-Seven workflow skills (roadmap, milestone, adr, ship-check, scope-guard, explain-diff, unstick),
-three ownership skills (teach-back, mapme, quizme), and the `setup-jaimitos-os` meta-skill. The three
-review skills are **report-only** (`disallowed-tools: Edit, Write, …`); a clean pre-commit chain
-is **`scope-guard → explain-diff → ship-check`**.
+Eighteen skills — ◆ marks the seven adapted from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT):
 
-**The full skills catalog lives in [`skills/README.md`](skills/README.md)** (workflow + ownership,
-including the [Ownership](skills/README.md#ownership) writeup) — single source, so this list never
-drifts from it.
+**Workflow (10)**
+- **grill** ◆ — relentless one-question-per-turn stress-test of a plan, each question with a recommendation
+- **to-spec** ◆ — synthesize the design conversation into docs/SPEC.md (seams confirmed, measurable criterion required)
+- **roadmap** — SPEC → phased docs/ROADMAP.md with measurable "Done when:" lines
+- **milestone** — add phases mid-project / archive a finished roadmap
+- **adr** — 4-line decision records in docs/decisions/
+- **glossary** ◆ — docs/GLOSSARY.md: one-line domain definitions + rejected terms
+- **ship-check** — pre-commit verdict: tests/lint/leftovers (report-only)
+- **scope-guard** — flags out-of-scope edits and drive-by refactors (report-only)
+- **explain-diff** — self-review: what changed and where it might be wrong (report-only)
+- **unstick** — breaks a circular-debugging loop by naming the shared failing assumption
+
+**Engineering (4)**
+- **design-twice** ◆ — two genuinely different designs before non-trivial code, ADR records the loser
+- **tdd** ◆ — the red→green loop with pre-agreed seams and the evaluator's own anti-pattern list
+- **diagnose** ◆ — hard-bug discipline: a tight red-capable feedback loop before any hypothesis
+- **merge-conflicts** ◆ — resolve from both sides' intent; covers /autopilot-parallel integration
+
+**Ownership (3):** **teach-back** (explain + quiz after a phase) · **mapme** (regenerate
+docs/ARCHITECTURE.md) · **quizme** (cold-open understanding check) — plus the
+**setup-jaimitos-os** installer meta-skill (global-only).
+
+A clean pre-commit chain is **`scope-guard → explain-diff → ship-check`**. **The authoritative
+catalog (descriptions, triggers, the MIT attribution notice) is
+[`skills/README.md`](skills/README.md)** — counts live there so they can't drift here.
 
 ---
 

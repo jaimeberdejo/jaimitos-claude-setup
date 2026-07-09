@@ -196,9 +196,33 @@ artifacts go to `docs/`; ADRs stay 4-line in `docs/decisions/`.
   docs/dev/); `scripts/test-docs.sh` (~40 lines): declared skill counts vs `ls skills/`,
   cited `\`path\`` existence in README/GUIDE; added to run-guard-tests.
 
-### Doc debt (filled in during 3.1)
+### Doc debt (recorded by Fase 3.1 before fixing)
 
-_To be recorded by Fase 3.1 before fixing._
+Sweep result (greps over *.md excluding CHANGELOG + docs/dev/, counts verified by command —
+18 skill dirs, 7 hooks, 4 agents, 26 scripts):
+
+1. `README.md` Skills section — still "Seven workflow skills … three ownership" (pre-2.5.0
+   count); needs the 18-skill grouped list with ◆ attribution marks (3.2).
+2. `CONTRIBUTING.md:17` — "the 10 portable skills" → 17; also needs the new "how to add a
+   skill" and "how synced files change" sections (3.5).
+3. `GUIDE.md` Part 11 — recommends installing mattpocock's grill-me externally; the toolkit now
+   ships its own `grill`/`to-spec`/`tdd`/`diagnose` etc. Rewrite around the bundled pack; keep
+   superpowers synergy. Also "the 11 bundled skills" line → 17.
+4. `GUIDE.md:213` Walkthrough A step 2 — "grill me on <idea>" (or /grill-me external) → the
+   bundled `grill` skill + `to-spec`.
+5. `SCAFFOLD.md` — installed-skills list is the old 10; no sandbox/ or manifest mention;
+   "Optional companions" still tells users to install mattpocock/skills for grill-me/diagnose.
+6. `GUIDE.md` Part 1 tree + Contents TOC — missing sandbox/, manifest, new Part 2/4 sections.
+7. ~~`PRACTICE-PROJECT.md:57` — "10 workflow/ownership skills" → 17.~~ Misattributed during the
+   sweep: the line was GUIDE.md's Part 1 tree (piped grep offsets), fixed under item 6.
+   PRACTICE-PROJECT.md itself carries no skill count (verified).
+8. `GUIDE.md` — needs "The skills pack" pipeline-flow subsection (3.3).
+9. No doc-count regression test — add `scripts/test-docs.sh` to run-guard-tests (3.6).
+10. `SECURITY.md` — name the shipped sandbox wrapper as the primary unattended mitigation (3.5).
+
+Clean already (verified): value-preserving/four-tier/unknown-tier wording, curl/wget deny
+mentions (survivors are the two deliberate explanations of the removal), old
+docs/audits / jaimitos-os/PLAN paths, tracker terms in skills/.
 
 ---
 

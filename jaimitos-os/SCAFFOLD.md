@@ -13,14 +13,24 @@ project (so it doesn't pollute it); read it on GitHub:
 ## What got installed here
 - **CLAUDE.md** — lean constitution (edit the `<...>` placeholders). Includes the Ownership section.
 - **.claude/** — hooks, commands (`/phase` `/autopilot` `/wrap` `/resume` `/models`), the four
-  `/phase`-stage subagents (`researcher`, `planner`, `executor`, `evaluator`), and the shared
-  guard libs (`_secret-scan.sh`, `_high-stakes.sh`).
-- **.claude/skills/** — the workflow + ownership skills (roadmap, adr, ship-check, scope-guard,
-  explain-diff, unstick, teach-back, mapme, quizme).
+  `/phase`-stage subagents (`researcher`, `planner`, `executor`, `evaluator`), the shared
+  guard libs (`_secret-scan.sh`, `_high-stakes.sh`, `_test-cmd.sh`), and
+  `.claude/.jaimitos-manifest` (the sha256 baseline `scripts/sync.sh` uses to update the
+  scaffold without clobbering your customizations).
+- **.claude/skills/** — 17 skills: think→spec→plan (grill, to-spec, roadmap, milestone, adr,
+  glossary), engineering (design-twice, tdd, diagnose, merge-conflicts), review (ship-check,
+  scope-guard, explain-diff, unstick), ownership (teach-back, mapme, quizme). Catalog:
+  `skills/README.md` in the toolkit repo.
 - **docs/** — SPEC/ROADMAP/STATE/ARCHITECTURE templates + `decisions/` for ADRs.
-- **scripts/** — `autopilot.sh` (guarded autonomous loop), `tick.sh` (the completion gate), `doctor.sh`, `test-hooks.sh`.
+- **scripts/** — `autopilot.sh` (guarded autonomous loop), `tick.sh` (the completion gate),
+  `sync.sh` (manifest-driven updater), `doctor.sh`, `test-hooks.sh` and the guard-test suites.
+- **sandbox/** — `Dockerfile.autopilot` + `run-autopilot-sandboxed.sh`, the supported way to run
+  the headless loop unattended (no-credentials container; only the repo mounted, only
+  `ANTHROPIC_API_KEY` passed).
 
-Later toolkit fixes? Run `bash scripts/sync.sh --toolkit <path-to-your-local-jaimitos-os-checkout> --dry-run` to preview pulling them in without losing your customizations.
+Later toolkit fixes? `bash scripts/sync.sh --toolkit <path-to-your-local-jaimitos-os-checkout> --dry-run`
+previews the plan; unchanged files batch-update, anything you modified is never overwritten
+(you get the diff instead). Scaffolded before v2.5.0? Run once with `--adopt-manifest` first.
 
 CI is **opt-in**: re-run the installer with `--with-ci` to also drop a
 `.github/workflows/jaimitos-os-ci.yml` into your project.
@@ -41,9 +51,11 @@ the project → `docs/SPEC.md` first, then run the `roadmap` skill → `docs/ROA
 CLAUDE.md's commands from the SPEC as it runs.
 
 ### Optional companions (not required)
-Handy extras, not part of setup — skip them and the stack still works:
+Handy extras, not part of setup — skip them and the stack still works. (Grilling, TDD discipline,
+bug diagnosis, and merge-conflict skills are BUNDLED since v2.5.0 — adapted from
+mattpocock/skills, MIT — so you no longer need an external pack for those.)
 
-    npx skills@latest add mattpocock/skills          # grill-me / diagnose etc. — handy, not required
+    npx skills@latest add mattpocock/skills          # Matt's originals (tracker-centric), if you want them too
     npm i -g @fission-ai/openspec && openspec init    # spec-of-record lifecycle, if you want it
 
 ## Safety note

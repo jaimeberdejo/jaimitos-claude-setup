@@ -62,8 +62,11 @@ prompt) only *asks* a model to comply.
   wall-clock timeout plus a parent-polled `AGENT_STOP` that kills the whole child tree — so a
   wedged headless `claude` subtree is contained rather than spawning a runaway; but that is a
   *liveness/containment* fix, not a security boundary, and does nothing to relax the sandbox-only
-  rule. Prefer `acceptEdits` (the default, no flag needed) whenever a human is at the terminal to
-  approve prompts.
+  rule. **The supported mitigation ships with the scaffold: `sandbox/run-autopilot-sandboxed.sh`**
+  builds a no-credentials container, mounts only the repo, passes only `ANTHROPIC_API_KEY`, and
+  refuses fail-closed if secret-shaped files would ride into the mount — use it for every
+  unattended run. Prefer `acceptEdits` (the default, no flag needed) whenever a human is at the
+  terminal to approve prompts.
 - **The high-stakes gate only protects paths YOU point it at.** Out of the box,
   `HIGH_STAKES_RE` in `_high-stakes.sh` and `paths:` in `high-stakes.md` are generic
   examples. If you don't edit them to match your real auth/migration/money/delete dirs, a

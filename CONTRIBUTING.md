@@ -14,8 +14,9 @@ There are three distinct things in this repo. Edits go to different places:
 - **The `jaimitos-os/` scaffold** — the files that *do* get installed into a user's repo:
   `CLAUDE.md`, `SCAFFOLD.md`, `docs/`, `scripts/`, `.claude/` (hooks, commands, the
   `evaluator` agent, `rules/high-stakes.md`), and the opt-in `.github/workflows/jaimitos-os-ci.yml`.
-- **`skills/`** — the 10 portable skills, each its own dir. `install.sh` copies them into a
-  target's `.claude/skills/` (all except `setup-jaimitos-os`, which is global-only).
+- **`skills/`** — the 17 portable skills, each its own dir. `install.sh` copies them into a
+  target's `.claude/skills/` (all except `setup-jaimitos-os`, which is global-only). Seven are
+  adaptations of mattpocock/skills (MIT) — see `skills/README.md` § Adapted skills.
 
 ## The "ship by directory" boundary — don't break it
 
@@ -28,6 +29,40 @@ So:
   note ships as `SCAFFOLD.md` (named so it can't clobber a user's `README.md`).
 - The install **smoke test** (`.github/scripts/install-smoke.sh`) asserts no tool-doc
   pollution, no README clobber, idempotency, and `.gitignore` merge — keep it green.
+
+## Adding a skill
+
+A skill is a directory under `skills/<name>/` with a `SKILL.md`; support files (extra `.md`s, a
+`scripts/` subdir) are optional. To add one:
+
+1. **Frontmatter** exactly like the existing skills: `name:`, and a `description:` whose text
+   contains the trigger phrases (that's what auto-invocation matches on). Report-only skills add
+   `disallowed-tools: Edit, Write, MultiEdit, NotebookEdit` (see `scope-guard` for the pattern,
+   including `allowed-tools` for a read-only git surface). Keep SKILL.md ~30–80 lines.
+2. **Register it everywhere the manifest lives** (all three, or CI catches you):
+   `skills/README.md`'s table + count line, `REQUIRED_SKILLS` in `jaimitos-os/scripts/doctor.sh`,
+   and the shipped-skill loop in `.github/scripts/install-smoke.sh`.
+3. If it's adapted from someone else's work, add the one-line attribution comment at the bottom
+   of SKILL.md and extend the "Adapted skills" notice in `skills/README.md`.
+4. Artifacts go under `docs/` (SPEC/ROADMAP/STATE/decisions/GLOSSARY) — never introduce a second
+   work queue or an external-tracker dependency.
+
+## How synced files change (the manifest contract)
+
+Every toolkit-owned file you edit ships to users through `scripts/sync.sh`, driven by
+`.claude/.jaimitos-manifest` (sha256 of each file as shipped, written by `install.sh`). What that
+means for a change:
+
+- **Editing a shipped file** is cheap for users who never touched their copy: it lands in their
+  next sync batch. Users who customized that file get a "manual merge required" diff instead —
+  so keep user-tunable values (like `HIGH_STAKES_RE`) isolated on their own line, and prefer
+  adding a NEW file over making an existing one more customization-prone.
+- **Renaming/deleting a shipped file** leaves stale manifest entries pointing at the old path on
+  users' machines; the old file shows up as "modified or deleted locally" forever. Avoid renames;
+  when unavoidable, note the migration in the CHANGELOG.
+- **Never list project-owned files** (docs/**, CLAUDE.md, SCAFFOLD.md, .gitignore, the
+  high-stakes allowlist) in the manifest — the `project_owned()` case patterns in `install.sh`
+  and `scripts/sync.sh` must stay identical.
 
 ## Local dev & running the checks
 
