@@ -39,9 +39,10 @@ Then it branches on whether there's an existing stack to detect:
 New to it all? Work through `PRACTICE-PROJECT.md` first.
 
 > **Two parts, how they relate:** the **`jaimitos-os/` scaffold** (hooks, commands, docs layout,
-> autopilot) and the **`skills/` pack** (11 skills; 10 are copied per-project). Skills work standalone, but several
-> (`roadmap`, `ship-check`, `adr`, …) assume the scaffold's `docs/` layout — install both for the
-> full experience.
+> autopilot) and the **`skills/` pack** (18 skills; 17 are copied per-project — see
+> [`skills/README.md`](skills/README.md) for the authoritative count and catalog). Skills work
+> standalone, but several (`roadmap`, `ship-check`, `adr`, …) assume the scaffold's `docs/`
+> layout — install both for the full experience.
 
 ---
 
@@ -65,7 +66,7 @@ jaimitos-claude-setup/
 │       ├── agents/                  # researcher, planner, executor, evaluator — one per /phase stage
 │       ├── rules/high-stakes.md     # path-scoped extra care
 │       └── hooks/                   # 7 deterministic shell hooks + 3 shared libs (_secret-scan, _high-stakes, _test-cmd)
-└── skills/                ← 11 skills (10 portable + setup-jaimitos-os installer)
+└── skills/                ← 18 skills (17 portable + setup-jaimitos-os installer) — see skills/README.md
 ```
 
 > The repo-root `README.md` documents the **toolkit**, so `install.sh` never copies it into your
