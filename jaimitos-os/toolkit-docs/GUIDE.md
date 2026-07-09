@@ -148,6 +148,27 @@ a customized `CLAUDE.md`. Use `--force` to overwrite, `--with-ci` to also drop t
 - **The real shell boundary** is sandboxing: sandboxed bash + the `sandbox.credentials` setting, or
   a container with no prod credentials, plus `permission_mode: default` for sensitive work.
 
+### Working in a team repo
+
+The defaults here are tuned for a solo repo. One of them — `commit-on-stop.sh`'s automatic
+`git add -A` checkpoint after every dirty turn — is actively wrong for a shared history: it
+sprays `checkpoint:` commits into branches teammates review. Three adjustments for team repos:
+
+- **Turn the checkpoint off: `LEAN_CHECKPOINT=off`.** Two places to set it, checked in this
+  order: the session environment (`export LEAN_CHECKPOINT=off` in the shell that launches
+  Claude Code), or persistently in `.claude/settings.json`'s `env` block
+  (`"env": { "LEAN_CHECKPOINT": "off" }`). `doctor.sh` warns when it sees more than one
+  contributor in `git shortlog` and the checkpoint still on.
+- **If you keep checkpointing, squash before the PR.** Every checkpoint commit starts with the
+  stable prefix `checkpoint:`, so they're easy to find (`git log --oneline --grep='^checkpoint:'`)
+  and easy to collapse — `git rebase -i` down to curated commits before pushing, or rely on
+  `gh pr merge --squash` so the shared history never sees them.
+- **Keep the guards, drop the conveniences.** The hooks worth keeping in a team repo are the
+  safety ones: `kill-switch.sh` (the `AGENT_STOP` brake) and the secret-scan inside
+  `commit-on-stop.sh` (which still runs when checkpointing is on). What's safe to disable is the
+  convenience layer: the checkpoint itself (`LEAN_CHECKPOINT=off`) and, if your team has its own
+  formatting pipeline, `format-on-edit.sh`. `test-gate.sh` is opt-in either way.
+
 ### Model & budget
 - **Each `/phase` stage (research/plan/execute/verify) can be pinned to its own model**, set once
   per project via `scripts/models.sh` / `/models` (persisted in `.claude/agents/<role>.md`'s

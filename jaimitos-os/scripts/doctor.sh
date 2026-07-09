@@ -255,6 +255,23 @@ if [ -f .claude/.jaimitos-os-version ]; then
 fi
 echo ""
 
+echo "Team repo:"
+# commit-on-stop.sh auto-checkpoints (git add -A) every dirty turn — right for a solo repo, noisy
+# for a shared one. Warn (never error) when history shows >1 contributor and LEAN_CHECKPOINT isn't
+# off, reading the same two places the hook resolves it from: the session env, else settings.json's
+# env block. See GUIDE.md § Working in a team repo.
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  CONTRIBUTORS=$(git shortlog -sn HEAD 2>/dev/null | wc -l | tr -d ' ')
+  LC_EFFECTIVE="${LEAN_CHECKPOINT:-}"
+  [ -z "$LC_EFFECTIVE" ] && LC_EFFECTIVE="$(jq -r '.env.LEAN_CHECKPOINT // empty' .claude/settings.json 2>/dev/null || true)"
+  if [ "${CONTRIBUTORS:-0}" -gt 1 ] && [ "$LC_EFFECTIVE" != "off" ]; then
+    warn "team repo detected ($CONTRIBUTORS contributors) — consider LEAN_CHECKPOINT=off (see GUIDE.md § Working in a team repo)"
+  else
+    ok "checkpointing suits this repo (single contributor, or LEAN_CHECKPOINT=off)"
+  fi
+fi
+echo ""
+
 if [ "$PROBLEMS" -ne 0 ]; then
   echo "$PROBLEMS problem(s) found. Fix the ✗ items above before an unattended run."
   # Remediation hint on EVERY problem run (M11 — not only behind --fix). Missing scaffold/libs/hooks/
