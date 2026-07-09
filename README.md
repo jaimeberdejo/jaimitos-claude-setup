@@ -221,6 +221,7 @@ Three ways to run, in order of trust:
 | Watchable loop | `/autopilot N` (in-session) | a few phases you want to *see* run |
 | Parallel watchable loop | `/autopilot-parallel "<heading>" ...` (in-session, per-phase worktree isolation) | a handful of phases you're confident don't interfere with each other |
 | Headless loop | `bash scripts/autopilot.sh N [--no-worktree] [--pr] [--allow-dirty] [--dangerously-skip-permissions]` | long/overnight, low-stakes, reversible |
+| **Sandboxed headless (recommended for unattended)** | `bash sandbox/run-autopilot-sandboxed.sh N [--pr ...]` | the supported way to run truly unattended — builds a no-credentials container, mounts only the repo, passes only `ANTHROPIC_API_KEY`, runs the headless loop with `--dangerously-skip-permissions` inside |
 
 `scripts/autopilot.sh` accepts `N` (up to N), `N-M` (aim for N, cap M), or `all` (malformed
 counts are rejected, not ignored). **Worktree isolation is the default** — a bad run can't touch

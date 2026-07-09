@@ -42,6 +42,7 @@ TESTS=(
   test-doctor.sh
   test-lint.sh
   test-models.sh
+  test-sandbox.sh
   test-sync.sh
   test-test-cmd.sh
 )

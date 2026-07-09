@@ -60,7 +60,8 @@ for f in CLAUDE.md .claude/settings.json \
          .claude/agents/researcher.md .claude/agents/planner.md .claude/agents/executor.md .claude/agents/evaluator.md \
          .claude/commands/resume.md .claude/commands/wrap.md .claude/commands/phase.md \
          .claude/commands/autopilot.md .claude/commands/autopilot-parallel.md .claude/commands/models.md \
-         .claude/high-stakes-path-allowlist; do
+         .claude/high-stakes-path-allowlist \
+         sandbox/Dockerfile.autopilot sandbox/run-autopilot-sandboxed.sh; do
   [ -f "$f" ] && ok "installed $f" || bad "missing $f"
 done
 # Skills installed per-project — assert the FULL shipped manifest (every project skill lands with its

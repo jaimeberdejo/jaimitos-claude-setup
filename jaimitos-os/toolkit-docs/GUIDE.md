@@ -488,6 +488,15 @@ checkout) · `--no-worktree` (opt out — run IN-PLACE, mutating your current ch
 > production credentials** (the real boundary from Part 2). The in-session `/autopilot` and
 > `/phase` keep the interactive permission prompts and don't need the flag.
 
+> **The sandbox ships with the scaffold — use it.** `sandbox/run-autopilot-sandboxed.sh` is the
+> supported path for unattended runs: it builds `sandbox/Dockerfile.autopilot` (debian-slim +
+> git/jq/node/claude CLI, non-root user) if missing, mounts ONLY the repo at `/work`, passes
+> exactly ONE credential (`ANTHROPIC_API_KEY` as an env var — documented as the single allowed
+> one), and runs `scripts/autopilot.sh <your args> --dangerously-skip-permissions` inside. It
+> refuses fail-closed if docker is missing, the key is unset, or the repo itself contains
+> secret-shaped files (per `_secret-scan.sh`'s filename rules) that the mount would carry into
+> the container. Running the bare script with the flag outside a container is on you.
+
 ### What the headless script adds over the in-session loops
 Both loops share the tick gate; the **headless** `scripts/autopilot.sh` adds *isolation* on top:
 

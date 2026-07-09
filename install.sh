@@ -241,8 +241,8 @@ if [ -f "$TARGET/.claude/lib/_high-stakes.sh" ]; then
   grep -E '^HIGH_STAKES_RE=' "$TARGET/.claude/lib/_high-stakes.sh" > "$TARGET/.claude/.high-stakes-default" 2>/dev/null || true
 fi
 
-# 4. Make hooks/scripts executable.
-chmod +x "$TARGET"/.claude/hooks/*.sh "$TARGET"/scripts/*.sh 2>/dev/null || true
+# 4. Make hooks/scripts executable (incl. the sandbox wrapper).
+chmod +x "$TARGET"/.claude/hooks/*.sh "$TARGET"/scripts/*.sh "$TARGET"/sandbox/*.sh 2>/dev/null || true
 
 echo ""
 echo "install: copied $COPIED file(s), skipped $SKIPPED, failed $FAILED."
