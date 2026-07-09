@@ -42,6 +42,9 @@ your-repo/
 │   ├── FAILURES.md                # archived NEEDS_WORK history (written on resolution)
 │   ├── plans/                     # per-phase plans /phase writes (research notes + tasks)
 │   └── decisions/                 # ADRs, one terse file each
+├── sandbox/
+│   ├── Dockerfile.autopilot       # minimal no-credentials container for unattended runs
+│   └── run-autopilot-sandboxed.sh # THE supported unattended path (repo-only mount, key-only env)
 ├── scripts/
 │   ├── autopilot.sh               # fresh-context HEADLESS loop w/ guardrails (overnight)
 │   ├── tick.sh                    # THE completion gate — the only thing that flips - [ ] → - [x]
@@ -53,7 +56,8 @@ your-repo/
 │   ├── run-guard-tests.sh         # the single behavioral-test list both CI workflows call
 │   └── test-*.sh                  # behavioral guard tests (tick, secret-scan, high-stakes, models, hooks, …)
 └── .claude/
-    ├── settings.json              # wires hooks → events + permissions.deny (secret reads/exfil)
+    ├── .jaimitos-manifest         # sha256 of every toolkit-owned file as shipped (sync.sh's primitive)
+    ├── settings.json              # wires hooks → events + permissions.deny (secret reads)
     ├── commands/
     │   ├── resume.md              # /resume    — orient at session start
     │   ├── wrap.md                # /wrap      — close out + tick via the gate + update docs
@@ -82,11 +86,12 @@ your-repo/
     │   ├── _secret-scan.sh        # SHARED: filename+content secret scan (commit-on-stop + tick + autopilot)
     │   ├── _high-stakes.sh        # SHARED: high-stakes path list + content matcher (the supervised gate)
     │   └── _test-cmd.sh           # SHARED: resolves the project test command (test-gate + test-evidence)
-    └── skills/                    # 10 workflow/ownership skills (see skills/README.md; NOT copied here:
+    └── skills/                    # 17 per-project skills (see skills/README.md; NOT copied here:
                                     #   setup-jaimitos-os is the global-only installer meta-skill)
-        ├── roadmap/ · milestone/ · adr/                              # planning
-        ├── ship-check/ · scope-guard/ · explain-diff/ · unstick/     # review + debugging (report-only x3)
-        └── teach-back/ · mapme/ · quizme/                            # ownership
+        ├── grill/ · to-spec/ · roadmap/ · milestone/ · adr/ · glossary/   # think → spec → plan
+        ├── design-twice/ · tdd/ · diagnose/ · merge-conflicts/            # engineering
+        ├── ship-check/ · scope-guard/ · explain-diff/ · unstick/          # review + debugging (report-only x3)
+        └── teach-back/ · mapme/ · quizme/                                 # ownership
 ```
 
 > **Canonical source:** the repo-root `README.md` is the master map; this GUIDE is the single
@@ -137,10 +142,37 @@ a customized `CLAUDE.md`. Use `--force` to overwrite, `--with-ci` to also drop t
 `.gitignore` stops git from *committing* `.env`; it does nothing to stop Claude from *reading* it.
 `settings.json` ships a `permissions.deny` block. Know the two tiers:
 - **Real boundary:** the `Read(...)` denies block the Read tool on `.env*`, `secrets/**`, `*.pem`, `*.key`, credentials.
-- **Defense-in-depth only:** the `Bash(...)` denies (`cat *.env*`, `curl *`, …) are bypassable
+- **Defense-in-depth only:** the `Bash(...)` denies (`cat *.env*`, `env`, …) are bypassable
   (`less`, `source`, `python -c "open('.env')"`). They block obvious accidents, not a determined agent.
+- **No network denies, on purpose.** Earlier releases denied `Bash(curl *)`/`Bash(wget *)`; v2.5.0
+  removed them. Network exfiltration cannot be blocked with bash globs — curl is one of a thousand
+  ways out (`python -c "urllib..."`, `node -e "fetch(...)"`, `nc`, git push to a new remote), and
+  real dev work (data/AI engineering, the roadmap skill's own "a curl that returns the right thing"
+  Done-when idiom) needs curl daily. Pretending a glob is an egress boundary is worse than saying
+  plainly: the boundary for exfiltration is a sandbox with no credentials and constrained egress.
 - **The real shell boundary** is sandboxing: sandboxed bash + the `sandbox.credentials` setting, or
   a container with no prod credentials, plus `permission_mode: default` for sensitive work.
+
+### Working in a team repo
+
+The defaults here are tuned for a solo repo. One of them — `commit-on-stop.sh`'s automatic
+`git add -A` checkpoint after every dirty turn — is actively wrong for a shared history: it
+sprays `checkpoint:` commits into branches teammates review. Three adjustments for team repos:
+
+- **Turn the checkpoint off: `LEAN_CHECKPOINT=off`.** Two places to set it, checked in this
+  order: the session environment (`export LEAN_CHECKPOINT=off` in the shell that launches
+  Claude Code), or persistently in `.claude/settings.json`'s `env` block
+  (`"env": { "LEAN_CHECKPOINT": "off" }`). `doctor.sh` warns when it sees more than one
+  contributor in `git shortlog` and the checkpoint still on.
+- **If you keep checkpointing, squash before the PR.** Every checkpoint commit starts with the
+  stable prefix `checkpoint:`, so they're easy to find (`git log --oneline --grep='^checkpoint:'`)
+  and easy to collapse — `git rebase -i` down to curated commits before pushing, or rely on
+  `gh pr merge --squash` so the shared history never sees them.
+- **Keep the guards, drop the conveniences.** The hooks worth keeping in a team repo are the
+  safety ones: `kill-switch.sh` (the `AGENT_STOP` brake) and the secret-scan inside
+  `commit-on-stop.sh` (which still runs when checkpointing is on). What's safe to disable is the
+  convenience layer: the checkpoint itself (`LEAN_CHECKPOINT=off`) and, if your team has its own
+  formatting pipeline, `format-on-edit.sh`. `test-gate.sh` is opt-in either way.
 
 ### Model & budget
 - **Each `/phase` stage (research/plan/execute/verify) can be pinned to its own model**, set once
@@ -183,9 +215,11 @@ Then:
    expected pre-SPEC, not a problem (an empty folder has no real stack or sensitive dirs to point
    at yet — `doctor.sh` warns, it doesn't fail). Then
    `git add -A && git commit -m "chore: scaffold jaimitos-os"`.
-2. **Think → SPEC.** Plan mode: `"grill me on <the idea>"` (or `/grill-me` — see [Part 11](#part-11--synergy-with-external-skills)),
-   then `"write that to docs/SPEC.md"` with a **measurable** success criterion. This is where the
-   real stack gets decided (the SPEC's Constraints section).
+2. **Think → SPEC.** `"grill me on <the idea>"` fires the bundled `grill` skill — a relentless
+   one-question-per-turn interview, each question carrying its own recommendation — and when the
+   answers converge, `"to spec"` (the `to-spec` skill) freezes them into `docs/SPEC.md` with a
+   **measurable** success criterion and confirmed test seams. This is where the real stack gets
+   decided (the SPEC's Constraints section).
 3. **SPEC → ROADMAP (auto-fills CLAUDE.md too).** Run the `roadmap` skill
    (`"turn the spec into a roadmap"`). Before writing `docs/ROADMAP.md`, it checks `CLAUDE.md` for
    left-over placeholders and fills the test/lint/run commands from the SPEC you just wrote — no
@@ -244,38 +278,66 @@ re-copying the whole scaffold by hand.
 
 Usage:
 ```bash
-bash scripts/sync.sh --toolkit <path-to-local-jaimitos-os> [--dry-run] [--yes]
+bash scripts/sync.sh --toolkit <path-to-local-jaimitos-os> [--dry-run] [--yes] [--adopt-manifest] [--restore <path>]
 ```
-`--toolkit` (required) points at a local `jaimitos-os/` checkout to diff against and copy from —
-e.g. `~/jaimitos-claude-setup/jaimitos-os`. `--dry-run` previews the full plan and writes nothing.
-`--yes` skips the per-file confirmation prompt, but only for non-mixed tiers (see below) — it never
-auto-applies a mixed merge.
+`--toolkit` (required) points at a local `jaimitos-os/` checkout to copy from — e.g.
+`~/jaimitos-claude-setup/jaimitos-os`. `--dry-run` previews the full plan and writes nothing (not
+even the manifest). `--yes` skips the single batch confirmation.
 
-Every toolkit-shipped file is classified into one of four tiers:
-- **Overwrite-safe** — toolkit-owned logic with no project values inside (hooks, `scripts/*.sh`,
-  commands, skills). Diffed, confirmed, then copied over.
-- **Never-touch** — project-owned content (`docs/`, `CLAUDE.md`, `SCAFFOLD.md`, `.gitignore`).
-  Always skipped; sync never writes these.
-- **Known-mixed** — a toolkit-owned file with exactly one project-customized value inside it:
-  `.claude/lib/_high-stakes.sh`'s `HIGH_STAKES_RE=` line, an agent's `model:` frontmatter line, or
-  `.claude/rules/high-stakes.md`'s `paths:` block. Sync merges the toolkit's updated body with
-  *your* value preserved — always prompts for confirmation, regardless of `--yes`.
-- **Unknown/malformed** — anything unclassified (e.g. `.claude/settings.json`), or a known-mixed
-  file whose shape doesn't match what sync expects. Always left for manual review; never guessed
-  at, never clobbered.
+#### Sync & the manifest
 
-Safety posture: nothing is ever written without first showing a diff (or, for a mixed merge, a
-diff of the proposed merge result); `--dry-run` lets you preview the whole plan risk-free;
-`--yes` only speeds up the non-mixed tiers, never a mixed merge; and a file sync can't confidently
-classify is always routed to manual review rather than guessed at. `settings.json` is intentionally
-report-only (manual merge) — sync never writes it.
+`install.sh` writes `.claude/.jaimitos-manifest`: one `<sha256>  <path>` line per toolkit-owned
+file, recording the bytes each file **shipped** with. The format is `sha256sum -c`-compatible, so
+`sha256sum -c .claude/.jaimitos-manifest` tells you at any time which shipped files you've since
+modified. With that primitive, sync no longer guesses — it *knows* whether you touched a file:
 
-**Current limitation:** sync detects drift by diffing against a LOCAL toolkit checkout you point
-`--toolkit` at — there's no shipped manifest of toolkit versions yet, so you need a clone of
-`jaimitos-claude-setup` on disk to sync from. `.github/workflows/*` is never synced (excluded from
-enumeration); only `.github/scripts/*.sh` is synced, and only into a project that already has a
-`.github/` dir (i.e. already opted into CI via a prior `install.sh --with-ci`) — sync won't
-silently add CI to a project that never asked for it.
+| Case | Condition | Action |
+|---|---|---|
+| up to date | local == toolkit | nothing (a stale manifest entry is silently repaired) |
+| **unchanged** | in manifest, local sha == manifest, toolkit differs | batch update — ONE confirmation for the whole lot (`--yes` skips); manifest entry refreshed |
+| **modified** | in manifest, local sha != manifest | **never written** — toolkit↔local diff shown, listed as "manual merge required" |
+| **project-owned** | `docs/**`, `CLAUDE.md`, `SCAFFOLD.md`, `.gitignore`, `.claude/high-stakes-path-allowlist` | never touched, never reported |
+| **deleted locally** | in manifest, absent on disk | never recreated; listed with the `--restore <path>` hint |
+| **new toolkit file** | in neither manifest nor project | joins the update batch; manifest entry added |
+
+Example output for a mixed run:
+```
+toolkit updates/additions (unchanged locally or new — one confirmation for the lot):
+  update: scripts/doctor.sh
+  add:    .claude/skills/diagnose/SKILL.md
+Apply these 2 update(s)/add(s) from the toolkit? [y/N]
+--- manual merge required: .claude/lib/_high-stakes.sh (modified locally — sync never overwrites it) ---
+2c2
+< HIGH_STAKES_RE='your-custom-regex'
+---
+> HIGH_STAKES_RE='new-shipped-default'
+  deleted locally — skipped (rerun with --restore 'scripts/lint-roadmap.sh' to reinstall): scripts/lint-roadmap.sh
+```
+There is no value-preserving merge machinery anymore: a modified file is *yours*; you see the diff
+and carry your line (a `HIGH_STAKES_RE`, an agent's `model:`) over by hand — 20 seconds, zero
+guessing, nothing clobbered.
+
+#### Upgrading from pre-2.5.0 (adopt the manifest once)
+
+A project scaffolded before v2.5.0 has no manifest, and sync refuses to guess. One-time step:
+
+```bash
+bash scripts/sync.sh --toolkit <path> --adopt-manifest   # record the CURRENT local files as baseline
+bash scripts/sync.sh --toolkit <path> --dry-run          # review the first plan carefully (see caveat)
+bash scripts/sync.sh --toolkit <path>                    # apply
+```
+
+`--adopt-manifest` writes only the manifest (hashes of your **current** toolkit-owned files) and
+never modifies content — explicit and auditable. Caveat: adoption cannot distinguish a
+pre-adoption customization from shipped bytes, so the **first** sync after adopting may list files
+you customized long ago in the update batch — that's why the `--dry-run` review matters. It
+refuses to re-baseline if a manifest already exists.
+
+Other properties: a failed copy is reported and exits nonzero (never counted as success; the
+version stamp is not bumped); shipped scripts get their exec bit restored on update;
+`.github/workflows/*` is never synced, and `.github/scripts/*.sh` is only *added* to a project
+that already opted into CI (`install.sh --with-ci`) — updates to an existing file are unaffected.
+Run sync on a clean working tree so you can `git diff` the result before committing.
 
 ---
 
@@ -395,10 +457,62 @@ Be honest about what actually *enforces* versus what merely *advises* — differ
 - **Advisory (a model is asked to comply):** `CLAUDE.md`, `.claude/rules/*`, and the evaluator's
   prompt. These shape behavior but a confused or adversarial model can ignore them.
 - **`permissions.deny` is two-tier:** `Read(...)` denies are a real boundary; `Bash(...)` denies are
-  a best-effort speed-bump, bypassable, not a wall.
+  a best-effort speed-bump, bypassable, not a wall. There are deliberately **no network denies**
+  (no `curl`/`wget` globs): a bash glob cannot block exfiltration — python, node, `nc`, or a git
+  push to a new remote all reach the network anyway — and blocking curl breaks legitimate daily
+  work. The exfiltration boundary is the no-credentials sandbox, not a command pattern.
 - **The real boundary for truly unattended runs is the environment:** a sandbox / container with **no
   production credentials** and constrained egress. The guardrails make a good run likely and a bad
   run loud; only the sandbox makes a bad run *harmless*. Set a hard budget cap as the outer backstop.
+
+### Gate integrity & the scan window (the details — this section is the single source)
+
+The fine print behind the high-stakes and secret gates. README and `CLAUDE.md` carry only
+summaries; this is where the full story lives.
+
+- **High-stakes work is supervised-only, and the loops enforce it.** A graded phase whose diff
+  touches `HIGH_STAKES_RE` paths (or trips the content matcher) is never auto-ticked or committed
+  by the headless loop, and its branch is **never pushed, even with `--pr`** — it stays local for
+  review. `/phase` alone never ticks, so the gate simply never runs there; `/autopilot` routes
+  every PASS through the same `scripts/tick.sh` gate as `/wrap`, and additionally checks the next
+  phase's `Mode:` line *before building it*, so an unattended run can't carry out a supervised
+  phase's work before being blocked from ticking it. Keep high-stakes work out of the loops
+  regardless — `Mode: supervised` plus a customized `HIGH_STAKES_RE` are the backstop, not the plan.
+- **`/autopilot-parallel` and a high-stakes hit:** the same `tick.sh` gate refuses the tick/push,
+  but unlike the headless script (which aborts the *entire* run) it leaves that one phase local
+  for supervised review and continues integrating the other named phases — each was independently
+  asserted by the user as non-interfering.
+- **High-stakes path allowlist** (`.claude/high-stakes-path-allowlist`) — a git-tracked, per-line,
+  reason-required escape for **exact-path false positives** in the path matcher (e.g. an ADR whose
+  name merely contains "money"). Purely subtractive: only an exact path with a non-empty reason is
+  cleared, the enforced `HIGH_STAKES_RE` and the content scanner are unchanged, and `doctor.sh`
+  lists every active suppression. An auditable escape hatch, not a bypass.
+- **The gate cannot exempt itself.** Editing the enforced high-stakes config —
+  `.claude/lib/_high-stakes.sh` or the allowlist — inside a phase forces **supervised** review
+  (`tick.sh` exit 3), regardless of the new contents: a phase can't self-exempt or self-narrow the
+  matcher and still auto-tick. `tick.sh` cannot guard edits to *itself* (a neutered gate would run
+  its own neutered check); those are caught one level up — under headless `scripts/autopilot.sh`,
+  every gate-control file **including `scripts/tick.sh`** is byte-compared against the trusted
+  launch checkout before the gate runs, so a builder that neuters the gate in its worktree gets no
+  auto-tick and no push.
+- **The scan window is orchestrator-trusted under headless autopilot.** The secret/high-stakes
+  scan runs over `${phase-base}..HEAD`. The builder writes `.claude/.phase-base` from inside its
+  session, so under `--dangerously-skip-permissions` it is **untrusted** — `scripts/autopilot.sh`
+  derives the phase base in its OWN trusted shell, overwrites the file before the evaluator runs,
+  and passes it to `tick.sh` via `TICK_BASE` (strict-ancestor-validated), so a forged
+  `.phase-base` can't shrink the scan window to hide a commit. The per-child watchdog (wall-clock
+  timeout + parent-polled `AGENT_STOP` that kills the child tree) contains a *wedged* subtree —
+  that's liveness, not security, and doesn't relax sandbox-only. We don't claim protection we
+  don't enforce: a fully-malicious builder with arbitrary shell access can still tamper with its
+  own worktree or exfiltrate; the executor's forbidden-writes rule is advisory, and the real
+  protection is the orchestrator's trusted re-derivation + integrity checks + the no-credentials
+  sandbox.
+- **The manual `/wrap` path is the weaker, human-supervised path — by design.** `/wrap` (and
+  `/autopilot-parallel`) call `tick.sh` directly and carry neither the trusted-base override nor
+  the gate-control byte-integrity check: they trust the session-written `.claude/.phase-base` and
+  the on-disk gate code. So (1) run `/wrap` only from a **clean working tree** — uncommitted
+  changes fall outside the `${phase-base}..HEAD` scan — and (2) use headless
+  `scripts/autopilot.sh` (inside the sandbox) as the hardened path for unattended operation.
 
 ---
 
@@ -429,6 +543,15 @@ checkout) · `--no-worktree` (opt out — run IN-PLACE, mutating your current ch
 > inside the session. So headless == bypass == **sandbox-only**: run it in a container with **no
 > production credentials** (the real boundary from Part 2). The in-session `/autopilot` and
 > `/phase` keep the interactive permission prompts and don't need the flag.
+
+> **The sandbox ships with the scaffold — use it.** `sandbox/run-autopilot-sandboxed.sh` is the
+> supported path for unattended runs: it builds `sandbox/Dockerfile.autopilot` (debian-slim +
+> git/jq/node/claude CLI, non-root user) if missing, mounts ONLY the repo at `/work`, passes
+> exactly ONE credential (`ANTHROPIC_API_KEY` as an env var — documented as the single allowed
+> one), and runs `scripts/autopilot.sh <your args> --dangerously-skip-permissions` inside. It
+> refuses fail-closed if docker is missing, the key is unset, or the repo itself contains
+> secret-shaped files (per `_secret-scan.sh`'s filename rules) that the mount would carry into
+> the container. Running the bare script with the flag outside a container is on you.
 
 ### What the headless script adds over the in-session loops
 Both loops share the tick gate; the **headless** `scripts/autopilot.sh` adds *isolation* on top:
@@ -904,47 +1027,59 @@ packs slot in. Two ground rules keep them from fighting the stack:
   **never as a competing loop.** Every skill should answer one question: *am I a step, or a spine?*
   Steps compose; a second spine collides.
 
-### grill-me / grill-with-docs (mattpocock/skills)
-`npx skills@latest add mattpocock/skills`. `/grill-me` interrogates a plan until every branch of the
-decision tree is resolved; `/grill-with-docs` does the same **and** builds a domain model + updates docs.
-
-**Where it fits:** *upstream of the `roadmap` skill.* The roadmap skill refuses a spec without a
-measurable success criterion — grilling is what manufactures that criterion. The full new-project
-pipeline, with grill-me as the thinking stage:
+### The skills pack and the pipeline (since v2.5.0 the "grill" stage is bundled)
+Seven skills adapted from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT) now ship
+WITH the toolkit — `grill`, `to-spec`, `glossary`, `design-twice`, `tdd`, `diagnose`,
+`merge-conflicts` — rewritten docs-centric (no external tracker, artifacts under `docs/`, ADRs in
+the 4-line `docs/decisions/` format). You no longer install a separate pack for the thinking
+stage. How they wire into the spine:
 
 ```
-  install                setup-jaimitos-os skill (or install.sh)
+  GRILL      grill skill        ← one question per turn, each with a recommendation; each closed
+     ↓          status: grilling   decision written into its real spec section as it lands
+  SPEC       to-spec skill      → docs/SPEC.md  (empties Open questions · distills ADRs · writes
+     ↓          → status: ready    CONFIRMED Test seams · flags a pivot if the criterion changed)
+  ROADMAP    roadmap skill      → docs/ROADMAP.md  (gate: STOP if status:grilling; else DERIVE
+     │          amend, don't        readiness from content. If a roadmap exists, AMEND it —
+     ↓          regenerate          ticked phases are immutable, numbers are stable IDs)
+  BUILD      /phase ×N          planner applies design-twice on non-trivial phases
+     │                            ("Alternative considered:" → feeds the adr skill);
+     │                          executor follows the tdd skill (seams from SPEC's ## Test seams);
+     │                          evaluator grades against the SAME tdd anti-pattern list
      ↓
-  GRILL   ── plan mode ──  /grill-me      ← interrogate until the goal + the ONE measurable
-                           (or "grill me on <idea>")   success metric + non-goals are crisp
+  AMEND      milestone          insert+renumber only if nothing ticked below; else append with
+     │                            Depends on: … Blocks: …  (numbers are stable IDs, never shifted)
      ↓
-  SPEC                     write docs/SPEC.md   (what/why · MEASURABLE criterion · non-goals · constraints)
-     ↓
-  ROADMAP                  roadmap skill  →  docs/ROADMAP.md   (ordered phases: Done when + Mode;
-                           also fills CLAUDE.md's commands from the SPEC, reminds re: HIGH_STAKES_RE)
-     ↓
-  BUILD                    /phase → review → teach-back → /wrap → /clear   ×N   →   ship
+  STUCK?     diagnose           ← a bug to reproduce (build the red-capable loop first)
+             unstick            ← 3+ attempts circling one assumption (reset the approach)
+  MERGE      merge-conflicts    ← /autopilot-parallel integration, or any stopped merge/rebase
+  VOCAB      glossary           → docs/GLOSSARY.md, injected (capped) every session start
 ```
 
 The `roadmap` step is the gate that makes grilling non-optional: a vague spec yields unverifiable
-phases, and unverifiable phases are exactly what the evaluator and the `tick.sh` gate can't pass. So
-grilling *manufactures the verifiable signal the whole autonomy chain runs on* — garbage-in at GRILL
-means phases your loop can never grade. `/grill-me` is the rigorous, install-once upgrade of the
-built-in `"grill me on <idea>"` prompt pattern ([Part 8, case 6](#6-start-a-brand-new-project-from-scratch)).
+phases, and unverifiable phases are exactly what the evaluator and the `tick.sh` gate can't pass.
+Grilling *manufactures the verifiable signal the whole autonomy chain runs on*. The spec's
+`status:` frontmatter tracks the lifecycle, but **only `grilling` is load-bearing** — `roadmap`
+re-derives "ready" from content (measurable criterion + empty Open questions) rather than trusting
+a stored label that could lie. See `skills/README.md` § "The spec lifecycle" for why ticked phases
+are immutable (it is *not* a `tick.sh` byte-comparison — that gate stores no prior roadmap).
 
-- **New milestone (same spine, one level up):** `milestone skill archives the done roadmap → /grill-me
-  the next batch → SPEC → roadmap`. Whether it's project zero or milestone five, it's `think → spec → roadmap`.
-- **Watch for:** aim `/grill-with-docs` at `docs/SPEC.md` / `docs/ARCHITECTURE.md` so it feeds the
-  source-of-truth layout instead of a parallel one (it overlaps the stack's own `mapme`).
+- **New milestone (same spine, one level up):** the `milestone` skill archives the done roadmap →
+  `grill` the next batch → `to-spec` → `roadmap`. Whether it's project zero or milestone five,
+  it's `think → spec → roadmap`.
+- **Still want Matt's originals** (`grill-with-docs`, the tracker-centric flow)?
+  `npx skills@latest add mattpocock/skills` works alongside — just aim its doc-writing at
+  `docs/SPEC.md`/`docs/ARCHITECTURE.md` so it feeds the source-of-truth layout, and keep this
+  stack's loop as the only spine.
 
 ### superpowers (the discipline pack)
 A broad pack of process skills. Map each to a stage of the loop rather than adopting it wholesale:
 
 | superpowers skill | Where it slots into jaimitos-os |
 |---|---|
-| `brainstorming` | Before the spec — same slot as grill-me; explore intent before `roadmap`. |
-| `test-driven-development` | Reinforces the stack's TDD working agreement; the stack layers the *deterministic* `test-gate` + evidence on top. |
-| `systematic-debugging` | When a phase stalls (the 3-strike cap trips) — pairs with the stack's `unstick`. |
+| `brainstorming` | Before the spec — same slot as the bundled `grill`; explore intent before `roadmap`. |
+| `test-driven-development` | Same slot as the bundled `tdd` skill; the stack layers the *deterministic* `test-gate` + evidence on top. |
+| `systematic-debugging` | When a phase stalls (the 3-strike cap trips) — same slot as the bundled `diagnose` + `unstick`. |
 | `using-git-worktrees` | Manual isolation; the headless `autopilot.sh` already does this for loops. |
 | `verification-before-completion` | Philosophically identical to the evaluator's default-FAIL + the `tick.sh` evidence gate ("evidence before assertions"). |
 | `requesting-code-review` / `receiving-code-review` | Downstream of a phase; complements `ship-check` + the evaluator. |
@@ -956,10 +1091,12 @@ systems will fight over the same files and the same "done." Use superpowers for 
 doesn't cover (brainstorming, debugging, review, verification discipline) and let `/phase` own the build.
 
 ### Don't forget the built-in layer
-Before reaching outside, the 11 bundled skills already cover most of the loop: `roadmap`/`milestone`
-(planning), `adr`/`mapme` (knowledge), `ship-check`/`scope-guard`/`explain-diff` (review),
-`teach-back`/`quizme` (ownership), `unstick` (debugging reset). External packs are for *depth in one
-area*, not replacements — reach for them when the built-in skill isn't enough, not by default.
+Before reaching outside, the bundled skills (17 per-project — see `skills/README.md`) already
+cover most of the loop: `grill`/`to-spec`/`roadmap`/`milestone` (think → spec → plan),
+`design-twice`/`tdd`/`diagnose`/`merge-conflicts` (engineering), `adr`/`glossary`/`mapme`
+(knowledge), `ship-check`/`scope-guard`/`explain-diff` (review), `teach-back`/`quizme`
+(ownership), `unstick` (debugging reset). External packs are for *depth in one area*, not
+replacements — reach for them when the built-in skill isn't enough, not by default.
 
 ### The one rule, compressed
 **Steps compose; spines collide.** Grill, brainstorm, debug, review — steps, wire them in freely. A
@@ -987,17 +1124,23 @@ COMMANDS     /resume       orient at session start
              /models       show/set which model each /phase stage uses (thin wrapper around scripts/models.sh)
              @evaluator     grade a phase independently
 
-SKILLS       workflow:   roadmap · milestone · adr · ship-check · scope-guard · explain-diff · unstick
-             ownership:  teach-back · mapme · quizme
-             installer:  setup-jaimitos-os (install + customize)
+SKILLS       workflow:    grill · to-spec · roadmap · milestone · adr · glossary
+                          · ship-check · scope-guard · explain-diff · unstick
+             engineering: design-twice · tdd · diagnose · merge-conflicts
+             ownership:   teach-back · mapme · quizme
+             installer:   setup-jaimitos-os (install + customize; global-only)
 
-AUTOPILOT    bash scripts/autopilot.sh [N|N-M|all] [--no-worktree] [--pr] [--allow-dirty]
+AUTOPILOT    bash sandbox/run-autopilot-sandboxed.sh [N|N-M|all] [--pr]   ← unattended (supported path)
+             bash scripts/autopilot.sh [N|N-M|all] [--no-worktree] [--pr] [--allow-dirty]
                             [--dangerously-skip-permissions]
              (worktree isolation is the DEFAULT; --no-worktree runs in-place)
              (--dangerously-skip-permissions REQUIRED for a real unattended/no-TTY run to
               complete a phase — acceptEdits alone can't approve .claude/ writes or Bash
-              test-suite calls headlessly; sandboxed container + no prod credentials only)
+              test-suite calls headlessly; the sandbox wrapper supplies the container it demands)
              touch AGENT_STOP   halt   ·   rm AGENT_STOP   resume   ·   echo … > STEER.md   redirect
+
+SYNC         bash scripts/sync.sh --toolkit <path> [--dry-run|--yes|--restore <p>]
+             pre-2.5.0 project: … --adopt-manifest once (baseline; writes only the manifest)
 
 THE GATE     scripts/tick.sh is the ONLY ticker. Needs: evaluator PASS + fresh green tests +
              clean secret scan + no high-stakes + not Mode:supervised. Fails closed.

@@ -30,32 +30,16 @@
 - docs/decisions/  = ADRs (one file each)
 
 ## Autonomy
-- `/phase` runs one roadmap phase end-to-end with self-verification (it does NOT tick the
-  roadmap — the shared gate does that).
 - **All ticking goes through `scripts/tick.sh`** — the single gate that flips `- [ ]` → `- [x]`.
-  Nothing (no command, prompt, or model) may mark a phase done without passing it: it requires a
-  recorded evaluator PASS, fresh green test evidence bound to the exact commit, a clean secret
-  scan, and no high-stakes changes, then updates the STATE auto-block. `/wrap`, `/autopilot`, and
-  `scripts/autopilot.sh` all call it.
-- `/autopilot N` loops N phases IN THIS SESSION (watchable). `scripts/autopilot.sh N` loops
-  headless in fresh processes (overnight). Both gate ticking through `scripts/tick.sh`. What the
-  **headless script** adds is fresh-context-per-phase, evaluator-change discard, and throwaway-
-  worktree isolation; the in-session loops share the tick gate but not that isolation.
-- The `evaluator` subagent grades completion independently — never mark a phase
-  done on the builder's say-so alone.
-- `/phase`'s four stages (research/plan/execute/verify) each run as their own subagent; pin any
-  of them to a specific model via `/models` (or `scripts/models.sh`) — set once, applies until changed.
-- `touch AGENT_STOP` halts the loop at the next tool call (it can't claw back a call already
-  in flight). Under headless `scripts/autopilot.sh` the parent also polls `AGENT_STOP` *during*
-  each builder/evaluator child run and kills the child process tree — so a wedged child can't
-  ignore it (it used to be checked only between iterations). Each child also has a wall-clock
-  watchdog timeout (`AUTOPILOT_CHILD_TIMEOUT`, default 20 min). Write STEER.md to redirect a
-  running loop.
-- **Closing a milestone (`close-milestone.sh`) and bumping `VERSION`/tagging are their own
-  checkpoint, separate from ticking a phase.** Never infer authorization for them from a
-  broader "go ahead" / "resume" / "continue" reply to an unrelated question — even when the
-  phase just ticked was the roadmap's last open item. State plainly that the milestone is
-  about to close, and wait for an explicit answer to that specific question.
+  No command, prompt, or model may mark a phase done without passing it. `/phase` builds; it
+  never ticks.
+- The `evaluator` subagent grades completion independently — never mark a phase done on the
+  builder's say-so alone.
+- `touch AGENT_STOP` halts any loop at the next tool call (`rm` it to resume); write STEER.md
+  to redirect a running loop.
+- **Closing a milestone / bumping VERSION / tagging is its own checkpoint:** state that question
+  explicitly and wait for an explicit yes — never inferred from a broader "go ahead"/"continue",
+  even when the roadmap's last phase just ticked. (Loop mechanics: toolkit-docs GUIDE Parts 4–5.)
 
 ## Ownership (understand what gets built)
 - Before /wrap on a non-trivial phase, run `teach-back` — Claude explains it and

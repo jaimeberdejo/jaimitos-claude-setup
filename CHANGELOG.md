@@ -8,6 +8,84 @@ uses [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [2.5.0] — 2026-07-09
+
+External-audit fixes + seven skills adapted from
+[mattpocock/skills](https://github.com/mattpocock/skills) (MIT, © Matt Pocock — rewritten
+docs-centric, never copied verbatim). `VERSION` → `2.5.0`.
+
+### Breaking — sync moves to a checksum manifest (one-time migration required)
+- **`scripts/sync.sh` is rewritten around `.claude/.jaimitos-manifest`** (written by
+  `install.sh`: one `sha256  path` line per toolkit-owned file as shipped, `sha256sum -c`
+  compatible). Unchanged files batch-update after ONE confirmation; locally modified files are
+  **never** written (diff shown, "manual merge required"); project-owned files are never touched
+  or reported; locally deleted files are never recreated (`--restore <path>` reinstalls one
+  deliberately); new toolkit files join the batch and enter the manifest.
+- **Required action for every pre-2.5.0 project:** run
+  `bash scripts/sync.sh --toolkit <path> --adopt-manifest` once. It records the CURRENT local
+  files as the baseline (writes only the manifest, no content). Review the first post-adoption
+  sync with `--dry-run` — adoption cannot tell a pre-adoption customization from shipped bytes.
+
+### Added
+- **Seven adapted skills** (attribution: mattpocock/skills, MIT): `grill` (one-question-per-turn
+  plan stress-test), `to-spec` (conversation → docs/SPEC.md with confirmed seams + measurable
+  criterion), `diagnose` (feedback-loop-first bug discipline, ships `hitl-loop.template.sh`),
+  `tdd` (+`tests.md`/`mocking.md`; the executor's TDD manual; anti-patterns mirrored in the
+  evaluator), `merge-conflicts` (intent-preserving resolution incl. the `/autopilot-parallel`
+  integration case), `design-twice` (two genuinely different designs → ADR with the rejected
+  alternative; applied by the planner on non-trivial phases), `glossary` (docs/GLOSSARY.md only;
+  injected capped by the session-start hook). 18 skills total, 17 per-project.
+- **A spec lifecycle across `grill` → `to-spec` → `roadmap` → `milestone`** (composition, one new
+  stored bit). `docs/SPEC.md` gains `status:` frontmatter plus `## Open questions` and
+  `## Test seams` sections. `grill` now writes each closed decision straight into its real spec
+  section as it lands (vocabulary → the `glossary` skill in place); `to-spec` closes the spec —
+  empties Open questions, distills the *settled* architectural notes into ADRs at close (via the
+  `adr` skill, so a decision reversed mid-interview never leaves a stale ADR), writes the confirmed
+  seams, and flags a pivot when the success criterion changed vs `git show HEAD:docs/SPEC.md`.
+  `roadmap` gains an entry gate and an **amend-don't-regenerate** mode; `milestone` inserts +
+  renumbers only when no ticked phase sits below, else appends with `Depends on: … Blocks: …`
+  (phase numbers are stable IDs). **Only `grilling` is a stored, load-bearing state** — `roadmap`
+  derives "ready" from content (measurable criterion + empty Open questions), so a stale label
+  can't gate a bad spec into planning. Ticked phases are immutable — and, corrected here, *not*
+  because `tick.sh` byte-compares the roadmap (it stores no prior copy): the real reasons are audit-
+  trail integrity, not regressing a `- [x]`, and keeping STATE.md's "last ticked" pointer resolvable.
+  No new skill; `tick.sh`/hooks/agents untouched.
+- **An executable sandbox for unattended runs**: `sandbox/Dockerfile.autopilot` +
+  `sandbox/run-autopilot-sandboxed.sh` — mounts only the repo, passes only `ANTHROPIC_API_KEY`,
+  runs the headless loop with `--dangerously-skip-permissions` inside; refuses fail-closed on
+  missing docker/key/scan-lib or secret-shaped files in the repo. `test-sandbox.sh` covers it.
+- **`sync.sh --adopt-manifest` and `--restore <path>`**; install-smoke verifies the manifest.
+- **`doctor.sh` team-repo warn**: >1 contributor with `LEAN_CHECKPOINT` not off (env or
+  settings.json `env`) → advisory pointer to the new GUIDE "Working in a team repo" section.
+  Checkpoint commits keep their stable `checkpoint:` prefix for filtering/squashing.
+- **Evaluator fakery list** gains `tautological tests` and `implementation-coupled tests`
+  (teach/grade symmetry with the `tdd` skill).
+- **Session-start hook** injects `docs/GLOSSARY.md` (capped at 30 lines) when present.
+
+### Changed
+- `CLAUDE.md` slimmed 67→51 lines (Autonomy = 10 lines of operational rules); the detailed
+  security narrative (gate integrity, scan window, /wrap-is-weaker) consolidated into GUIDE.md
+  Parts 4–5 as the single source; README carries a ≤15-line summary.
+- Dev plans and audits moved out of the shipped tree: `docs/dev/plans/`, `docs/dev/audits/`.
+- `planner.md` applies design-it-twice to non-trivial phases ("Alternative considered:" line);
+  `executor.md` follows the `tdd` skill; `roadmap`→`grill` and `unstick`↔`diagnose`
+  cross-references.
+
+### Removed
+- **`Bash(curl *)`/`Bash(wget *)` permission denies** — a bash glob is not an egress boundary
+  (python/node/nc/git-push all reach the network) and it broke daily curl work; the exfiltration
+  boundary is the no-credentials sandbox, now shipped (see Added).
+- **sync's four-tier classifier and all value-preserving merge machinery** (HIGH_STAKES_RE /
+  agent `model:` / `paths:`-block surgical merges, the `unknown` tier): 575→292 lines of sync,
+  875→283 of tests. A modified file is yours; you merge the diff by hand.
+
+### Review note (dated)
+- **TODO 2026-09-09 — autopilot.sh usage review.** `scripts/autopilot.sh` (683 lines) was
+  deliberately NOT simplified in this release: its bulk is guarantees (watchdogs,
+  integrity-checks, worktrees), not fat. The lean decision is about USE, not code: if by
+  ~2026-09-09 the headless mode has been used fewer than 3 times, the right simplification is
+  deleting it entirely in favor of in-session `/autopilot`.
+
 ## [2.4.0] — 2026-07-08
 
 Autopilot child containment + supervised-phase approval — from the SessionLens headless dogfood —

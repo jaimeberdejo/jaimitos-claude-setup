@@ -146,5 +146,33 @@ else
 fi
 
 echo ""
+echo "Team repo warn: >1 contributor + LEAN_CHECKPOINT not off → warn; off (env or settings) → quiet"
+echo ""
+mkscaffold "$WORK/team"
+( cd "$WORK/team" && git -c user.email=other@example.com -c user.name=Other commit -q --allow-empty -m "second author" )
+( cd "$WORK/team" && LEAN_CHECKPOINT= bash scripts/doctor.sh > "$WORK/team.out" 2>&1 ); teamrc=$?
+grep -q "team repo detected" "$WORK/team.out" \
+  && pass "team: 2 simulated authors + checkpoint on → 'team repo detected' warn" \
+  || fail "team: 2-author repo did not warn about LEAN_CHECKPOINT"
+[ "$teamrc" -eq 0 ] && pass "team: the warn is advisory (doctor still exits 0)" \
+  || fail "team: the team warn wrongly made doctor exit non-zero (rc=$teamrc)"
+( cd "$WORK/team" && LEAN_CHECKPOINT=off bash scripts/doctor.sh > "$WORK/team.off.out" 2>&1 )
+grep -q "team repo detected" "$WORK/team.off.out" \
+  && fail "team: LEAN_CHECKPOINT=off (env) still warned" \
+  || pass "team: LEAN_CHECKPOINT=off in the env silences the warn"
+# The settings.json env block is the persistent place to set it — doctor must honor it too.
+( cd "$WORK/team" && jq '.env.LEAN_CHECKPOINT = "off"' .claude/settings.json > s.tmp && mv s.tmp .claude/settings.json )
+( cd "$WORK/team" && LEAN_CHECKPOINT= bash scripts/doctor.sh > "$WORK/team.set.out" 2>&1 )
+grep -q "team repo detected" "$WORK/team.set.out" \
+  && fail "team: settings.json env.LEAN_CHECKPOINT=off still warned" \
+  || pass "team: LEAN_CHECKPOINT=off in settings.json's env block silences the warn"
+# Single-contributor control: no warn.
+mkscaffold "$WORK/solo"
+( cd "$WORK/solo" && bash scripts/doctor.sh > "$WORK/solo.out" 2>&1 )
+grep -q "team repo detected" "$WORK/solo.out" \
+  && fail "team: single-contributor repo wrongly warned" \
+  || pass "team: single-contributor repo does not warn"
+
+echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All doctor --fix tests passed."; exit 0
 else echo "$FAILS doctor test(s) FAILED."; tail -n 15 "$WORK/out" 2>/dev/null; exit 1; fi

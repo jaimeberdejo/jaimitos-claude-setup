@@ -66,7 +66,7 @@ REQUIRED_LIBS="_secret-scan _high-stakes _test-cmd"
 # Shipped project skills (install.sh copies each into .claude/skills/<name>/). setup-jaimitos-os is the
 # installer/meta skill — it is --global-skills only, never per-project, so it is NOT listed here. Keep in
 # sync with .github/scripts/install-smoke.sh (the authoritative post-install manifest gate).
-REQUIRED_SKILLS="roadmap milestone adr ship-check scope-guard explain-diff unstick teach-back mapme quizme"
+REQUIRED_SKILLS="roadmap milestone adr ship-check scope-guard explain-diff unstick teach-back mapme quizme grill to-spec glossary design-twice tdd diagnose merge-conflicts"
 
 echo "jaimitos-os doctor"
 [ -f .claude/.jaimitos-os-version ] && echo "jaimitos-os version: $(cat .claude/.jaimitos-os-version)"
@@ -252,6 +252,23 @@ if [ -f .claude/.jaimitos-os-version ]; then
   ok "scaffolded from jaimitos-os $(cat .claude/.jaimitos-os-version)"
   warn "run 'bash scripts/sync.sh --toolkit <path-to-jaimitos-os> --dry-run' to check for toolkit"
   warn "  updates and apply them without clobbering your customizations"
+fi
+echo ""
+
+echo "Team repo:"
+# commit-on-stop.sh auto-checkpoints (git add -A) every dirty turn — right for a solo repo, noisy
+# for a shared one. Warn (never error) when history shows >1 contributor and LEAN_CHECKPOINT isn't
+# off, reading the same two places the hook resolves it from: the session env, else settings.json's
+# env block. See GUIDE.md § Working in a team repo.
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  CONTRIBUTORS=$(git shortlog -sn HEAD 2>/dev/null | wc -l | tr -d ' ')
+  LC_EFFECTIVE="${LEAN_CHECKPOINT:-}"
+  [ -z "$LC_EFFECTIVE" ] && LC_EFFECTIVE="$(jq -r '.env.LEAN_CHECKPOINT // empty' .claude/settings.json 2>/dev/null || true)"
+  if [ "${CONTRIBUTORS:-0}" -gt 1 ] && [ "$LC_EFFECTIVE" != "off" ]; then
+    warn "team repo detected ($CONTRIBUTORS contributors) — consider LEAN_CHECKPOINT=off (see GUIDE.md § Working in a team repo)"
+  else
+    ok "checkpointing suits this repo (single contributor, or LEAN_CHECKPOINT=off)"
+  fi
 fi
 echo ""
 

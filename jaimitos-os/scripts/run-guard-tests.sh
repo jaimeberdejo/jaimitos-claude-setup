@@ -37,11 +37,13 @@ TESTS=(
   test-autopilot-gates.sh
   test-autopilot-parallel.sh
   test-tick.sh
+  test-docs.sh
   test-docs-invariants.sh
   test-close-milestone.sh
   test-doctor.sh
   test-lint.sh
   test-models.sh
+  test-sandbox.sh
   test-sync.sh
   test-test-cmd.sh
 )

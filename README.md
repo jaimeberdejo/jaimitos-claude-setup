@@ -39,9 +39,10 @@ Then it branches on whether there's an existing stack to detect:
 New to it all? Work through `PRACTICE-PROJECT.md` first.
 
 > **Two parts, how they relate:** the **`jaimitos-os/` scaffold** (hooks, commands, docs layout,
-> autopilot) and the **`skills/` pack** (11 skills; 10 are copied per-project). Skills work standalone, but several
-> (`roadmap`, `ship-check`, `adr`, …) assume the scaffold's `docs/` layout — install both for the
-> full experience.
+> autopilot) and the **`skills/` pack** (18 skills; 17 are copied per-project — see
+> [`skills/README.md`](skills/README.md) for the authoritative count and catalog). Skills work
+> standalone, but several (`roadmap`, `ship-check`, `adr`, …) assume the scaffold's `docs/`
+> layout — install both for the full experience.
 
 ---
 
@@ -65,7 +66,7 @@ jaimitos-claude-setup/
 │       ├── agents/                  # researcher, planner, executor, evaluator — one per /phase stage
 │       ├── rules/high-stakes.md     # path-scoped extra care
 │       └── hooks/                   # 7 deterministic shell hooks + 3 shared libs (_secret-scan, _high-stakes, _test-cmd)
-└── skills/                ← 11 skills (10 portable + setup-jaimitos-os installer)
+└── skills/                ← 18 skills (17 portable + setup-jaimitos-os installer) — see skills/README.md
 ```
 
 > The repo-root `README.md` documents the **toolkit**, so `install.sh` never copies it into your
@@ -200,14 +201,33 @@ Seven deterministic shell hooks plus three shared libs:
 
 ## Skills (`skills/`)
 
-Seven workflow skills (roadmap, milestone, adr, ship-check, scope-guard, explain-diff, unstick),
-three ownership skills (teach-back, mapme, quizme), and the `setup-jaimitos-os` meta-skill. The three
-review skills are **report-only** (`disallowed-tools: Edit, Write, …`); a clean pre-commit chain
-is **`scope-guard → explain-diff → ship-check`**.
+Eighteen skills — ◆ marks the seven adapted from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT):
 
-**The full skills catalog lives in [`skills/README.md`](skills/README.md)** (workflow + ownership,
-including the [Ownership](skills/README.md#ownership) writeup) — single source, so this list never
-drifts from it.
+**Workflow (10)**
+- **grill** ◆ — relentless one-question-per-turn stress-test of a plan, each question with a recommendation
+- **to-spec** ◆ — synthesize the design conversation into docs/SPEC.md (seams confirmed, measurable criterion required)
+- **roadmap** — SPEC → phased docs/ROADMAP.md with measurable "Done when:" lines
+- **milestone** — add phases mid-project / archive a finished roadmap
+- **adr** — 4-line decision records in docs/decisions/
+- **glossary** ◆ — docs/GLOSSARY.md: one-line domain definitions + rejected terms
+- **ship-check** — pre-commit verdict: tests/lint/leftovers (report-only)
+- **scope-guard** — flags out-of-scope edits and drive-by refactors (report-only)
+- **explain-diff** — self-review: what changed and where it might be wrong (report-only)
+- **unstick** — breaks a circular-debugging loop by naming the shared failing assumption
+
+**Engineering (4)**
+- **design-twice** ◆ — two genuinely different designs before non-trivial code, ADR records the loser
+- **tdd** ◆ — the red→green loop with pre-agreed seams and the evaluator's own anti-pattern list
+- **diagnose** ◆ — hard-bug discipline: a tight red-capable feedback loop before any hypothesis
+- **merge-conflicts** ◆ — resolve from both sides' intent; covers /autopilot-parallel integration
+
+**Ownership (3):** **teach-back** (explain + quiz after a phase) · **mapme** (regenerate
+docs/ARCHITECTURE.md) · **quizme** (cold-open understanding check) — plus the
+**setup-jaimitos-os** installer meta-skill (global-only).
+
+A clean pre-commit chain is **`scope-guard → explain-diff → ship-check`**. **The authoritative
+catalog (descriptions, triggers, the MIT attribution notice) is
+[`skills/README.md`](skills/README.md)** — counts live there so they can't drift here.
 
 ---
 
@@ -221,6 +241,7 @@ Three ways to run, in order of trust:
 | Watchable loop | `/autopilot N` (in-session) | a few phases you want to *see* run |
 | Parallel watchable loop | `/autopilot-parallel "<heading>" ...` (in-session, per-phase worktree isolation) | a handful of phases you're confident don't interfere with each other |
 | Headless loop | `bash scripts/autopilot.sh N [--no-worktree] [--pr] [--allow-dirty] [--dangerously-skip-permissions]` | long/overnight, low-stakes, reversible |
+| **Sandboxed headless (recommended for unattended)** | `bash sandbox/run-autopilot-sandboxed.sh N [--pr ...]` | the supported way to run truly unattended — builds a no-credentials container, mounts only the repo, passes only `ANTHROPIC_API_KEY`, runs the headless loop with `--dangerously-skip-permissions` inside |
 
 `scripts/autopilot.sh` accepts `N` (up to N), `N-M` (aim for N, cap M), or `all` (malformed
 counts are rejected, not ignored). **Worktree isolation is the default** — a bad run can't touch
@@ -265,68 +286,22 @@ unattended runs; use the in-session modes when you want to watch.
 
 ## Security
 
-**Enforcement reality — know which tier you're trusting:** the **deterministic** layer
-(shell hooks + `autopilot.sh` control flow — kill-switch, strict verdict parsing,
-secret-scan, high-stakes gate, evaluator-change cleanup) actually enforces and fails closed;
-the **advisory** layer (`CLAUDE.md`, `rules/`, the evaluator prompt) only asks a model to comply.
+**Two tiers.** The **deterministic** layer (shell hooks, `tick.sh`, `autopilot.sh` control flow)
+enforces and fails closed; the **advisory** layer (`CLAUDE.md`, `rules/`, agent prompts) only asks
+a model to comply. `Read(...)` denies are a real boundary; `Bash(...)` denies are a bypassable
+speed-bump — and there are deliberately **no `curl`/`wget` denies**, because a bash glob is not an
+egress boundary. The real boundary for unattended runs is a **no-credentials sandbox**, and one
+ships with the scaffold: `sandbox/run-autopilot-sandboxed.sh` (see Autonomy above).
 
-- `.gitignore` stops *committing* `.env`; it does **not** stop *reading* it. `settings.json`
-  ships a `permissions.deny` block for `.env*`, `secrets/**`, `*.pem`, `*.key`, credentials.
-- The `Read(...)` denies are a **real boundary**. The `Bash(...)` denies are a **best-effort
-  speed-bump** (bypassable via `less`, `source`, `python -c …`), not containment — the real shell
-  boundary is a sandbox/no-creds container + `permission_mode: default` for sensitive work.
-- High-stakes code (auth/authentication/oauth, migrations, money/payments/refunds, deletes,
-  external effects like deploy/email/webhook): supervised only, smallest phases, audit trail. The
-  `high-stakes.md` rule advises it, and the **headless** `autopilot.sh` high-stakes gate enforces it
-  — a graded phase whose diff touches those paths is never auto-ticked/committed, and the branch is
-  **never pushed, even with `--pr`** (it stays local for review). The enforced match list is
-  `HIGH_STAKES_RE` in `_high-stakes.sh`; **customize it per project** (run `doctor.sh` — it warns if
-  it's still the shipped default). `/phase` alone never ticks, so the gate simply never runs in
-  that mode — but `/autopilot` DOES route every PASS through the same `scripts/tick.sh` gate
-  (identical to `/wrap`), so a high-stakes diff is refused there too; `/autopilot` additionally
-  checks the next phase's `Mode:` line *before* building it, not just before ticking, so an
-  unattended run can't carry out a supervised phase's actual work before being blocked from
-  ticking it. Keep high-stakes work out of these loops regardless — `Mode: supervised` and a
-  correctly customized `HIGH_STAKES_RE` are the backstop, not the plan.
-- `/autopilot-parallel` routes every phase through the same `tick.sh` gate, so a high-stakes hit on
-  one named phase is still never auto-ticked or pushed — but unlike `scripts/autopilot.sh` (which
-  aborts the *entire* run), it leaves that one phase local for supervised review and **continues
-  integrating the other named phases**, since each was independently asserted by the user as
-  non-interfering.
-- **High-stakes path allowlist** (`.claude/high-stakes-path-allowlist`) — a git-tracked, per-line,
-  reason-required escape for **exact-path false positives** in the high-stakes path matcher (e.g. an
-  ADR file whose name merely contains "money"). Purely subtractive: only an exact path with a non-empty
-  reason is cleared; the enforced `HIGH_STAKES_RE` and the content scanner are unchanged; and
-  `doctor.sh` lists every active suppression so one is never hidden. It is an **auditable escape hatch,
-  not a bypass.**
-- **The gate cannot exempt itself.** Editing the enforced high-stakes config —
-  `.claude/lib/_high-stakes.sh` or `.claude/high-stakes-path-allowlist` — inside a phase forces
-  **supervised** review (`tick.sh` exit 3): a phase can't self-exempt or self-narrow the high-stakes
-  matcher and still auto-tick. `tick.sh` **cannot guard edits to `tick.sh` itself** (a neutered gate would
-  just run its own neutered check). Those are caught one level up: under headless `scripts/autopilot.sh`
-  every gate-control file — **including `scripts/tick.sh`** — is **integrity-checked** (byte-compared
-  against the trusted launch checkout) before the gate runs, so a builder that neuters
-  `tick.sh`/`_high-stakes.sh` in its worktree gets no auto-tick and no push. The manual `/wrap` path has no
-  such byte-integrity check and stays human-supervised (see below).
-- **The scan window is orchestrator-trusted under autopilot.** The secret/high-stakes scan runs over
-  `${phase-base}..HEAD`. The builder writes `.claude/.phase-base` from inside its session, so under
-  headless `--dangerously-skip-permissions` it is **untrusted** — `scripts/autopilot.sh` derives the
-  phase base in its OWN trusted shell, overwrites the file before the evaluator, and passes it to
-  `tick.sh` (which strict-ancestor-validates it), so a forged `.phase-base` can't shrink the scan window
-  to hide a commit. `--dangerously-skip-permissions` still removes the interactive permission boundary
-  entirely: run it **only** in a sandboxed container with no production credentials. (The child
-  watchdog — per-child timeout + parent-polled `AGENT_STOP` that kills the child tree — contains a
-  *wedged* subtree so it can't run away, but that's liveness, not security; it doesn't relax
-  sandbox-only.) We don't claim
-  protection we don't enforce — a fully-malicious builder with arbitrary shell access can still tamper
-  with its own worktree or exfiltrate; the executor's forbidden-writes rule is advisory (a model can
-  ignore it), the real protection is the orchestrator's trusted re-derivation + integrity checks.
-- **The manual `/wrap` path is the weaker, human-supervised path.** `/wrap` (and `/autopilot-parallel`)
-  call `tick.sh` directly and do **not** yet carry headless autopilot's trusted-base override or
-  gate-control byte-integrity check — they trust the session-written `.claude/.phase-base` and the on-disk
-  gate code. Run `/wrap` only from a **clean working tree** (uncommitted changes fall outside the
-  `${phase-base}..HEAD` scan), and use **headless `scripts/autopilot.sh` as the hardened path for
-  unattended operation.**
+Enforced by `tick.sh` + `_high-stakes.sh` + `_secret-scan.sh`: high-stakes paths/content are
+never auto-ticked or pushed (supervised review instead); the gate's own config can't be edited by
+the phase it gates; under headless autopilot the scan window and every gate-control file are
+orchestrator-trusted (re-derived in a trusted shell + byte-integrity-checked); the manual `/wrap`
+path is the weaker, human-supervised one — run it from a clean tree. Customize `HIGH_STAKES_RE`
+per project (`doctor.sh` warns while it's the shipped default).
+
+**The full security narrative lives in [GUIDE.md Parts 4–5](jaimitos-os/toolkit-docs/GUIDE.md#part-4--the-per-phase-cycle-hooks--the-completion-gate)
+(single source — enforcement reality, gate integrity, the scan window), plus the policy in [SECURITY.md](SECURITY.md).**
 
 ---
 
@@ -348,25 +323,31 @@ the **advisory** layer (`CLAUDE.md`, `rules/`, the evaluator prompt) only asks a
 run `sync.sh` against a local jaimitos-os checkout:
 
 ```bash
-bash scripts/sync.sh --toolkit /path/to/Claude_SETUP/jaimitos-os --dry-run   # preview the whole plan
-bash scripts/sync.sh --toolkit /path/to/Claude_SETUP/jaimitos-os             # apply, confirming each file
+bash scripts/sync.sh --toolkit /path/to/jaimitos-claude-setup/jaimitos-os --dry-run  # preview the plan
+bash scripts/sync.sh --toolkit /path/to/jaimitos-claude-setup/jaimitos-os           # apply (one batch confirm)
 ```
 
-- **Local checkout only.** There's no shipped manifest yet — sync diffs against the toolkit path you
-  pass (`--toolkit`), so keep a `git pull`-ed `Claude_SETUP` checkout around and point at its
-  `jaimitos-os/` dir.
-- **Four tiers, fail-safe.** Every toolkit file is classified: **overwrite** (toolkit-owned logic —
-  diffed, confirmed, copied), **never** (project-owned: `docs/`, `CLAUDE.md`, `.gitignore`,
-  `.claude/high-stakes-path-allowlist` — always skipped), **mixed** (a toolkit file with exactly one
-  customized value — the `HIGH_STAKES_RE=` line, an agent's `model:` line, or `high-stakes.md`'s
-  `paths:` block — a narrow value-preserving merge that keeps the toolkit's body and *your* value;
-  **always prompts**, never `--yes`-bypassed), and **unknown** (anything unclassified, e.g.
-  `settings.json` — shown as an informational diff, never written).
-- `--dry-run` writes nothing; `--yes` skips confirmation for the non-mixed tiers only. Nothing is
-  written without a shown diff and an explicit yes; a failed copy is reported, never counted as success.
-- **Risk / scope.** A `mixed` merge preserves **only** that one named value — any *other* local edit to
-  a mixed file (an agent's description/tools/body) is replaced by the toolkit's, so read the shown merge
-  diff. Run sync on a clean working tree so you can `git diff` the result before committing.
+- **The manifest is the primitive.** `install.sh` writes `.claude/.jaimitos-manifest` — one
+  `sha256  path` line per toolkit-owned file, recording the bytes each file *shipped* with
+  (`sha256sum -c`-compatible). Sync compares local vs manifest vs toolkit and acts per file:
+  - **Unchanged locally** (local hash == manifest) and the toolkit has a newer version →
+    batch-updated after ONE confirmation (`--yes` skips it).
+  - **Modified locally** → **never written.** You get the toolkit↔local diff and a
+    "manual merge required" listing; copy your line over in 20 seconds.
+  - **Project-owned** (`docs/**`, `CLAUDE.md`, `SCAFFOLD.md`, `.gitignore`, the high-stakes
+    allowlist) → never touched, never reported.
+  - **Deleted locally** (in the manifest, absent on disk) → never recreated;
+    `--restore <path>` reinstalls it deliberately. A file in *neither* place is a new toolkit
+    addition and joins the update batch.
+
+> **Upgrading a pre-2.5.0 project (one-time step):** projects scaffolded before the manifest
+> existed must adopt one first — `bash scripts/sync.sh --toolkit <path> --adopt-manifest`
+> records the **current local files** as the baseline (writes only the manifest, no content).
+> Because adoption can't tell a pre-adoption customization from shipped bytes, review the first
+> post-adoption sync with `--dry-run` before confirming the batch.
+
+- `--dry-run` writes nothing (not even the manifest); a failed copy is reported and exits nonzero,
+  never counted as success. Run sync on a clean working tree so you can `git diff` the result.
 - Sync **refuses on a never-scaffolded project** (no `.claude/settings.json`) — run `install.sh` first.
 
 ## Loop engineering notes

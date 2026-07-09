@@ -33,9 +33,7 @@
       "Bash(cat **/secrets/**)",
       "Bash(cat *credentials*)",
       "Bash(env)",
-      "Bash(printenv*)",
-      "Bash(curl *)",
-      "Bash(wget *)"
+      "Bash(printenv*)"
     ]
   },
   "hooks": {

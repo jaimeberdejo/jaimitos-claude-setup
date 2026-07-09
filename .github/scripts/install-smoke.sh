@@ -60,19 +60,33 @@ for f in CLAUDE.md .claude/settings.json \
          .claude/agents/researcher.md .claude/agents/planner.md .claude/agents/executor.md .claude/agents/evaluator.md \
          .claude/commands/resume.md .claude/commands/wrap.md .claude/commands/phase.md \
          .claude/commands/autopilot.md .claude/commands/autopilot-parallel.md .claude/commands/models.md \
-         .claude/high-stakes-path-allowlist; do
+         .claude/high-stakes-path-allowlist \
+         sandbox/Dockerfile.autopilot sandbox/run-autopilot-sandboxed.sh; do
   [ -f "$f" ] && ok "installed $f" || bad "missing $f"
 done
 # Skills installed per-project — assert the FULL shipped manifest (every project skill lands with its
 # SKILL.md). A bare roadmap-only check let a dropped/renamed skill ship silently (v2.3.1 fix); this loop
 # is the authoritative shipped-skill gate. The installer/meta skill setup-jaimitos-os is NOT copied
 # per-project (it installs only via --global-skills). Keep this list in sync with doctor.sh REQUIRED_SKILLS.
-for sk in roadmap milestone adr ship-check scope-guard explain-diff unstick teach-back mapme quizme; do
+for sk in roadmap milestone adr ship-check scope-guard explain-diff unstick teach-back mapme quizme \
+          grill to-spec glossary design-twice tdd diagnose merge-conflicts; do
   [ -f ".claude/skills/$sk/SKILL.md" ] && ok "skill installed: $sk/SKILL.md" || bad "skill missing or lacks SKILL.md: .claude/skills/$sk"
 done
 [ -e .claude/skills/setup-jaimitos-os ] && bad "setup-jaimitos-os copied per-project (should be --global-skills only)" || ok "setup-jaimitos-os not copied per-project"
 # Installed version is stamped for doctor.sh.
 [ -f .claude/.jaimitos-os-version ] && ok "version stamp written (.claude/.jaimitos-os-version)" || bad "version stamp missing"
+# Sync manifest: written on install, sha256sum -c-verifiable, and toolkit-owned only (no
+# project-owned entries — sync never manages those files).
+MANIFEST=.claude/.jaimitos-manifest
+if [ -f "$MANIFEST" ]; then
+  ok "sync manifest written ($MANIFEST)"
+  if command -v sha256sum >/dev/null 2>&1; then MF_CHECK="sha256sum -c --quiet"; else MF_CHECK="shasum -a 256 -c"; fi
+  $MF_CHECK "$MANIFEST" >/dev/null 2>&1 && ok "manifest verifies (sha256sum -c) on a clean install" || bad "manifest does NOT verify with sha256sum -c"
+  { ! grep -qF "  CLAUDE.md" "$MANIFEST" && ! grep -q "  docs/" "$MANIFEST" && ! grep -qF "  SCAFFOLD.md" "$MANIFEST"; } \
+    && ok "manifest lists toolkit-owned files only" || bad "manifest lists project-owned files"
+else
+  bad "sync manifest missing ($MANIFEST)"
+fi
 # .gitignore merged, pre-existing rule preserved.
 grep -q "jaimitos-os control/secret ignores" .gitignore && ok ".gitignore merge block added" || bad ".gitignore not merged"
 grep -qx "node_modules/" .gitignore && ok "pre-existing .gitignore rule preserved" || bad "pre-existing .gitignore rule lost"

@@ -1,0 +1,27 @@
+# Dockerfile.autopilot — minimal sandbox for the headless autopilot loop.
+#
+# The ONLY supported way to run `scripts/autopilot.sh --dangerously-skip-permissions`
+# unattended: a container with the repo mounted as a volume and NO credentials in it —
+# no ~/.aws, no ~/.ssh, no .env mounts, ever. The single allowed credential is
+# ANTHROPIC_API_KEY, passed as an env var by run-autopilot-sandboxed.sh (documented there).
+# Build/run via that wrapper; you shouldn't need to touch this file.
+#
+# hadolint ignore=DL3008  (unpinned apt packages: this is a throwaway sandbox image, and
+# pinning debian package versions breaks the build on every point release for zero benefit)
+FROM debian:bookworm-slim
+
+# Everything the scaffold's scripts need: git+jq+bash for the hooks and gates,
+# nodejs/npm for the claude CLI, ca-certificates for TLS.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        bash ca-certificates git jq nodejs npm procps \
+    && rm -rf /var/lib/apt/lists/* \
+    && npm install -g @anthropic-ai/claude-code
+
+# Non-root: a bad run inside the container shouldn't even own the container.
+RUN useradd -m -u 1000 autopilot
+USER autopilot
+
+# The repo is mounted here by run-autopilot-sandboxed.sh (-v "$PWD":/work).
+WORKDIR /work
+ENTRYPOINT ["bash"]
