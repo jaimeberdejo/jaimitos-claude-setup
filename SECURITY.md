@@ -45,7 +45,11 @@ prompt) only *asks* a model to comply.
   secret scanning) + a pre-commit hook, and review your diffs. This guard only stops the obvious.
 - **`permissions.deny` is defense-in-depth, not a boundary.** The `Read(...)` denies are a
   real boundary; the `Bash(...)` denies are a bypassable speed-bump (`less`, `source`,
-  `python -c …`). The real boundary for unattended runs is the **environment**: a
+  `python -c …`). There are deliberately **no network denies** (v2.5.0 removed the old
+  `Bash(curl *)`/`Bash(wget *)` entries): network exfiltration cannot be blocked with bash
+  globs — curl is one of a thousand ways out (python, node, `nc`, a git push to a new
+  remote) — and denying it only broke legitimate daily work while implying protection that
+  didn't exist. The real boundary for unattended runs is the **environment**: a
   sandbox/container with **no production credentials** and constrained egress, plus
   `permission_mode: default`. This scaffold can't sandbox itself.
 - **`scripts/autopilot.sh --dangerously-skip-permissions` removes the permission boundary

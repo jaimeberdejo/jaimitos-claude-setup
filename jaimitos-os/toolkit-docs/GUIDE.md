@@ -137,8 +137,14 @@ a customized `CLAUDE.md`. Use `--force` to overwrite, `--with-ci` to also drop t
 `.gitignore` stops git from *committing* `.env`; it does nothing to stop Claude from *reading* it.
 `settings.json` ships a `permissions.deny` block. Know the two tiers:
 - **Real boundary:** the `Read(...)` denies block the Read tool on `.env*`, `secrets/**`, `*.pem`, `*.key`, credentials.
-- **Defense-in-depth only:** the `Bash(...)` denies (`cat *.env*`, `curl *`, …) are bypassable
+- **Defense-in-depth only:** the `Bash(...)` denies (`cat *.env*`, `env`, …) are bypassable
   (`less`, `source`, `python -c "open('.env')"`). They block obvious accidents, not a determined agent.
+- **No network denies, on purpose.** Earlier releases denied `Bash(curl *)`/`Bash(wget *)`; v2.5.0
+  removed them. Network exfiltration cannot be blocked with bash globs — curl is one of a thousand
+  ways out (`python -c "urllib..."`, `node -e "fetch(...)"`, `nc`, git push to a new remote), and
+  real dev work (data/AI engineering, the roadmap skill's own "a curl that returns the right thing"
+  Done-when idiom) needs curl daily. Pretending a glob is an egress boundary is worse than saying
+  plainly: the boundary for exfiltration is a sandbox with no credentials and constrained egress.
 - **The real shell boundary** is sandboxing: sandboxed bash + the `sandbox.credentials` setting, or
   a container with no prod credentials, plus `permission_mode: default` for sensitive work.
 
@@ -395,7 +401,10 @@ Be honest about what actually *enforces* versus what merely *advises* — differ
 - **Advisory (a model is asked to comply):** `CLAUDE.md`, `.claude/rules/*`, and the evaluator's
   prompt. These shape behavior but a confused or adversarial model can ignore them.
 - **`permissions.deny` is two-tier:** `Read(...)` denies are a real boundary; `Bash(...)` denies are
-  a best-effort speed-bump, bypassable, not a wall.
+  a best-effort speed-bump, bypassable, not a wall. There are deliberately **no network denies**
+  (no `curl`/`wget` globs): a bash glob cannot block exfiltration — python, node, `nc`, or a git
+  push to a new remote all reach the network anyway — and blocking curl breaks legitimate daily
+  work. The exfiltration boundary is the no-credentials sandbox, not a command pattern.
 - **The real boundary for truly unattended runs is the environment:** a sandbox / container with **no
   production credentials** and constrained egress. The guardrails make a good run likely and a bad
   run loud; only the sandbox makes a bad run *harmless*. Set a hard budget cap as the outer backstop.
