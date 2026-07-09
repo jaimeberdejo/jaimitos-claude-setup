@@ -458,6 +458,55 @@ Be honest about what actually *enforces* versus what merely *advises* — differ
   production credentials** and constrained egress. The guardrails make a good run likely and a bad
   run loud; only the sandbox makes a bad run *harmless*. Set a hard budget cap as the outer backstop.
 
+### Gate integrity & the scan window (the details — this section is the single source)
+
+The fine print behind the high-stakes and secret gates. README and `CLAUDE.md` carry only
+summaries; this is where the full story lives.
+
+- **High-stakes work is supervised-only, and the loops enforce it.** A graded phase whose diff
+  touches `HIGH_STAKES_RE` paths (or trips the content matcher) is never auto-ticked or committed
+  by the headless loop, and its branch is **never pushed, even with `--pr`** — it stays local for
+  review. `/phase` alone never ticks, so the gate simply never runs there; `/autopilot` routes
+  every PASS through the same `scripts/tick.sh` gate as `/wrap`, and additionally checks the next
+  phase's `Mode:` line *before building it*, so an unattended run can't carry out a supervised
+  phase's work before being blocked from ticking it. Keep high-stakes work out of the loops
+  regardless — `Mode: supervised` plus a customized `HIGH_STAKES_RE` are the backstop, not the plan.
+- **`/autopilot-parallel` and a high-stakes hit:** the same `tick.sh` gate refuses the tick/push,
+  but unlike the headless script (which aborts the *entire* run) it leaves that one phase local
+  for supervised review and continues integrating the other named phases — each was independently
+  asserted by the user as non-interfering.
+- **High-stakes path allowlist** (`.claude/high-stakes-path-allowlist`) — a git-tracked, per-line,
+  reason-required escape for **exact-path false positives** in the path matcher (e.g. an ADR whose
+  name merely contains "money"). Purely subtractive: only an exact path with a non-empty reason is
+  cleared, the enforced `HIGH_STAKES_RE` and the content scanner are unchanged, and `doctor.sh`
+  lists every active suppression. An auditable escape hatch, not a bypass.
+- **The gate cannot exempt itself.** Editing the enforced high-stakes config —
+  `.claude/lib/_high-stakes.sh` or the allowlist — inside a phase forces **supervised** review
+  (`tick.sh` exit 3), regardless of the new contents: a phase can't self-exempt or self-narrow the
+  matcher and still auto-tick. `tick.sh` cannot guard edits to *itself* (a neutered gate would run
+  its own neutered check); those are caught one level up — under headless `scripts/autopilot.sh`,
+  every gate-control file **including `scripts/tick.sh`** is byte-compared against the trusted
+  launch checkout before the gate runs, so a builder that neuters the gate in its worktree gets no
+  auto-tick and no push.
+- **The scan window is orchestrator-trusted under headless autopilot.** The secret/high-stakes
+  scan runs over `${phase-base}..HEAD`. The builder writes `.claude/.phase-base` from inside its
+  session, so under `--dangerously-skip-permissions` it is **untrusted** — `scripts/autopilot.sh`
+  derives the phase base in its OWN trusted shell, overwrites the file before the evaluator runs,
+  and passes it to `tick.sh` via `TICK_BASE` (strict-ancestor-validated), so a forged
+  `.phase-base` can't shrink the scan window to hide a commit. The per-child watchdog (wall-clock
+  timeout + parent-polled `AGENT_STOP` that kills the child tree) contains a *wedged* subtree —
+  that's liveness, not security, and doesn't relax sandbox-only. We don't claim protection we
+  don't enforce: a fully-malicious builder with arbitrary shell access can still tamper with its
+  own worktree or exfiltrate; the executor's forbidden-writes rule is advisory, and the real
+  protection is the orchestrator's trusted re-derivation + integrity checks + the no-credentials
+  sandbox.
+- **The manual `/wrap` path is the weaker, human-supervised path — by design.** `/wrap` (and
+  `/autopilot-parallel`) call `tick.sh` directly and carry neither the trusted-base override nor
+  the gate-control byte-integrity check: they trust the session-written `.claude/.phase-base` and
+  the on-disk gate code. So (1) run `/wrap` only from a **clean working tree** — uncommitted
+  changes fall outside the `${phase-base}..HEAD` scan — and (2) use headless
+  `scripts/autopilot.sh` (inside the sandbox) as the hardened path for unattended operation.
+
 ---
 
 ## Part 5 — Autonomy in depth

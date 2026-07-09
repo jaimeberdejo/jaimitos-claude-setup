@@ -79,25 +79,18 @@ prompt) only *asks* a model to comply.
   contents. `tick.sh` **cannot** guard edits to `tick.sh` itself (a neutered gate would run its own
   neutered check); those are caught under headless autopilot by the gate-control byte-integrity check
   (next bullet), not by `tick.sh` exit 3.
-- **Under headless autopilot, the gate's own code and scan window are orchestrator-trusted.**
-  `tick.sh` and `_high-stakes.sh` run from the builder's worktree, and the scan runs over
-  `${phase-base}..HEAD` where `.claude/.phase-base` is builder-written — both untrusted under
-  `--dangerously-skip-permissions`. `scripts/autopilot.sh` closes that: it derives the phase base in its
-  OWN trusted shell (overwriting the builder's file before the evaluator, strict-ancestor-validated by
-  `tick.sh` via `TICK_BASE`), and byte-compares each gate-control file against the trusted launch
-  checkout before running the gate — so a builder can neither forge `.phase-base` to hide a commit nor
-  neuter `tick.sh`/`_high-stakes.sh` in its worktree and still get an auto-tick or push. This is enforced
-  and tested; the executor's forbidden-writes rule is advisory on top of it. It still assumes a
-  sandboxed, no-credentials environment — a builder with arbitrary shell access can tamper with its own
-  worktree or exfiltrate, and we do not claim otherwise.
-- **The manual `/wrap` path is weaker than headless autopilot — by design.** `/wrap` (and
-  `/autopilot-parallel`) call `tick.sh` directly and do **not** yet have the trusted-base override or the
-  gate-control byte-integrity check that `scripts/autopilot.sh` runs: they trust the session-written
-  `.claude/.phase-base` and the on-disk gate code. Two consequences: (1) run `/wrap` only from a **clean
-  working tree** — `tick.sh` scans `${phase-base}..HEAD`, so an **uncommitted** high-stakes/secret change
-  is outside the window; (2) a forged/narrowed in-session `.phase-base` (a valid later ancestor) can shrink
-  that window. Both are acceptable because `/wrap` is **human-supervised**; for **unattended** operation use
-  **headless `scripts/autopilot.sh`**, which is the hardened path.
+- **Under headless autopilot, the gate's own code and scan window are orchestrator-trusted;
+  the manual `/wrap` path is weaker by design.** `scripts/autopilot.sh` re-derives the phase base
+  in its own trusted shell and byte-integrity-checks every gate-control file, so a builder can
+  neither forge `.claude/.phase-base` to shrink the scan window nor neuter the gate in its
+  worktree; `/wrap` (and `/autopilot-parallel`) trust the session-written base and on-disk gate
+  code and are human-supervised — run `/wrap` only from a clean working tree, and use headless
+  autopilot (in the sandbox) for unattended operation. The full mechanism — trusted re-derivation,
+  `TICK_BASE` ancestor validation, integrity checks, and their limits — is documented in
+  [GUIDE.md Part 4, "Gate integrity & the scan window"](jaimitos-os/toolkit-docs/GUIDE.md), the
+  single source for that narrative. It still assumes a sandboxed, no-credentials environment — a
+  builder with arbitrary shell access can tamper with its own worktree or exfiltrate, and we do
+  not claim otherwise.
 - **Autopilot is for low-stakes, reversible code only.** Worktree isolation, the kill-switch (now
   parent-polled *during* each child run, not just between iterations), and the per-child watchdog
   timeout reduce blast radius; they do not make irreversible actions safe. Set a hard budget cap as

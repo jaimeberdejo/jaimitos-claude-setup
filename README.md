@@ -266,68 +266,22 @@ unattended runs; use the in-session modes when you want to watch.
 
 ## Security
 
-**Enforcement reality — know which tier you're trusting:** the **deterministic** layer
-(shell hooks + `autopilot.sh` control flow — kill-switch, strict verdict parsing,
-secret-scan, high-stakes gate, evaluator-change cleanup) actually enforces and fails closed;
-the **advisory** layer (`CLAUDE.md`, `rules/`, the evaluator prompt) only asks a model to comply.
+**Two tiers.** The **deterministic** layer (shell hooks, `tick.sh`, `autopilot.sh` control flow)
+enforces and fails closed; the **advisory** layer (`CLAUDE.md`, `rules/`, agent prompts) only asks
+a model to comply. `Read(...)` denies are a real boundary; `Bash(...)` denies are a bypassable
+speed-bump — and there are deliberately **no `curl`/`wget` denies**, because a bash glob is not an
+egress boundary. The real boundary for unattended runs is a **no-credentials sandbox**, and one
+ships with the scaffold: `sandbox/run-autopilot-sandboxed.sh` (see Autonomy above).
 
-- `.gitignore` stops *committing* `.env`; it does **not** stop *reading* it. `settings.json`
-  ships a `permissions.deny` block for `.env*`, `secrets/**`, `*.pem`, `*.key`, credentials.
-- The `Read(...)` denies are a **real boundary**. The `Bash(...)` denies are a **best-effort
-  speed-bump** (bypassable via `less`, `source`, `python -c …`), not containment — the real shell
-  boundary is a sandbox/no-creds container + `permission_mode: default` for sensitive work.
-- High-stakes code (auth/authentication/oauth, migrations, money/payments/refunds, deletes,
-  external effects like deploy/email/webhook): supervised only, smallest phases, audit trail. The
-  `high-stakes.md` rule advises it, and the **headless** `autopilot.sh` high-stakes gate enforces it
-  — a graded phase whose diff touches those paths is never auto-ticked/committed, and the branch is
-  **never pushed, even with `--pr`** (it stays local for review). The enforced match list is
-  `HIGH_STAKES_RE` in `_high-stakes.sh`; **customize it per project** (run `doctor.sh` — it warns if
-  it's still the shipped default). `/phase` alone never ticks, so the gate simply never runs in
-  that mode — but `/autopilot` DOES route every PASS through the same `scripts/tick.sh` gate
-  (identical to `/wrap`), so a high-stakes diff is refused there too; `/autopilot` additionally
-  checks the next phase's `Mode:` line *before* building it, not just before ticking, so an
-  unattended run can't carry out a supervised phase's actual work before being blocked from
-  ticking it. Keep high-stakes work out of these loops regardless — `Mode: supervised` and a
-  correctly customized `HIGH_STAKES_RE` are the backstop, not the plan.
-- `/autopilot-parallel` routes every phase through the same `tick.sh` gate, so a high-stakes hit on
-  one named phase is still never auto-ticked or pushed — but unlike `scripts/autopilot.sh` (which
-  aborts the *entire* run), it leaves that one phase local for supervised review and **continues
-  integrating the other named phases**, since each was independently asserted by the user as
-  non-interfering.
-- **High-stakes path allowlist** (`.claude/high-stakes-path-allowlist`) — a git-tracked, per-line,
-  reason-required escape for **exact-path false positives** in the high-stakes path matcher (e.g. an
-  ADR file whose name merely contains "money"). Purely subtractive: only an exact path with a non-empty
-  reason is cleared; the enforced `HIGH_STAKES_RE` and the content scanner are unchanged; and
-  `doctor.sh` lists every active suppression so one is never hidden. It is an **auditable escape hatch,
-  not a bypass.**
-- **The gate cannot exempt itself.** Editing the enforced high-stakes config —
-  `.claude/lib/_high-stakes.sh` or `.claude/high-stakes-path-allowlist` — inside a phase forces
-  **supervised** review (`tick.sh` exit 3): a phase can't self-exempt or self-narrow the high-stakes
-  matcher and still auto-tick. `tick.sh` **cannot guard edits to `tick.sh` itself** (a neutered gate would
-  just run its own neutered check). Those are caught one level up: under headless `scripts/autopilot.sh`
-  every gate-control file — **including `scripts/tick.sh`** — is **integrity-checked** (byte-compared
-  against the trusted launch checkout) before the gate runs, so a builder that neuters
-  `tick.sh`/`_high-stakes.sh` in its worktree gets no auto-tick and no push. The manual `/wrap` path has no
-  such byte-integrity check and stays human-supervised (see below).
-- **The scan window is orchestrator-trusted under autopilot.** The secret/high-stakes scan runs over
-  `${phase-base}..HEAD`. The builder writes `.claude/.phase-base` from inside its session, so under
-  headless `--dangerously-skip-permissions` it is **untrusted** — `scripts/autopilot.sh` derives the
-  phase base in its OWN trusted shell, overwrites the file before the evaluator, and passes it to
-  `tick.sh` (which strict-ancestor-validates it), so a forged `.phase-base` can't shrink the scan window
-  to hide a commit. `--dangerously-skip-permissions` still removes the interactive permission boundary
-  entirely: run it **only** in a sandboxed container with no production credentials. (The child
-  watchdog — per-child timeout + parent-polled `AGENT_STOP` that kills the child tree — contains a
-  *wedged* subtree so it can't run away, but that's liveness, not security; it doesn't relax
-  sandbox-only.) We don't claim
-  protection we don't enforce — a fully-malicious builder with arbitrary shell access can still tamper
-  with its own worktree or exfiltrate; the executor's forbidden-writes rule is advisory (a model can
-  ignore it), the real protection is the orchestrator's trusted re-derivation + integrity checks.
-- **The manual `/wrap` path is the weaker, human-supervised path.** `/wrap` (and `/autopilot-parallel`)
-  call `tick.sh` directly and do **not** yet carry headless autopilot's trusted-base override or
-  gate-control byte-integrity check — they trust the session-written `.claude/.phase-base` and the on-disk
-  gate code. Run `/wrap` only from a **clean working tree** (uncommitted changes fall outside the
-  `${phase-base}..HEAD` scan), and use **headless `scripts/autopilot.sh` as the hardened path for
-  unattended operation.**
+Enforced by `tick.sh` + `_high-stakes.sh` + `_secret-scan.sh`: high-stakes paths/content are
+never auto-ticked or pushed (supervised review instead); the gate's own config can't be edited by
+the phase it gates; under headless autopilot the scan window and every gate-control file are
+orchestrator-trusted (re-derived in a trusted shell + byte-integrity-checked); the manual `/wrap`
+path is the weaker, human-supervised one — run it from a clean tree. Customize `HIGH_STAKES_RE`
+per project (`doctor.sh` warns while it's the shipped default).
+
+**The full security narrative lives in [GUIDE.md Parts 4–5](jaimitos-os/toolkit-docs/GUIDE.md#part-4--the-per-phase-cycle-hooks--the-completion-gate)
+(single source — enforcement reality, gate integrity, the scan window), plus the policy in [SECURITY.md](SECURITY.md).**
 
 ---
 
