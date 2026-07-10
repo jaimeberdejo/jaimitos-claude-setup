@@ -370,7 +370,7 @@ BASE_SIGNATURE=""
 # control prompt should force supervised review, not silently continue — so they are integrity-checked
 # here alongside the scripts. (A legitimate agent-prompt change is a supervised toolkit edit, not an
 # unattended autopilot phase.)
-GATE_CONTROL_FILES="scripts/tick.sh .claude/lib/_high-stakes.sh .claude/lib/_secret-scan.sh .claude/lib/_eval-isolation.sh .claude/lib/_roadmap.sh scripts/test-evidence.sh scripts/record-grade.sh .claude/lib/_test-cmd.sh .claude/high-stakes-path-allowlist .claude/agents/researcher.md .claude/agents/planner.md .claude/agents/executor.md .claude/agents/evaluator.md"
+GATE_CONTROL_FILES="scripts/tick.sh .claude/lib/_high-stakes.sh .claude/lib/_secret-scan.sh .claude/lib/_eval-isolation.sh .claude/lib/_roadmap.sh scripts/test-evidence.sh scripts/record-grade.sh .claude/lib/_test-cmd.sh .claude/test-command .claude/high-stakes-path-allowlist .claude/agents/researcher.md .claude/agents/planner.md .claude/agents/executor.md .claude/agents/evaluator.md"
 gate_control_intact() {
   local p
   for p in $GATE_CONTROL_FILES; do

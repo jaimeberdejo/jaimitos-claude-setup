@@ -85,7 +85,7 @@ sha256_of() {
 # install.sh's manifest writer — keep the two case patterns identical).
 project_owned() {
   case "$1" in
-    docs/*|CLAUDE.md|SCAFFOLD.md|.gitignore|.claude/high-stakes-path-allowlist) return 0 ;;
+    docs/*|CLAUDE.md|SCAFFOLD.md|.gitignore|.claude/high-stakes-path-allowlist|.claude/test-command) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -284,6 +284,16 @@ if [ "$FAILED" -gt 0 ]; then
   echo "sync: ⛔ $FAILED file(s) failed to copy — see FAILED lines above." >&2
   exit 1
 fi
+# Migration (D1): seed .claude/test-command from PERSISTENT project config if it doesn't exist yet, so
+# an existing install upgrading to the integrity-bound test-command gate (H2) keeps working without a
+# manual step. Never overwrites; never reads the transient LEAN_TEST_CMD process env; leaves the file
+# absent (fail-closed) if nothing safe can be derived. Best-effort — a seed failure never fails sync.
+if [ "$DRY_RUN" -eq 0 ] && [ -f .claude/lib/_test-cmd.sh ]; then
+  # shellcheck disable=SC1091
+  . .claude/lib/_test-cmd.sh 2>/dev/null || true
+  command -v seed_test_command_file >/dev/null 2>&1 && seed_test_command_file || true
+fi
+
 # Stamp the synced-to VERSION (mirrors install.sh) after a successful non-dry run.
 if [ "$DRY_RUN" -eq 0 ]; then
   TOOLKIT_VERSION="$(cat "$TOOLKIT/../VERSION" 2>/dev/null || echo '?')"

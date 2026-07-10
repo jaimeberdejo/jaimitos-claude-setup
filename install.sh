@@ -112,7 +112,7 @@ sha256_of() {
 # Keep this case pattern identical to sync.sh's project_owned().
 project_owned() {
   case "$1" in
-    docs/*|CLAUDE.md|SCAFFOLD.md|.gitignore|.claude/high-stakes-path-allowlist) return 0 ;;
+    docs/*|CLAUDE.md|SCAFFOLD.md|.gitignore|.claude/high-stakes-path-allowlist|.claude/test-command) return 0 ;;
     *) return 1 ;;
   esac
 }

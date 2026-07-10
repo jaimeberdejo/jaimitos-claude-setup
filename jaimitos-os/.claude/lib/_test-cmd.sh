@@ -108,5 +108,103 @@ resolve_test_cmd() {
   return 1
 }
 
+# ============================================================================================
+# authorized_test_cmd — the GRADED path (finding H2). resolve_test_cmd() above is the PROPOSAL
+# function: it autodetects from mutable, builder-writable files (settings.json's env block, package.json,
+# Makefile, …) and is fine for the advisory Stop-hook nudge and for SEEDING .claude/test-command at
+# setup time. But those same files are exactly what an implementation agent can rewrite MID-PHASE to
+# swap the graded suite for a no-op — and they are NOT gate-controlled. So the command whose result the
+# tick gate TRUSTS must come only from sources that are either not builder-controllable or are
+# gate-controlled + project-owned:
+#   1. $LEAN_TEST_CMD env — set by the operator / CI / the autopilot orchestrator in the PARENT shell;
+#      a headless builder cannot set it there. This is also how the test suites and CI legitimately
+#      stub a suite, so it is accepted as-is (a trusted launcher's explicit choice).
+#   2. .claude/test-command — a one-line, project-owned (never sync-managed), gate-controlled file
+#      (in autopilot.sh's GATE_CONTROL_FILES). A no-op here (empty / true / : / exit 0) is REJECTED —
+#      that is the builder-writable surface, so it gets the strict check. A line `none: <reason>`
+#      (or a bare `none`) is the explicit "this phase legitimately has no tests" sentinel.
+# It deliberately does NOT read settings.json's env block or ecosystem manifests — those are the H2
+# vectors. Contract:
+#   rc 0 + <cmd>  — a real command to run
+#   rc 1          — explicit no-tests sentinel (`none:`)
+#   rc 2          — a configured command was REJECTED as a no-op (fail-closed; never grade green)
+#   rc 3          — nothing configured (no env, no file) — fail-closed / unconfigured
+authorized_test_cmd() {
+  if [ -n "${LEAN_TEST_CMD:-}" ]; then printf '%s' "$LEAN_TEST_CMD"; return 0; fi
+  local f=".claude/test-command" line
+  if [ -f "$f" ]; then
+    # first non-blank, non-comment line, trimmed
+    line=$(grep -vE '^[[:space:]]*(#|$)' "$f" 2>/dev/null | head -1)
+    line="${line#"${line%%[![:space:]]*}"}"; line="${line%"${line##*[![:space:]]}"}"
+    case "$line" in
+      none|none:*) return 1 ;;
+      ''|true|':'|'exit 0'|'/bin/true'|'/usr/bin/true')
+        echo "authorized_test_cmd: .claude/test-command is empty or a no-op ('$line') — not a real test suite (fail-closed)." >&2
+        return 2 ;;
+      *) printf '%s' "$line"; return 0 ;;
+    esac
+  fi
+  echo "authorized_test_cmd: no authorized test command. Set LEAN_TEST_CMD, or write the command to" >&2
+  echo "  .claude/test-command (run 'bash scripts/doctor.sh --fix' or the setup skill to seed it from" >&2
+  echo "  your project config), or put 'none: <reason>' there for a genuinely test-less phase." >&2
+  return 3
+}
+
+# authorized_test_cmd_source — echoes a short label for WHERE authorized_test_cmd resolved from, so
+# evidence can record provenance. Kept separate so authorized_test_cmd's stdout stays the bare command.
+authorized_test_cmd_source() {
+  if [ -n "${LEAN_TEST_CMD:-}" ]; then printf 'env:LEAN_TEST_CMD'; return 0; fi
+  [ -f .claude/test-command ] && { printf 'file:.claude/test-command'; return 0; }
+  printf 'none'; return 0
+}
+
+# _seed_test_cmd — resolve a command to SEED into .claude/test-command at migration/setup time, from
+# PERSISTENT repo config ONLY (D1): settings.json's env.LEAN_TEST_CMD, then ecosystem autodetect. It
+# must NOT read the transient $LEAN_TEST_CMD process env (that would bake a one-off shell override into
+# a committed file). Rejects no-ops. Echoes "<cmd>\t<source>" and returns 0, or returns 1 if nothing
+# safe was found. Callers write the command (not the source) to the file.
+_seed_test_cmd() {
+  local cmd src
+  cmd="$(_lean_test_cmd_from_settings)"
+  if [ -n "$cmd" ]; then src="settings.json:env.LEAN_TEST_CMD"; else
+    # autodetect WITHOUT the transient env (unset in a subshell so resolve_test_cmd skips source #1)
+    cmd="$( unset LEAN_TEST_CMD; resolve_test_cmd 2>/dev/null || true )"
+    src="autodetect"
+  fi
+  case "$cmd" in
+    ''|true|':'|'exit 0'|'/bin/true'|'/usr/bin/true') return 1 ;;   # nothing safe to seed
+    *) printf '%s\t%s' "$cmd" "$src"; return 0 ;;
+  esac
+}
+
+# seed_test_command_file — migration/setup helper (D1). If .claude/test-command does NOT already exist,
+# seed it from PERSISTENT config only (via _seed_test_cmd — settings.json + autodetect, never the
+# transient env). NEVER overwrites an existing file. On success prints the exact command + source it
+# wrote. If nothing safe can be seeded, leaves the file ABSENT (the graded path then stays fail-closed)
+# and prints a precise remediation note. rc 0 = a file exists now (seeded or pre-existing); rc 1 = none.
+seed_test_command_file() {
+  local f=".claude/test-command" out cmd src
+  [ -f "$f" ] && return 0            # never overwrite a project-owned file
+  if ! out="$(_seed_test_cmd)"; then
+    echo "test-command: could not derive a test command from project config (settings.json env.LEAN_TEST_CMD" >&2
+    echo "  or a detected ecosystem manifest). Left .claude/test-command ABSENT — the tick gate fails closed" >&2
+    echo "  until you write the exact command there (one line), or export LEAN_TEST_CMD. Use 'none: <reason>'" >&2
+    echo "  for a genuinely test-less project." >&2
+    return 1
+  fi
+  cmd="${out%%	*}"; src="${out#*	}"   # split on the literal TAB _seed_test_cmd emits
+  mkdir -p .claude 2>/dev/null || true
+  {
+    echo "# .claude/test-command — the ONE authorized test command for this project (finding H2)."
+    echo "# The tick gate grades ONLY this command (or the LEAN_TEST_CMD env), never settings.json or a"
+    echo "# mutable manifest. Project-owned: sync never overwrites it. First non-comment line is the command."
+    echo "# Use 'none: <reason>' if this project genuinely has no tests."
+    echo "# Seeded from: $src"
+    printf '%s\n' "$cmd"
+  } > "$f" 2>/dev/null || { echo "test-command: failed to write $f" >&2; return 1; }
+  echo "test-command: seeded .claude/test-command → '$cmd'  (source: $src)"
+  return 0
+}
+
 # Sourcing only defines the function; running this file directly is a harmless no-op.
 return 0 2>/dev/null || exit 0

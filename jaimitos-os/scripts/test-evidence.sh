@@ -42,8 +42,19 @@ mkdir -p .claude 2>/dev/null || true
 HEAD=$(git rev-parse HEAD 2>/dev/null || echo "")
 
 [ -f .claude/lib/_test-cmd.sh ] && . .claude/lib/_test-cmd.sh 2>/dev/null || true
-CMD=""
-if command -v resolve_test_cmd >/dev/null 2>&1; then CMD=$(resolve_test_cmd 2>/dev/null || true); fi
+command -v authorized_test_cmd >/dev/null 2>&1 || { echo "test-evidence: _test-cmd.sh unavailable (no authorized_test_cmd) — fail-closed" >&2; exit 1; }
+
+# GRADED source only (H2): the command comes from authorized_test_cmd (LEAN_TEST_CMD env, or the
+# gate-controlled .claude/test-command), NEVER from settings.json's env block or a mutable manifest.
+CMD=$(authorized_test_cmd); AC_RC=$?
+SRC="$(authorized_test_cmd_source 2>/dev/null || echo '')"
+# config_sha: identity of the config that authorized the command, so tick evidence records WHICH
+# configuration was in force (a mismatch across a phase is then detectable). Only .claude/test-command
+# has a stable on-disk identity; an env override records its own literal as the identity input.
+CFG_SHA=""
+if [ "$SRC" = "file:.claude/test-command" ] && [ -f .claude/test-command ]; then
+  CFG_SHA=$( { shasum -a 256 .claude/test-command 2>/dev/null || sha256sum .claude/test-command 2>/dev/null; } | cut -d' ' -f1 )
+fi
 
 # emit <passed-json-literal> <command-or-empty> <exit-or-null> <note-or-empty>
 emit() {
@@ -53,23 +64,34 @@ emit() {
      --argjson exit "${3:-null}" \
      --arg run_id "$HEAD" \
      --arg note "$4" \
+     --arg source "$SRC" \
+     --arg config_sha "$CFG_SHA" \
      '{passed: $passed,
        command: (if $cmd == "" then null else $cmd end),
        exit: $exit,
-       run_id: $run_id}
+       run_id: $run_id,
+       source: (if $source == "" then null else $source end),
+       config_sha: (if $config_sha == "" then null else $config_sha end)}
       + (if $note == "" then {} else {note: $note} end)' \
      > "$OUT_FILE" 2>/dev/null || true
 }
 
-if [ -z "$CMD" ]; then
-  emit null "" null "no test command resolved"
-  if [ "$ALLOW_NO_TESTS" -eq 1 ]; then
-    echo "test-evidence: no test command resolved — recorded passed:null (--allow-no-tests)."
-    exit 0
-  fi
-  echo "test-evidence: no test command resolved — fail-closed (pass --allow-no-tests to record null and continue)." >&2
-  exit 1
-fi
+case "$AC_RC" in
+  2)  # a CONFIGURED command was rejected as a no-op (e.g. a builder wrote `true` to the file) — hard
+      # fail, never record green. This is the H2 attack surface; it must not pass.
+      emit false "" null "configured test command rejected as a no-op (fail-closed)"
+      echo "test-evidence: ⛔ the configured test command is a no-op — refusing to record evidence (fail-closed)." >&2
+      exit 1 ;;
+  1|3)  # no tests: explicit `none:` sentinel (1) or nothing configured (3). Record passed:null; whether
+        # null is acceptable for a TICK is still decided downstream by tick.sh via evaluator NO_TESTS_OK.
+      emit null "" null "no test command resolved"
+      if [ "$ALLOW_NO_TESTS" -eq 1 ]; then
+        echo "test-evidence: no authorized test command — recorded passed:null (--allow-no-tests)."
+        exit 0
+      fi
+      echo "test-evidence: no authorized test command — fail-closed (pass --allow-no-tests to record null and continue)." >&2
+      exit 1 ;;
+esac
 
 # Retry-with-backoff before recording red: this script is invoked in the most fragile window
 # of an autopilot iteration — right after the builder subprocess exits, when leftover

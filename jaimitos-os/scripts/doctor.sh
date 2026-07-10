@@ -340,6 +340,36 @@ if [ -f CLAUDE.md ]; then
 fi
 echo ""
 
+echo "Authorized test command (the ONLY command the tick gate grades — finding H2):"
+# The graded path reads .claude/test-command (or the LEAN_TEST_CMD env), never settings.json or a
+# mutable manifest. Missing + no env → the tick gate fails closed. Under --fix, seed it from persistent
+# project config (never the transient env); otherwise flag it as an unconfigured install.
+if [ -f .claude/test-command ]; then
+  TC_LINE=$(grep -vE '^[[:space:]]*(#|$)' .claude/test-command 2>/dev/null | head -1)
+  case "$TC_LINE" in
+    none|none:*) ok ".claude/test-command → 'no tests' sentinel ($TC_LINE)" ;;
+    ''|true|':'|'exit 0') bad ".claude/test-command is empty or a no-op ('$TC_LINE') — not a real suite (fail-closed at tick)" ;;
+    *) ok ".claude/test-command → '$TC_LINE'" ;;
+  esac
+elif [ -n "${LEAN_TEST_CMD:-}" ]; then
+  ok "LEAN_TEST_CMD is set in the environment ('$LEAN_TEST_CMD') — the graded command"
+elif [ "$FIX" -eq 1 ] && [ -f .claude/lib/_test-cmd.sh ]; then
+  # shellcheck source=/dev/null
+  . .claude/lib/_test-cmd.sh 2>/dev/null || true
+  if command -v seed_test_command_file >/dev/null 2>&1 && seed_test_command_file; then
+    fixed "seeded .claude/test-command from project config"
+  else
+    warn ".claude/test-command is unset and could not be auto-seeded — write the exact test command"
+    warn "  there (one line), or export LEAN_TEST_CMD, or use 'none: <reason>'. The tick gate fails closed until then."
+    UNCONFIGURED=1
+  fi
+else
+  warn ".claude/test-command is unset — the tick gate has no authorized test command and will fail closed."
+  warn "  Run 'bash scripts/doctor.sh --fix' to seed it from your project config, or write it by hand."
+  UNCONFIGURED=1
+fi
+echo ""
+
 echo "Toolkit sync:"
 if [ -f .claude/.jaimitos-os-version ]; then
   ok "scaffolded from jaimitos-os $(cat .claude/.jaimitos-os-version)"

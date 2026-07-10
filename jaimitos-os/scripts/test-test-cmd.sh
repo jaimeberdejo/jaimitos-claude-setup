@@ -14,6 +14,10 @@ command -v jq >/dev/null 2>&1 || { echo "test: jq required"; exit 1; }
 . "$LIB"
 
 FAILS=0
+# pass/fail for the subshell-wrapped tests below: fail RETURNS nonzero so the enclosing
+# `( ... ) || FAILS=$((FAILS+1))` counts it (a subshell's own FAILS++ would be lost on exit).
+pass() { printf '  ✓ %s\n' "$1"; return 0; }
+fail() { printf '  ✗ %s\n' "$1"; return 1; }
 
 WORK="$(mktemp -d 2>/dev/null || mktemp -d -t leanstack)"
 cleanup() { rm -rf "$WORK" 2>/dev/null; }
@@ -334,6 +338,65 @@ echo "exit, clean stdout (was a SILENT empty before M2 — the deadlock this fix
   scenario_dir
   unset LEAN_TEST_CMD; PATH="/usr/bin:/bin"; export PATH
   expect_loud_fallback "empty project, nothing detected"
+) || FAILS=$((FAILS+1))
+
+echo ""
+echo "authorized_test_cmd — the GRADED path (H2). It reads ONLY the LEAN_TEST_CMD env and the"
+echo "gate-controlled .claude/test-command; NEVER settings.json's env block or a mutable manifest:"
+(
+  scenario_dir
+  # H2 vectors present but authorized_test_cmd must IGNORE them: a builder could edit either.
+  mkdir -p .claude
+  printf '{"env":{"LEAN_TEST_CMD":"true"}}\n' > .claude/settings.json      # builder-writable
+  printf '{"scripts":{"test":"exit 0"}}\n' > package.json                   # builder-writable
+  unset LEAN_TEST_CMD
+  authorized_test_cmd >/dev/null 2>&1; rc=$?
+  [ "$rc" = 3 ] && pass "settings.json/package.json are NOT graded — no file, no env → fail-closed rc 3" \
+                || fail "authorized_test_cmd read a mutable manifest/settings (rc=$rc, expected 3)"
+) || FAILS=$((FAILS+1))
+(
+  scenario_dir
+  export LEAN_TEST_CMD="pytest -q"
+  out=$(authorized_test_cmd); rc=$?
+  { [ "$rc" = 0 ] && [ "$out" = "pytest -q" ]; } && pass "LEAN_TEST_CMD env → used verbatim (trusted launcher)" || fail "env override not honored (rc=$rc, out='$out')"
+) || FAILS=$((FAILS+1))
+(
+  scenario_dir; mkdir -p .claude; unset LEAN_TEST_CMD
+  printf 'pytest -q\n' > .claude/test-command
+  out=$(authorized_test_cmd); rc=$?
+  { [ "$rc" = 0 ] && [ "$out" = "pytest -q" ]; } && pass ".claude/test-command → used when no env" || fail "file command not read (rc=$rc, out='$out')"
+) || FAILS=$((FAILS+1))
+(
+  scenario_dir; mkdir -p .claude; unset LEAN_TEST_CMD
+  printf 'true\n' > .claude/test-command
+  authorized_test_cmd >/dev/null 2>&1; rc=$?
+  [ "$rc" = 2 ] && pass "a no-op ('true') in .claude/test-command → REJECTED (rc 2, never grades green)" || fail "no-op file command not rejected (rc=$rc)"
+) || FAILS=$((FAILS+1))
+(
+  scenario_dir; mkdir -p .claude; unset LEAN_TEST_CMD
+  printf 'none: this phase is docs-only, no tests\n' > .claude/test-command
+  authorized_test_cmd >/dev/null 2>&1; rc=$?
+  [ "$rc" = 1 ] && pass "'none: <reason>' sentinel → rc 1 (explicit no-tests, not a no-op reject)" || fail "none: sentinel mishandled (rc=$rc)"
+) || FAILS=$((FAILS+1))
+
+echo ""
+echo "_seed_test_cmd — migration seeding reads PERSISTENT config only (settings.json + autodetect),"
+echo "NEVER the transient LEAN_TEST_CMD process env (D1):"
+(
+  scenario_dir; mkdir -p .claude
+  export LEAN_TEST_CMD="transient-should-not-persist"          # transient process env
+  printf '{"env":{"LEAN_TEST_CMD":"pytest -q"}}\n' > .claude/settings.json   # persistent
+  out=$(_seed_test_cmd); rc=$?
+  { [ "$rc" = 0 ] && printf '%s' "$out" | grep -q 'pytest -q' && ! printf '%s' "$out" | grep -q 'transient'; } \
+    && pass "seed uses settings.json (persistent), NOT the transient LEAN_TEST_CMD env" \
+    || fail "seed leaked the transient env or missed persistent config (rc=$rc, out='$out')"
+) || FAILS=$((FAILS+1))
+(
+  scenario_dir; unset LEAN_TEST_CMD
+  # nothing persistent, autodetect finds nothing safe → seed refuses (leave the file absent)
+  PATH="/usr/bin:/bin"; export PATH
+  _seed_test_cmd >/dev/null 2>&1; rc=$?
+  [ "$rc" = 1 ] && pass "no persistent config + no autodetect → seed returns nothing (file left absent, fail-closed)" || fail "seed produced something from nothing (rc=$rc)"
 ) || FAILS=$((FAILS+1))
 
 echo ""
