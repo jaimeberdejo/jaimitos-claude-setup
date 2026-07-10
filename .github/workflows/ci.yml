@@ -48,7 +48,9 @@ jobs:
           # AND `|| true` both guard it, so shfmt differences (or an install hiccup) never break CI.
           # Flip this to a blocking gate once the tree is actually shfmt-formatted.
           go install mvdan.cc/sh/v3/cmd/shfmt@v3.8.0 || true
-          export PATH="$PATH:$(go env GOPATH)/bin"
+          # Declare + assign separately (SC2155): keep `go env`'s exit status out of the export.
+          GOPATH_BIN="$(go env GOPATH)/bin"
+          export PATH="$PATH:$GOPATH_BIN"
           if command -v shfmt >/dev/null 2>&1; then
             shfmt -d install.sh .github/scripts/*.sh jaimitos-os/scripts/*.sh \
                      jaimitos-os/.claude/hooks/*.sh jaimitos-os/.claude/lib/*.sh jaimitos-os/sandbox/*.sh || true

@@ -10,7 +10,10 @@ uses [Semantic Versioning](https://semver.org/).
 - **Master CI is green again.** The v2.6.0 guard suite had never actually run in CI: the shellcheck
   step failed first (a `lint-shell.sh` doc comment whose leading token `shellcheck` was misparsed as a
   directive → SC1073/1072; and `LEAN_CHECKPOINT= bash …` in `test-doctor.sh` → SC1007), which masked
-  the guard tests entirely. Fixed both, plus the failures the guard tests then surfaced:
+  the guard tests entirely. Fixed both, plus the failures each newly-reached step then surfaced:
+  - **actionlint** — once shellcheck passed, actionlint (it lints workflow `run:` blocks through
+    shellcheck) flagged SC2155 in `ci.yml`'s shfmt step (`export PATH="$PATH:$(go env GOPATH)/bin"`
+    masks `go env`'s exit status); split the declare and assign.
   - **`claude`-less runner** — `test-doctor.sh` and the `test-sandbox.sh` sandbox-gate tests run
     `doctor.sh`/`autopilot.sh`, which correctly treat a missing `claude` CLI as fatal; CI installs no
     `claude`. Both now stub a no-op `claude` on `PATH` so the tests assert scaffold/gate behavior, not
