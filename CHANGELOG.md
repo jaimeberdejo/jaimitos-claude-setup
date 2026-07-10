@@ -8,6 +8,65 @@ uses [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [2.6.0] — 2026-07-10
+
+Closing guarantees: make the evaluator's independence mechanical in both run modes, fail-closed the
+sandbox brake, and let the secret scan be a real scanner. No new commands, skills, or agents.
+`VERSION` → `2.6.0`. Not tagged.
+
+### Fixed
+- **The evaluator-isolation asymmetry — a broken guarantee, not an enhancement.** Headless
+  `scripts/autopilot.sh` discarded any file change the evaluator wrote; interactive `/phase` did
+  not — so the grader's independence was mechanical headless but merely a *convention* in the
+  most-used mode, and undocumented. The evaluator has `Bash`, and `>` is a write; the realistic
+  vector is a *complacent* grader whose test re-run lets a fixture get written that makes the grade
+  pass. Extracted the mechanism to `.claude/lib/_eval-isolation.sh` (`eval_snapshot` +
+  `eval_restore` (destructive, headless) + `eval_changed_files` (non-destructive detect,
+  interactive)). `autopilot.sh` now sources the lib instead of duplicating it (behavior identical,
+  proven by the existing gate tests). `/phase` snapshots before grading (fail-closed) and, after,
+  **refuses to advance and names the exact files** if the grader wrote — it never `git reset
+  --hard`s your live checkout (that would eat WIP); a human is present to clean up. The lib is
+  gate-integrity-checked under headless and required by `doctor.sh`.
+
+### Added
+- **`LEAN_SECRET_SCANNER`** (`regex` default | `gitleaks` | `trufflehog`) — opt a real scanner in as
+  the backend of `secret_scan_diff`, same 0/1/2 contract, so `tick.sh`/`commit-on-stop.sh` are
+  untouched. Fail-closed: a selected-but-missing binary stops the scan (never a silent downgrade to
+  regex). `doctor.sh` hard-fails when a selected scanner is absent.
+- **`autopilot.sh --i-understand-no-sandbox`** — `--dangerously-skip-permissions` on a bare host
+  (no `JAIMITOS_SANDBOXED` / `/.dockerenv` / container-cgroup signal) is now **refused** unless this
+  flag is passed; with it, a loud banner is printed and recorded in the run log. The wrapper exports
+  `JAIMITOS_SANDBOXED=1`. Signals are documented as reminders, not a boundary.
+- **`/autopilot-parallel` requires the literal phrase `I assert these phases are independent`**
+  before building (a sentence isn't typed reflexively like `--yes`), and can now reuse the Fase 1
+  lib to isolate its integration-time grades.
+- **`doctor.sh` subagent-frontmatter check** (warn): flags a subagent file that uses hyphenated
+  skill-style keys (`disallowed-tools`/`permission-mode`) instead of camelCase
+  (`disallowedTools`/`permissionMode`), or malformed frontmatter that loads with empty metadata —
+  both silently drop the restriction you think you set. Warn, not error: the docs confirm the
+  camelCase names but not whether the CLI rejects vs ignores a hyphenated key. Also a new `doctor`
+  `info` level for non-problem notes.
+- **Shell-lint hardening (minor):** repo-root `.shellcheckrc` (codifies CI's existing flags),
+  `.github/scripts/lint-shell.sh` (local convenience: blocking shellcheck + advisory shfmt), CI now
+  lints `sandbox/*.sh` (a gap since v2.5.0) and runs an **advisory** `shfmt -d` step. shfmt is
+  advisory-only because the tree predates it; flip it to blocking once formatted.
+
+### Changed
+- **`/autopilot-parallel` is now labeled Advanced / experimental** in README and GUIDE, with its
+  absent guarantees (no child watchdog, no auto-retry) listed alongside.
+
+### Deferred (out of scope, with a reactivation trigger)
+- **Run-ledger JSONL** — when the 3-strike thrash cap fails to stop a runaway even once.
+- **Two-axis (Spec/Impl) evaluator** — when the evaluator passes something a Spec axis would catch.
+- **context7 MCP for the researcher** — when the researcher hallucinates an API in practice.
+- **Modern command frontmatter (`description`/`argument-hint`)** — a dead afternoon; verify each key
+  against the live docs first (adding keys the CLI ignores is maintenance noise).
+- **statusline / MCP profiles / monorepo / devcontainer / per-stack templates / `/audit-setup` /
+  solo-vs-team install profiles / PR-level code-review** — when real use demands it, not before.
+
+### Note
+- **TODO 2026-09-09 (carried from v2.5.0): `autopilot.sh` usage review.** Unchanged.
+
 ## [2.5.0] — 2026-07-09
 
 External-audit fixes + seven skills adapted from

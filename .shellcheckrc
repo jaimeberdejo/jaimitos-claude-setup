@@ -1,0 +1,12 @@
+# .shellcheckrc — shared shellcheck config for the toolkit's shell code.
+# This only CODIFIES what CI already passes on the command line (severity=warning, and the two
+# source-follow disables), so making it explicit changes no behavior — it just means a local
+# `shellcheck` run matches CI, and `scripts`/`.github/scripts` don't each need the flags inline.
+#
+# Floor: warnings and above fail. (Style/info are not enforced — raise deliberately, not by drift.)
+severity=warning
+
+# SC1090/SC1091: "can't follow non-constant / not-included source". Every lib is sourced by a
+# runtime-resolved path (`. .claude/lib/_x.sh`) that shellcheck can't statically follow; that's by
+# design, not a bug. Disabled repo-wide (matches CI's `-e SC1090,SC1091`).
+disable=SC1090,SC1091

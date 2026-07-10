@@ -30,13 +30,31 @@ jobs:
           bash -n install.sh
           bash -n .github/scripts/install-smoke.sh
 
-      - name: shellcheck — installer, scaffold scripts, hooks, libs
+      - name: shellcheck — installer, scaffold scripts, hooks, libs, sandbox
         run: |
+          # Flags mirror the repo-root .shellcheckrc (kept explicit here too so the gate is legible).
+          # sandbox/*.sh added in v2.6.0 — the sandbox wrapper was shell code CI wasn't linting.
           shellcheck -S warning -e SC1090,SC1091 \
             install.sh .github/scripts/*.sh \
             jaimitos-os/scripts/*.sh \
             jaimitos-os/.claude/hooks/*.sh \
-            jaimitos-os/.claude/lib/*.sh
+            jaimitos-os/.claude/lib/*.sh \
+            jaimitos-os/sandbox/*.sh
+
+      - name: shfmt -d (advisory — the tree isn't shfmt-formatted yet, so this never fails the build)
+        continue-on-error: true
+        run: |
+          # GitHub runners ship Go; install shfmt from source, pinned. Advisory only: continue-on-error
+          # AND `|| true` both guard it, so shfmt differences (or an install hiccup) never break CI.
+          # Flip this to a blocking gate once the tree is actually shfmt-formatted.
+          go install mvdan.cc/sh/v3/cmd/shfmt@v3.8.0 || true
+          export PATH="$PATH:$(go env GOPATH)/bin"
+          if command -v shfmt >/dev/null 2>&1; then
+            shfmt -d install.sh .github/scripts/*.sh jaimitos-os/scripts/*.sh \
+                     jaimitos-os/.claude/hooks/*.sh jaimitos-os/.claude/lib/*.sh jaimitos-os/sandbox/*.sh || true
+          else
+            echo "shfmt unavailable in this runner — advisory step skipped."
+          fi
 
       - name: actionlint — both workflow files
         run: |
