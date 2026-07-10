@@ -8,6 +8,27 @@ uses [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [2.8.1] — 2026-07-11
+
+Patch release. Corrects a dangling command reference introduced in 2.8.0. No safety-path behavior
+changes — the N-2 fail-closed refusal on a failed STATE write is unchanged; only the recovery guidance
+it prints is now accurate.
+
+### Fixed
+- **Dangling `doctor.sh --state` reference in `scripts/tick.sh`.** On a failed `docs/STATE.md` write
+  (finding N-2) tick.sh refused correctly but told the user to run `bash scripts/doctor.sh --state` — a
+  command that was deferred and never implemented (`doctor.sh` rejects it with exit 2). The recovery
+  message and its code comment now name only supported actions: `docs/ROADMAP.md` is authoritative;
+  restore or repair `docs/STATE.md` and re-run `bash scripts/tick.sh` on a clean tree. New regression
+  test (`scripts/test-tick.sh`, case 16e) forces the STATE write to fail and asserts tick exits
+  non-zero, never prints `✓ ticked`, never mentions `doctor.sh --state`, and that every command named
+  in the recovery message actually exists.
+
+### Deferred (unchanged, still tracked)
+- Full transactional ROADMAP+STATE two-file update and a complete `doctor --state` cross-file
+  invariant/repair path (audit N2/6.7) remain a separately tracked future improvement — deliberately
+  NOT pulled into this patch.
+
 ## [2.8.0] — 2026-07-10
 
 Hardening release acting on the repository-wide 2026-07-10 audit (`docs/dev/audits/`). It closes the

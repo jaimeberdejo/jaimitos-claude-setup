@@ -536,6 +536,27 @@ chmod 0644 "$REPO/docs/STATE.md" 2>/dev/null || true
   && pass "failed STATE write → non-zero exit, no '✓ ticked' (N-2)" \
   || fail "failed STATE write reported success (rc=$rc, out follows)"; [ "$rc" = 0 ] && tail -3 "$WORK/out"
 
+# 16e — the recovery message on a failed STATE write must name ONLY real, supported actions: it must
+# NOT reference the never-implemented `doctor.sh --state`, and every `scripts/<name>.sh` command it
+# shows must actually exist. Regression for the dangling doctor.sh --state reference (removed v2.8.1).
+mkrepo t16e; good_grade t16e; good_evidence t16e
+chmod 0444 "$REPO/docs/STATE.md"
+rc=$(runtick "$REPO")
+chmod 0644 "$REPO/docs/STATE.md" 2>/dev/null || true
+recovery=$(grep -F 'STATE update FAILED' "$WORK/out" 2>/dev/null || true)
+# a) the failure path fired: non-zero exit, a recovery message printed, no false '✓ ticked'
+a_ok=0; { [ "$rc" != 0 ] && [ -n "$recovery" ] && ! grep -q '✓ ticked' "$WORK/out"; } || a_ok=1
+# b) it must NOT point at the non-existent `doctor.sh --state` (nor any bare `--state` flag)
+b_ok=0; printf '%s\n' "$recovery" | grep -qE '\-\-state' && b_ok=1
+# c) every `scripts/<name>.sh` the message names must exist in the repo (no dangling command refs)
+c_ok=0
+for s in $(printf '%s\n' "$recovery" | grep -oE 'scripts/[A-Za-z0-9_-]+\.sh' | sort -u); do
+  [ -f "$REPO/$s" ] || { c_ok=1; break; }
+done
+{ [ "$a_ok" = 0 ] && [ "$b_ok" = 0 ] && [ "$c_ok" = 0 ]; } \
+  && pass "failed STATE write → recovery names only existing commands, no doctor.sh --state (v2.8.1)" \
+  || fail "recovery message inaccurate (rc=$rc a=$a_ok nostate=$b_ok cmds=$c_ok): $recovery"
+
 echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All tick gate + evidence tests passed."; exit 0
 else echo "$FAILS tick test(s) FAILED."; echo "--- last tick output ---"; tail -n 20 "$WORK/out" 2>/dev/null; exit 1; fi

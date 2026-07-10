@@ -351,8 +351,10 @@ fi
 rm -f .claude/.phase-ready .claude/.phase-grade .claude/.supervised-approval 2>/dev/null || true
 # N-2: a failed STATE write must NOT be reported as success. The ROADMAP checkbox is already flipped
 # at this point (an intended, committed-later change), so a STATE failure leaves the two files out of
-# sync — refuse loudly and point at the repair path (doctor --state, added in Phase 7) rather than
-# printing "✓ ticked" and exiting 0.
-update_state "$heading" || refuse "STATE update FAILED after ROADMAP was ticked — files are out of sync; repair with 'bash scripts/doctor.sh --state' (or restore docs/STATE.md and re-run)"
+# sync — refuse loudly and point at a real, supported recovery path (docs/ROADMAP.md is authoritative;
+# restore/repair docs/STATE.md and re-run this script on a clean tree) rather than printing "✓ ticked"
+# and exiting 0. (A full transactional two-file update + a doctor --state repair path are tracked as a
+# future improvement; do NOT name a command here that does not yet exist.)
+update_state "$heading" || refuse "STATE update FAILED after ROADMAP was ticked — docs/ROADMAP.md and docs/STATE.md are now out of sync. docs/ROADMAP.md is authoritative: restore or repair docs/STATE.md to match it (make the file writable), then re-run 'bash scripts/tick.sh' on a clean tree."
 echo "tick: ✓ ticked '$heading' ($((before - after)) item(s))"
 exit 0
