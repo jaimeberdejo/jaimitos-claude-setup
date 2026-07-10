@@ -17,10 +17,17 @@
 #   8. make test              (Makefile/makefile with a real `^test:` target AND `make` on PATH)
 #   9. mvn -q test            (pom.xml present AND `mvn` on PATH)
 #  10. gradle test            (build.gradle or build.gradle.kts present AND `gradle` on PATH)
+#  11. dbt build             (dbt_project.yml present AND `dbt` on PATH)
 #
-# Ecosystem detectors (6-10) each require BOTH the manifest file AND the runner on PATH — mirroring
+# Ecosystem detectors (6-11) each require BOTH the manifest file AND the runner on PATH — mirroring
 # how uv/poetry/npm are gated — so resolve_test_cmd never emits a command whose runner is not
 # installed; an unmatched manifest simply falls through to the next check.
+#
+# dbt (11) runs `dbt build`, which executes the models AND their tests in dependency order — `dbt test`
+# alone would grade a warehouse the phase never rebuilt. It sits with the other manifests, i.e. AFTER
+# the pytest checks (2-4): `dbt init` scaffolds a `tests/` dir, so a dbt project that ALSO has pytest
+# installed resolves to pytest first. That is intentional — a repo with both usually does have Python
+# tests to run — but if you want the dbt run to be the graded suite, set LEAN_TEST_CMD="dbt build".
 #
 # If NOTHING matches, resolve_test_cmd writes a precise "no known test runner detected — set
 # LEAN_TEST_CMD" message to STDERR (stdout stays clean for command-capturing callers) and returns 1.
@@ -92,9 +99,12 @@ resolve_test_cmd() {
   if { [ -f build.gradle ] || [ -f build.gradle.kts ]; } && command -v gradle >/dev/null 2>&1; then
     printf '%s' "gradle test"; return 0
   fi
+  if [ -f dbt_project.yml ] && command -v dbt >/dev/null 2>&1; then
+    printf '%s' "dbt build"; return 0
+  fi
   # Nothing matched. Loud, precise instruction to STDERR (never stdout — command-capturing callers
   # must stay unaffected) so a non-pytest/npm project cannot silently deadlock the tick gate.
-  printf '%s\n' "resolve_test_cmd: no known test runner detected for this project (checked uv/poetry/pytest, npm, go, cargo, make, mvn, gradle). Set LEAN_TEST_CMD to the exact test command via the environment, or add .env.LEAN_TEST_CMD to .claude/settings.json, so the tick gate can record test evidence." >&2
+  printf '%s\n' "resolve_test_cmd: no known test runner detected for this project (checked uv/poetry/pytest, npm, go, cargo, make, mvn, gradle, dbt). Set LEAN_TEST_CMD to the exact test command via the environment, or add .env.LEAN_TEST_CMD to .claude/settings.json, so the tick gate can record test evidence." >&2
   return 1
 }
 

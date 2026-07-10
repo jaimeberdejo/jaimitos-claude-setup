@@ -23,7 +23,7 @@ trap cleanup EXIT
 # these, it never executes them, so trivial no-op stubs make the tests hermetic regardless of
 # what's actually installed on the machine running them.
 BIN="$WORK/bin"; mkdir -p "$BIN"
-for tool in uv poetry pytest go cargo make mvn gradle; do
+for tool in uv poetry pytest go cargo make mvn gradle dbt; do
   printf '#!/usr/bin/env bash\nexit 0\n' > "$BIN/$tool"
   chmod +x "$BIN/$tool"
 done
@@ -277,6 +277,13 @@ echo "M2 — common non-Python/JS ecosystems (were a hard tick-gate deadlock bef
   unset LEAN_TEST_CMD; PATH="$BIN:/usr/bin:/bin"; export PATH
   expect_cmd "build.gradle + gradle on PATH" "gradle test"
 ) || FAILS=$((FAILS+1))
+# dbt: `dbt build` (models AND their tests), not `dbt test` — the audit's day-one blocker for a
+# data-engineering project, whose first phase could not produce tick evidence without it.
+(
+  scenario_dir; : > dbt_project.yml
+  unset LEAN_TEST_CMD; PATH="$BIN:/usr/bin:/bin"; export PATH
+  expect_cmd "dbt_project.yml + dbt on PATH" "dbt build"
+) || FAILS=$((FAILS+1))
 
 echo ""
 echo "A Makefile WITHOUT a real test: target must NOT resolve to make (falls through to loud fallback):"
@@ -299,6 +306,17 @@ echo "whose runner is missing):"
   for _t in grep sed awk cat; do _p=$(command -v "$_t" 2>/dev/null) && ln -sf "$_p" "$norunner/$_t"; done
   PATH="$norunner"; export PATH
   expect_loud_fallback "go.mod present but go absent from PATH"
+) || FAILS=$((FAILS+1))
+# Same for dbt: a dbt_project.yml with no `dbt` installed must fall through to the loud fallback, never
+# emit a command that cannot run. Uses the runner-free PATH farm above, NOT "/usr/bin:/bin" — a CI
+# runner may ship a tool in /usr/bin, which would silently make this case vacuous.
+(
+  scenario_dir; : > dbt_project.yml
+  unset LEAN_TEST_CMD
+  norunner="$WORK/norunner-dbt"; mkdir -p "$norunner"
+  for _t in grep sed awk cat; do _p=$(command -v "$_t" 2>/dev/null) && ln -sf "$_p" "$norunner/$_t"; done
+  PATH="$norunner"; export PATH
+  expect_loud_fallback "dbt_project.yml present but dbt absent from PATH"
 ) || FAILS=$((FAILS+1))
 
 echo ""
