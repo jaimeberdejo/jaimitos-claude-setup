@@ -61,14 +61,36 @@ _high_stakes_allowlisted() {
   return 1
 }
 
+# hs_regex_valid <regex>: 0 if the regex COMPILES under grep -E, 1 if it does not.
+#   grep exits 0 (match) or 1 (no match) on a VALID pattern, and >1 (POSIX: 2) on a compile error.
+#   We probe against EMPTY input so a valid pattern always yields rc 1 (no match) and only an
+#   invalid pattern yields rc >1. Portable across BSD grep (macOS) and GNU grep — the ">1 on error"
+#   contract is POSIX-mandated. `-Ei` mirrors the live matchers so validity is judged identically.
+hs_regex_valid() {
+  printf '' | grep -Eiq "$1" 2>/dev/null
+  [ "$?" -le 1 ]
+}
+
 # high_stakes_match <newline-separated-paths>
-#   Echoes the matching paths; returns 0 if any matched, 1 if none.
-#   FAILS SAFE: if HIGH_STAKES_RE is empty or unset (a customization slip), treat EVERY
-#   path as high-stakes rather than silently matching nothing (which would fail OPEN).
+#   Three-state contract:
+#     rc 0 — one or more paths matched (echoed to stdout)
+#     rc 1 — clean (no path matched)
+#     rc 2 — CONFIGURATION ERROR: HIGH_STAKES_RE does not compile. Callers MUST fail closed on rc 2
+#            (never treat it as rc 1 "clean"). Finding H4/N-4: a `if HS=$(high_stakes_match ...)`
+#            caller swallows rc 2 exactly like rc 1, so a typo in the ENFORCED regex would silently
+#            disable the gate. The distinct rc 2 exists so every caller can refuse instead.
+#   FAILS SAFE on empty/unset (a customization slip) with rc 0 — treats EVERY path as high-stakes
+#   rather than matching nothing (which would fail OPEN). Empty (rc 0) and invalid (rc 2) are
+#   deliberately DIFFERENT: empty is a benign blank, invalid is a broken pattern the user must fix.
 high_stakes_match() {
   if [ -z "${HIGH_STAKES_RE:-}" ]; then
     echo "high-stakes: HIGH_STAKES_RE is empty/unset — failing SAFE (treating all paths as high-stakes)." >&2
     printf '%s\n' "$1"; return 0
+  fi
+  if ! hs_regex_valid "$HIGH_STAKES_RE"; then
+    echo "high-stakes: HIGH_STAKES_RE does not compile — fail-CLOSED (configuration error, rc 2)." >&2
+    echo "high-stakes:   fix the regex in .claude/lib/_high-stakes.sh; the gate is disabled until it compiles." >&2
+    return 2
   fi
   local matched line
   matched=$(printf '%s\n' "$1" | grep -Ei "$HIGH_STAKES_RE" 2>/dev/null)
@@ -115,11 +137,19 @@ HIGH_STAKES_CONTENT_RE="DROP[[:space:]]+TABLE|TRUNCATE[[:space:]]+TABLE|DELETE[[
 # one-line, auditable, per-line opt-out, not a way to silence the scanner file-wide.
 HIGH_STAKES_OK_RE='high-stakes-ok:[[:space:]]*[^[:space:]]'
 
-# high_stakes_content_match <text>: echoes matching lines; returns 0 if any matched, 1 if none.
+# high_stakes_content_match <text>: three-state, same contract as high_stakes_match —
+#   rc 0 matched (lines echoed), rc 1 clean, rc 2 CONFIGURATION ERROR (HIGH_STAKES_CONTENT_RE does
+#   not compile; callers must fail closed). HIGH_STAKES_CONTENT_RE is a fixed shipped value, so rc 2
+#   here signals tampering/corruption of the lib rather than a user customization slip — either way,
+#   a non-compiling content gate must block, not silently pass.
 # Lines the content regex hits are dropped if that SAME line also carries a valid
 # high-stakes-ok marker — suppression is purely additive filtering on top of the match, so it
 # can never widen what the scanner catches, only narrow an already-flagged line.
 high_stakes_content_match() {
+  if ! hs_regex_valid "${HIGH_STAKES_CONTENT_RE:-}"; then
+    echo "high-stakes: HIGH_STAKES_CONTENT_RE does not compile — fail-CLOSED (configuration error, rc 2)." >&2
+    return 2
+  fi
   local matched
   matched=$(printf '%s\n' "$1" | grep -Ei "$HIGH_STAKES_CONTENT_RE" 2>/dev/null)
   if [ -n "$matched" ]; then

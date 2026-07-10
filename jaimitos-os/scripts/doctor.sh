@@ -169,7 +169,17 @@ echo "High-stakes gate customization:"
 HS_LIB=".claude/lib/_high-stakes.sh"
 if [ -f "$HS_LIB" ]; then
   HS_CUR=$(grep -E '^HIGH_STAKES_RE=' "$HS_LIB" 2>/dev/null)
-  if [ ! -f .claude/.high-stakes-default ]; then
+  # Fail-CLOSED validation (finding H4): a customized-but-INVALID HIGH_STAKES_RE silently disables the
+  # ENFORCED path gate (grep can't compile it → no match → fail open). Catch it here so doctor is RED,
+  # not a green "customized". Source the lib to get hs_regex_valid + the live value, then probe. This
+  # runs BEFORE the fingerprint compare so a broken regex is reported as an error, not "customized".
+  # shellcheck source=/dev/null
+  ( . "$HS_LIB" 2>/dev/null && [ -n "${HIGH_STAKES_RE:-}" ] && ! hs_regex_valid "$HIGH_STAKES_RE" ) \
+    && HS_BAD_RE=1 || HS_BAD_RE=0
+  if [ "$HS_BAD_RE" = 1 ]; then
+    bad "HIGH_STAKES_RE does not compile — the ENFORCED high-stakes gate is a no-op (fails OPEN)."
+    warn "  Fix the regex in $HS_LIB; run 'bash scripts/test-high-stakes.sh' to confirm it compiles."
+  elif [ ! -f .claude/.high-stakes-default ]; then
     warn "cannot verify high-stakes customization — fingerprint .claude/.high-stakes-default missing"
     warn "  (re-run install.sh to create it). Confirm HIGH_STAKES_RE in $HS_LIB matches your paths."
   elif [ "$HS_CUR" = "$(cat .claude/.high-stakes-default 2>/dev/null)" ]; then

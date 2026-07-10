@@ -65,17 +65,27 @@ update_state() {
     fi
     echo "$STATE_END"
   } > "$blockfile"
+  # Capture the write result (finding N-2): update_state used to end on `rm -f ... || true`, so it
+  # ALWAYS returned 0 — a failed STATE write (e.g. a read-only docs/STATE.md) was silently swallowed
+  # and tick.sh then printed "✓ ticked" and exit 0 with ROADMAP ticked but STATE stale. Track the
+  # write's status and return it so the caller can refuse instead of reporting a false success.
+  local wrote_rc=0
   if grep -qF "$STATE_BEGIN" "$state"; then
-    awk -v b="$STATE_BEGIN" -v e="$STATE_END" -v bf="$blockfile" '
+    if awk -v b="$STATE_BEGIN" -v e="$STATE_END" -v bf="$blockfile" '
       BEGIN { while ((getline l < bf) > 0) blk = blk l "\n" }
       $0==b { printf "%s", blk; skip=1; next }
       $0==e { if (skip) { skip=0; next } }
       !skip { print }
-    ' "$state" > "$state.tmp" && mv "$state.tmp" "$state"
+    ' "$state" > "$state.tmp" 2>/dev/null && mv "$state.tmp" "$state" 2>/dev/null; then
+      wrote_rc=0
+    else
+      wrote_rc=1; rm -f "$state.tmp" 2>/dev/null || true
+    fi
   else
-    { echo ""; cat "$blockfile"; } >> "$state"
+    if { echo ""; cat "$blockfile"; } >> "$state" 2>/dev/null; then wrote_rc=0; else wrote_rc=1; fi
   fi
   rm -f "$blockfile" 2>/dev/null || true
+  return "$wrote_rc"
 }
 
 APPROVAL=".claude/.supervised-approval"
@@ -144,6 +154,26 @@ grep -qxF -e "$heading" "$ROADMAP" || refuse "phase heading not found as an exac
 HEAD=$(git rev-parse HEAD 2>/dev/null) || refuse "not a git repo / no HEAD"
 command -v jq >/dev/null 2>&1 || refuse "jq required to read evidence"
 
+# --- clean-tree gate (H5) ---
+# Exact-HEAD evidence (grade + test run_id both == HEAD) is only an HONEST description of what was
+# judged when the checkout EQUALS HEAD. The secret + high-stakes scans read BASE..HEAD, which is
+# committed-only — an uncommitted secret or high-stakes change sitting in the working tree is
+# invisible to them, yet the phase would be ticked as if the checkout were the judged revision.
+# Refuse a dirty tree BEFORE mutating ROADMAP/STATE. `git status --porcelain` already excludes
+# gitignored files, which is EXACTLY the runtime-artifact exemption we want (.claude/.phase-grade,
+# .tick-evidence.json, .phase-base, .phase-ready, .supervised-approval, NEXT_FINDINGS.md,
+# autopilot.log, ... — all gitignored by the scaffold). Do NOT add --ignored. ROADMAP/STATE are
+# tick's OWN later output; at this point they still equal HEAD, so they never trip this.
+# (v2.7.0's record-grade.sh already refuses a dirty TRACKED tree at grade time; this is stronger —
+# it also catches untracked non-ignored files, e.g. a leaked secret file — and closes the
+# grade→tick window on the manual /wrap path, which has no orchestrator to re-check.)
+DIRTY=$(git status --porcelain 2>/dev/null)
+if [ -n "$DIRTY" ]; then
+  echo "tick: REFUSED — working tree not clean; exact-HEAD evidence requires the checkout to equal HEAD:" >&2
+  printf '%s\n' "$DIRTY" | sed 's/^/    /' >&2
+  refuse "uncommitted changes present (commit or stash them, then re-run)"
+fi
+
 # --- 2. evaluator PASS evidence ---
 [ -f "$GRADE" ] || refuse "missing evaluator grade evidence ($GRADE) — run the evaluator first"
 g_run=$(grep -E '^run_id=' "$GRADE" | head -1 | cut -d= -f2- || true)
@@ -180,8 +210,13 @@ esac
 #     the untrusted .claude/.phase-base (which a compromised builder can forge to HEAD to empty the
 #     scan). autopilot also overwrites .phase-base with this same trusted value before the evaluator.
 #   • TICK_BASE ABSENT → the in-session /wrap path; read the builder-written .claude/.phase-base.
-# Either source is strict-ancestor-validated below, so neither a forged env nor a forged file can
-# narrow, empty, or misdirect the scan.
+# Both sources are strict-ancestor-validated below. That stops a base from being emptied (== HEAD),
+# pointed at unrelated history, or set to a non-commit. It does NOT establish that the base is the
+# ORIGINAL phase start: a builder can advance .claude/.phase-base to a LATER ancestor B (still a
+# strict ancestor of HEAD), narrowing A..HEAD to B..HEAD and hiding the commits between A and B
+# (finding H1). The TICK_BASE path is safe because the orchestrator derives the base OUTSIDE the
+# builder; the manual .phase-base path is human-reviewed, not builder-proof, until scripts/start-phase.sh
+# anchors it (planned). Do NOT read this comment as "a forged file cannot narrow the scan" — it can.
 if [ -n "${TICK_BASE+set}" ]; then
   BASE="$TICK_BASE"
   BASE_SRC="TICK_BASE env (orchestrator-trusted)"
@@ -228,20 +263,30 @@ if [ -n "$GATE_CFG" ]; then
   printf '%s\n' "$GATE_CFG" | sed 's/^/    /' >&2
   exit 3
 fi
-if HS=$(high_stakes_match "$CHANGED"); then
-  echo "tick: ⛔ HIGH-STAKES paths changed — supervised review required, NOT ticking:" >&2
-  printf '%s\n' "$HS" | sed 's/^/    /' >&2
-  exit 3
-fi
+# Three-state, NOT `if HS=$(...)`: high_stakes_match returns 0 matched / 1 clean / 2 config error.
+# A plain `if` command-substitution would swallow rc 2 exactly like rc 1 (finding N-4) — a typo in
+# the ENFORCED HIGH_STAKES_RE would then silently fall through as "no high-stakes paths" and auto-tick.
+# rc 2 must fail closed, same as a missing library above.
+HS=$(high_stakes_match "$CHANGED"); hs_rc=$?
+case "$hs_rc" in
+  0) echo "tick: ⛔ HIGH-STAKES paths changed — supervised review required, NOT ticking:" >&2
+     printf '%s\n' "$HS" | sed 's/^/    /' >&2
+     exit 3 ;;
+  1) : ;;   # clean
+  *) refuse "high-stakes path matcher configuration error (rc=$hs_rc) — fail-closed (fix HIGH_STAKES_RE)" ;;
+esac
 # Content-level high-stakes: destructive operations in a benignly-named file. Scan the
 # ADDED lines of the whole phase diff. A hit forces supervised review (exit 3), same as a path.
 if command -v high_stakes_content_match >/dev/null 2>&1; then
   ADDED=$(git diff "$RANGE" --unified=0 2>/dev/null | grep -E '^\+' | grep -Ev '^\+\+\+' || true)
-  if HC=$(high_stakes_content_match "$ADDED"); then
-    echo "tick: ⛔ HIGH-STAKES content in phase diff — supervised review required, NOT ticking:" >&2
-    printf '%s\n' "$HC" | sed 's/^/    /' >&2
-    exit 3
-  fi
+  HC=$(high_stakes_content_match "$ADDED"); hc_rc=$?
+  case "$hc_rc" in
+    0) echo "tick: ⛔ HIGH-STAKES content in phase diff — supervised review required, NOT ticking:" >&2
+       printf '%s\n' "$HC" | sed 's/^/    /' >&2
+       exit 3 ;;
+    1) : ;;   # clean
+    *) refuse "high-stakes content matcher configuration error (rc=$hc_rc) — fail-closed" ;;
+  esac
 fi
 
 # Mode: supervised — the author flagged this phase as human-on-the-loop. Enforce it (the tag
@@ -289,6 +334,10 @@ if [ "$after" -ge "$before" ]; then
 fi
 
 rm -f .claude/.phase-ready .claude/.phase-grade .claude/.supervised-approval 2>/dev/null || true
-update_state "$heading"
+# N-2: a failed STATE write must NOT be reported as success. The ROADMAP checkbox is already flipped
+# at this point (an intended, committed-later change), so a STATE failure leaves the two files out of
+# sync — refuse loudly and point at the repair path (doctor --state, added in Phase 7) rather than
+# printing "✓ ticked" and exiting 0.
+update_state "$heading" || refuse "STATE update FAILED after ROADMAP was ticked — files are out of sync; repair with 'bash scripts/doctor.sh --state' (or restore docs/STATE.md and re-run)"
 echo "tick: ✓ ticked '$heading' ($((before - after)) item(s))"
 exit 0

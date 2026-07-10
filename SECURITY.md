@@ -77,9 +77,14 @@ prompt) only *asks* a model to comply.
   wedged headless `claude` subtree is contained rather than spawning a runaway; but that is a
   *liveness/containment* fix, not a security boundary, and does nothing to relax the sandbox-only
   rule. **The supported mitigation ships with the scaffold: `sandbox/run-autopilot-sandboxed.sh`**
-  builds a no-credentials container, mounts only the repo, passes only `ANTHROPIC_API_KEY`, and
-  refuses fail-closed if secret-shaped files would ride into the mount — use it for every
-  unattended run. Prefer `acceptEdits` (the default, no flag needed) whenever a human is at the
+  builds a no-credentials container, mounts the repo, passes only `ANTHROPIC_API_KEY`, and refuses
+  fail-closed if a **tracked or unignored** secret-shaped file would ride into the mount. Note the
+  residual: the wrapper's preflight scan is scoped to tracked/unignored files, so a **gitignored**
+  secret (`.env`, `*.pem`, `.netrc`, …) that is still physically present in the repo dir is NOT
+  flagged and, under the current bind-mount, still enters the container — prefer *removing* real
+  credentials from the working tree, not merely gitignoring them, before an unattended run. (A
+  clean tracked-only staging mount that closes this is planned.) Use the wrapper for every
+  unattended run, and prefer `acceptEdits` (the default, no flag needed) whenever a human is at the
   terminal to approve prompts.
 - **Claude Code's `auto` permission mode is an in-session *semantic complement*, not a replacement
   for the deterministic high-stakes gate.** `auto` asks a model to judge, per tool call, whether an

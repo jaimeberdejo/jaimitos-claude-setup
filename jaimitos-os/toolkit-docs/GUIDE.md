@@ -485,10 +485,11 @@ summaries; this is where the full story lives.
   touches `HIGH_STAKES_RE` paths (or trips the content matcher) is never auto-ticked or committed
   by the headless loop, and its branch is **never pushed, even with `--pr`** — it stays local for
   review. `/phase` alone never ticks, so the gate simply never runs there; `/autopilot` routes
-  every PASS through the same `scripts/tick.sh` gate as `/wrap`, and additionally checks the next
-  phase's `Mode:` line *before building it*, so an unattended run can't carry out a supervised
-  phase's work before being blocked from ticking it. Keep high-stakes work out of the loops
-  regardless — `Mode: supervised` plus a customized `HIGH_STAKES_RE` are the backstop, not the plan.
+  every PASS through the same `scripts/tick.sh` gate as `/wrap`. The **in-session** `/autopilot`
+  command additionally checks the next phase's `Mode:` line *before building it* (see
+  `.claude/commands/autopilot.md`), so a watched loop won't carry out a supervised phase's work
+  before being blocked from ticking it. Keep high-stakes work out of the loops regardless —
+  `Mode: supervised` plus a customized `HIGH_STAKES_RE` are the backstop, not the plan.
 - **High-stakes path allowlist** (`.claude/high-stakes-path-allowlist`) — a git-tracked, per-line,
   reason-required escape for **exact-path false positives** in the path matcher (e.g. an ADR whose
   name merely contains "money"). Purely subtractive: only an exact path with a non-empty reason is

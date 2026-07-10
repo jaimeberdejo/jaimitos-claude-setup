@@ -62,6 +62,15 @@ set_grade()    { printf 'run_id=%s\nverdict=%s\nno_tests_ok=%s\n' "$2" "$3" "${4
 set_evidence() { printf '%s\n' "$2" > "$(_resolve "$1")/.claude/.tick-evidence.json"; }
 good_grade()   { set_grade "$1" "$HEAD" PASS 0; }
 good_evidence(){ set_evidence "$1" "{\"passed\":true,\"run_id\":\"$HEAD\"}"; }
+# set_mode <repo> <mode>: append a `Mode: <mode>` line to docs/ROADMAP.md AND COMMIT it, then
+# re-capture HEAD. Real roadmaps carry their Mode lines in git, so the tree is clean at tick time;
+# the fixtures used to append WITHOUT committing, which tick.sh's clean-tree gate (H5) now correctly
+# refuses. Callers must (re-)grade after this, since HEAD advances.
+set_mode() {
+  local r; r="$(_resolve "$1")"
+  ( cd "$r" && printf 'Mode: %s\n' "$2" >> docs/ROADMAP.md && git add docs/ROADMAP.md && git commit -q -m "mark $2" )
+  HEAD=$(git -C "$r" rev-parse HEAD)
+}
 runtick() { local r="$1"; shift; ( cd "$r" && bash scripts/tick.sh "$@" ) >"$WORK/out" 2>&1; echo $?; }
 # Like runtick but passes the orchestrator-trusted base via the TICK_BASE env var (headless autopilot
 # path). An empty base ("") is passed as SET-but-empty (distinct from unset) to exercise fail-closed.
@@ -132,7 +141,7 @@ mkrepo t9b src/utils.py 'cursor.execute("DROP TABLE users")'; good_grade t9b; go
 { [ "$rc" = 3 ] && ! ticked "$REPO"; } && pass "high-stakes content (DROP TABLE in benign path) → exit 3" || fail "content high-stakes mishandled (rc=$rc)"
 
 # 9c — a phase marked "Mode: supervised" → exit 3 (enforced), not ticked.
-mkrepo t9c; printf 'Mode: supervised\n' >> "$REPO/docs/ROADMAP.md"; good_grade t9c; good_evidence t9c; rc=$(runtick "$REPO")
+mkrepo t9c; set_mode t9c supervised; good_grade t9c; good_evidence t9c; rc=$(runtick "$REPO")
 { [ "$rc" = 3 ] && ! ticked "$REPO"; } && pass "Mode: supervised → exit 3 (tag enforced, not auto-ticked)" || fail "Mode:supervised not enforced (rc=$rc)"
 
 # 9d (C1) — phase edits the high-stakes path ALLOWLIST → exit 3 (a phase cannot self-EXEMPT the gate
@@ -141,6 +150,22 @@ mkrepo t9c; printf 'Mode: supervised\n' >> "$REPO/docs/ROADMAP.md"; good_grade t
 mkrepo t9d .claude/high-stakes-path-allowlist 'src/foo.py: reviewed, safe'; good_grade t9d; good_evidence t9d; rc=$(runtick "$REPO")
 { [ "$rc" = 3 ] && ! ticked "$REPO" && [ ! -f "$REPO/NEXT_FINDINGS.md" ]; } \
   && pass "phase edits high-stakes-path-allowlist → exit 3 (no self-exempt)" || fail "allowlist-in-diff not gated (rc=$rc)"
+
+# 9f (H4/N-4) — a malformed HIGH_STAKES_RE must make tick REFUSE (fail-closed), NOT tick. Before the
+# three-state matcher + three-way caller, `if HS=$(high_stakes_match ...)` swallowed the matcher's
+# error rc exactly like "no match", so a typo'd ENFORCED regex silently disabled the gate and the
+# phase auto-ticked. The malformed regex is committed BEFORE the phase base (so editing the lib is not
+# itself the in-phase gate-config change 9d/9e cover) — this isolates the matcher-error path.
+mkrepo t9f
+# overwrite the copied lib's regex with an uncompilable one, and re-baseline so the edit is pre-phase
+sed -i.bak "s|^HIGH_STAKES_RE=.*|HIGH_STAKES_RE='['|" "$REPO/.claude/lib/_high-stakes.sh" && rm -f "$REPO/.claude/lib/_high-stakes.sh.bak"
+( cd "$REPO" && git add -A && git commit -q -m 'break the regex (pre-phase)' \
+    && git rev-parse HEAD > .claude/.phase-base \
+    && printf 'def widget2(): return 2\n' > src/widget2.py && git add -A && git commit -q -m 'phase work' )
+HEAD=$(git -C "$REPO" rev-parse HEAD); good_grade t9f; good_evidence t9f; rc=$(runtick "$REPO")
+{ [ "$rc" != 0 ] && ! ticked "$REPO"; } \
+  && pass "malformed HIGH_STAKES_RE → tick refuses (fail-closed, rc=$rc), not ticked" \
+  || fail "malformed HIGH_STAKES_RE FAILED OPEN — tick proceeded (rc=$rc)"
 
 # 9e (C1) — phase modifies the high-stakes matcher LIB (_high-stakes.sh) → exit 3 (a phase cannot
 # self-NARROW the gate by shrinking HIGH_STAKES_RE in the same commit). Bespoke fixture: mkrepo
@@ -254,17 +279,20 @@ echo "supervised-approval tests (v2.4.0)"; echo ""
 # heading existence) still fires first. Approval staleness / mismatch / malformation all fail closed.
 
 # S1 — supervised phase, NO approval → exit 3 (refused, not ticked). (Baseline: same as old behaviour.)
-mkrepo s1; printf 'Mode: supervised\n' >> "$REPO/docs/ROADMAP.md"; good_grade s1; good_evidence s1
+mkrepo s1; set_mode s1 supervised; good_grade s1; good_evidence s1
 rc=$(runtick "$REPO")
 { [ "$rc" = 3 ] && ! ticked "$REPO"; } && pass "supervised, no approval → exit 3 (refused)" || fail "supervised no-approval mishandled (rc=$rc)"
 
 # S2 — supervised phase + --supervised-approved → writes a HEAD-bound approval and ticks.
-mkrepo s2; printf 'Mode: supervised\n' >> "$REPO/docs/ROADMAP.md"; good_grade s2; good_evidence s2
+mkrepo s2; set_mode s2 supervised; good_grade s2; good_evidence s2
 rc=$(runtick "$REPO" --supervised-approved --note "reviewed the auth flow by hand")
 { [ "$rc" = 0 ] && ticked "$REPO"; } && pass "supervised + --supervised-approved → ticks" || fail "valid supervised approval did not tick (rc=$rc)"
 
 # S3 — an approval made at an OLD commit is STALE after a new commit (run_id != HEAD) → refuses.
-mkrepo s3; printf 'Mode: supervised\n' >> "$REPO/docs/ROADMAP.md"
+# set_mode commits the Mode line (HEAD includes it); the approval is bound to that HEAD, then an empty
+# commit advances HEAD past it. .supervised-approval is gitignored, so the tree stays clean → the
+# clean-tree gate passes and the supervised/staleness block is the real reason for the refusal.
+mkrepo s3; set_mode s3 supervised
 OLD=$(git -C "$REPO" rev-parse HEAD); PR=$(cat "$REPO/.claude/.phase-ready")
 printf 'run_id=%s\ntitle=%s\napproved_at=x\nnote=ok\n' "$OLD" "$PR" > "$REPO/.claude/.supervised-approval"
 ( cd "$REPO" && git commit -q --allow-empty -m "advance HEAD after approval" )
@@ -272,32 +300,35 @@ HEAD=$(git -C "$REPO" rev-parse HEAD); good_grade s3; good_evidence s3; rc=$(run
 { [ "$rc" = 3 ] && ! ticked "$REPO"; } && pass "stale approval (old SHA after a new commit) → refuses" || fail "stale approval mishandled (rc=$rc)"
 
 # S4 — an approval whose title is for a DIFFERENT phase → refuses (title must match the heading).
-mkrepo s4; printf 'Mode: supervised\n' >> "$REPO/docs/ROADMAP.md"; good_grade s4; good_evidence s4
+mkrepo s4; set_mode s4 supervised; good_grade s4; good_evidence s4
 printf 'run_id=%s\ntitle=## Phase 2 — Other\napproved_at=x\nnote=ok\n' "$HEAD" > "$REPO/.claude/.supervised-approval"
 rc=$(runtick "$REPO")
 { [ "$rc" = 3 ] && ! ticked "$REPO"; } && pass "approval for a different title → refuses" || fail "wrong-title approval mishandled (rc=$rc)"
 
 # S5 — a malformed approval file (no run_id/title fields) → refuses (fail-closed).
-mkrepo s5; printf 'Mode: supervised\n' >> "$REPO/docs/ROADMAP.md"; good_grade s5; good_evidence s5
+mkrepo s5; set_mode s5 supervised; good_grade s5; good_evidence s5
 printf 'garbage not an approval\n' > "$REPO/.claude/.supervised-approval"; rc=$(runtick "$REPO")
 { [ "$rc" = 3 ] && ! ticked "$REPO"; } && pass "malformed approval → refuses (fail-closed)" || fail "malformed approval mishandled (rc=$rc)"
 
-# S6 — approval must NOT bypass the SECRET gate: a supervised phase with a planted secret + the flag
-# still fails at the secret scan (which runs ABOVE the supervised block) → exit 1, not ticked.
-mkrepo s6 src/cfg.py 'AWS="AKIAIOSFODNN7EXAMPLE"'; printf 'Mode: supervised\n' >> "$REPO/docs/ROADMAP.md"
+# S6 — approval must NOT bypass the SECRET gate: a supervised phase with a planted (committed) secret
+# + the flag still fails at the secret scan (which runs ABOVE the supervised block) → exit 1, not
+# ticked. set_mode commits the Mode line so the tree is clean and the SECRET gate (not the clean-tree
+# gate, which would also exit 1) is the real reason — asserted by checking the output names a secret.
+mkrepo s6 src/cfg.py 'AWS="AKIAIOSFODNN7EXAMPLE"'; set_mode s6 supervised
 good_grade s6; good_evidence s6; rc=$(runtick "$REPO" --supervised-approved --note "approve")
-{ [ "$rc" = 1 ] && ! ticked "$REPO"; } && pass "approval does NOT bypass the secret gate (exit 1)" || fail "approval bypassed secret gate (rc=$rc)"
+{ [ "$rc" = 1 ] && ! ticked "$REPO" && grep -qi 'secret' "$WORK/out"; } \
+  && pass "approval does NOT bypass the secret gate (exit 1, secret-scan reason)" || fail "approval bypassed secret gate (rc=$rc)"
 
 # S7 — approval must NOT bypass the HIGH-STAKES path gate: supervised phase touching a high-stakes
 # path + the flag still exits 3 AT the high-stakes gate (above the supervised block) and never ticks.
-mkrepo s7 auth/login.py 'def login(): return True'; printf 'Mode: supervised\n' >> "$REPO/docs/ROADMAP.md"
+mkrepo s7 auth/login.py 'def login(): return True'; set_mode s7 supervised
 good_grade s7; good_evidence s7; rc=$(runtick "$REPO" --supervised-approved --note "approve")
 { [ "$rc" = 3 ] && ! ticked "$REPO" && grep -q "HIGH-STAKES paths changed" "$WORK/out"; } \
   && pass "approval does NOT bypass the high-stakes path gate (exit 3 at high-stakes, not ticked)" || fail "approval bypassed high-stakes gate (rc=$rc)"
 
 # S8 — approval must NOT invent a phase: --supervised-approved with a heading absent from ROADMAP is
 # refused by the heading-existence check (above everything) → exit 1, not ticked, no approval written.
-mkrepo s8; printf 'Mode: supervised\n' >> "$REPO/docs/ROADMAP.md"; good_grade s8; good_evidence s8
+mkrepo s8; set_mode s8 supervised; good_grade s8; good_evidence s8
 rc=$(runtick "$REPO" --supervised-approved "## Phase 99 — Nope" --note "approve")
 { [ "$rc" = 1 ] && ! ticked "$REPO" && [ ! -f "$REPO/.claude/.supervised-approval" ]; } \
   && pass "approval for a heading absent from ROADMAP → refuses (exit 1, no approval written)" || fail "approval invented a heading (rc=$rc)"
@@ -465,6 +496,44 @@ rc=$(runtick "$REPO" "## Phase 1 — Work")
 { [ "$rc" = 1 ] && ! ticked "$REPO" && grep -qi 'ancestor' "$WORK/out"; } \
   && pass "non-ancestor .phase-base (divergent branch) → fail-closed refuse (ancestor guard)" \
   || fail "non-ancestor base not refused by the ancestor guard (rc=$rc)"
+
+echo ""
+echo "Clean-tree gate (H5) — exact-HEAD evidence is only honest when the checkout == HEAD. A dirty"
+echo "tracked/untracked tree can hide an uncommitted secret/high-stakes change the BASE..HEAD scan"
+echo "(committed-only) never sees. Gitignored runtime artifacts are exempt (porcelain omits them):"
+# 16a — an uncommitted TRACKED modification → refuse, not ticked.
+mkrepo t16a; good_grade t16a; good_evidence t16a
+printf 'def widget(): return 999\n' > "$REPO/src/widget.py"   # modify a tracked file, do NOT commit
+rc=$(runtick "$REPO")
+{ [ "$rc" = 1 ] && ! ticked "$REPO" && grep -qi 'not clean\|uncommitted' "$WORK/out"; } \
+  && pass "dirty tracked tree → refuse (not ticked)" || fail "dirty tracked tree ticked anyway (rc=$rc)"
+# 16b — an untracked, non-ignored file (e.g. a leaked secret file) → refuse.
+mkrepo t16b; good_grade t16b; good_evidence t16b
+printf 'AKIAIOSFODNN7EXAMPLE\n' > "$REPO/leaked.txt"          # untracked, not gitignored
+rc=$(runtick "$REPO")
+{ [ "$rc" = 1 ] && ! ticked "$REPO"; } \
+  && pass "dirty untracked (non-ignored) file → refuse" || fail "untracked file ticked anyway (rc=$rc)"
+# 16c — only gitignored runtime artifacts dirty → MUST still tick (the exemption set; must not regress).
+mkrepo t16c; good_grade t16c; good_evidence t16c
+printf 'log line\n' > "$REPO/autopilot.log"                   # gitignored per scaffold... but this
+# fixture's .gitignore doesn't list autopilot.log; use one it DOES list to prove the exemption:
+rm -f "$REPO/autopilot.log"; printf 'stale finding\n' > "$REPO/NEXT_FINDINGS.md"   # NEXT_FINDINGS.md is gitignored
+rc=$(runtick "$REPO")
+{ [ "$rc" = 0 ] && ticked "$REPO"; } \
+  && pass "only gitignored artifacts dirty → still ticks (exemption preserved)" || fail "ignored-only dirty blocked the tick (rc=$rc)"
+
+echo ""
+echo "Checked STATE write (N-2) — a FAILED docs/STATE.md write must NOT report success. Before the fix"
+echo "tick.sh called update_state with no error check, then printed '✓ ticked' and exit 0 on a failed"
+echo "write, leaving ROADMAP ticked but STATE stale and the caller believing it succeeded:"
+# 16d — make docs/STATE.md unwritable so the append/rewrite fails; tick must exit non-zero, no '✓ ticked'.
+mkrepo t16d; good_grade t16d; good_evidence t16d
+chmod 0444 "$REPO/docs/STATE.md"
+rc=$(runtick "$REPO")
+chmod 0644 "$REPO/docs/STATE.md" 2>/dev/null || true
+{ [ "$rc" != 0 ] && ! grep -q '✓ ticked' "$WORK/out"; } \
+  && pass "failed STATE write → non-zero exit, no '✓ ticked' (N-2)" \
+  || fail "failed STATE write reported success (rc=$rc, out follows)"; [ "$rc" = 0 ] && tail -3 "$WORK/out"
 
 echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All tick gate + evidence tests passed."; exit 0

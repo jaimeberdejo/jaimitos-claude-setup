@@ -73,6 +73,25 @@ echo "Fail-safe: an empty/unset HIGH_STAKES_RE must treat ALL paths as high-stak
 ) || FAILS=$((FAILS+1))
 
 echo ""
+echo "Fail-CLOSED: a syntactically INVALID HIGH_STAKES_RE must return a CONFIGURATION ERROR (rc 2),"
+echo "never a silent no-match (rc 1) that fails OPEN — finding H4. rc 2 is a distinct third state so"
+echo "callers can refuse rather than treat a broken gate as 'no high-stakes paths here':"
+for bad in '[' '(' '*' 'a\' '[z-a]' '\'; do
+  ( HIGH_STAKES_RE="$bad" high_stakes_match "auth/login.py" >/dev/null 2>&1 )
+  rc=$?
+  if [ "$rc" -eq 2 ]; then printf '  ✓ malformed %-6s -> rc 2 (config error, fail-closed)\n' "'$bad'"
+  else printf '  ✗ malformed %-6s -> rc %s (expected 2; fail-OPEN regression)\n' "'$bad'" "$rc"; FAILS=$((FAILS+1)); fi
+done
+echo "  (and the empty/unset case above must STILL be rc 0 fail-safe, not rc 2 — a distinct state):"
+( unset HIGH_STAKES_RE; high_stakes_match "any/path.py" >/dev/null 2>&1 ); rc=$?
+if [ "$rc" -eq 0 ]; then printf '  ✓ empty regex still rc 0 (fail-safe), distinct from invalid rc 2\n'
+else printf '  ✗ empty regex rc %s (expected 0 fail-safe)\n' "$rc"; FAILS=$((FAILS+1)); fi
+echo "  content matcher fails closed on an invalid HIGH_STAKES_CONTENT_RE too (rc 2):"
+( HIGH_STAKES_CONTENT_RE='[' high_stakes_content_match 'DROP TABLE users' >/dev/null 2>&1 ); rc=$?
+if [ "$rc" -eq 2 ]; then printf '  ✓ malformed content RE -> rc 2 (config error)\n'
+else printf '  ✗ malformed content RE -> rc %s (expected 2)\n' "$rc"; FAILS=$((FAILS+1)); fi
+
+echo ""
 echo "Content-level detection — destructive operations in a benignly-named file (must match):"
 content_match()  { if high_stakes_content_match "$1" >/dev/null; then printf '  ✓ content matches: %s\n' "$1"; else printf '  ✗ MISSED content (should match): %s\n' "$1"; FAILS=$((FAILS+1)); fi; }
 content_ignore() { if high_stakes_content_match "$1" >/dev/null; then printf '  ✗ FALSE content HIT (should ignore): %s\n' "$1"; FAILS=$((FAILS+1)); else printf '  ✓ ignores content: %s\n' "$1"; fi; }
