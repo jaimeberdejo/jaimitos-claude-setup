@@ -24,9 +24,13 @@ while IFS= read -r f; do FILES+=("$f"); done < <(
 
 RC=0
 
-echo "== shellcheck (blocking; honors .shellcheckrc) =="
+echo "== shellcheck (blocking; -S warning + .shellcheckrc disables) =="
 if command -v shellcheck >/dev/null 2>&1; then
-  if shellcheck "${FILES[@]}"; then
+  # -S warning is REQUIRED here: shellcheck's .shellcheckrc has no `severity` key (CLI-only), so
+  # without this flag a local run falls to the `style` default and fails on info/style findings CI
+  # never sees. This mirrors ci.yml's `shellcheck -S warning -e SC1090,SC1091` (SC1090/91 come from
+  # .shellcheckrc's `disable=`). Keep the two callers' floors in sync.
+  if shellcheck -S warning "${FILES[@]}"; then
     echo "  ✓ shellcheck clean"
   else
     echo "  ✗ shellcheck reported findings (above)" >&2

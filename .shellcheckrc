@@ -1,11 +1,12 @@
 # .shellcheckrc — shared shellcheck config for the toolkit's shell code.
-# This only CODIFIES what CI already passes on the command line (severity=warning, and the two
-# source-follow disables), so making it explicit changes no behavior — it just means a local
-# `shellcheck` run matches CI, and `scripts`/`.github/scripts` don't each need the flags inline.
 #
-# Floor: warnings and above fail. (Style/info are not enforced — raise deliberately, not by drift.)
-severity=warning
-
+# NOTE: shellcheck has NO `severity` key in .shellcheckrc — severity is CLI-ONLY (`-S`/`--severity`).
+# A `severity=warning` line here is silently ignored, so the warning FLOOR must live in the callers:
+# `.github/scripts/lint-shell.sh` and `.github/workflows/ci.yml` both pass `-S warning`. Only `disable`
+# is honored from this file. (An earlier version of this file claimed `severity=warning` here "changes
+# no behavior — a local run matches CI"; it did NOT — bare `shellcheck` fell to its `style` default and
+# failed on info/style findings CI never saw.)
+#
 # SC1090/SC1091: "can't follow non-constant / not-included source". Every lib is sourced by a
 # runtime-resolved path (`. .claude/lib/_x.sh`) that shellcheck can't statically follow; that's by
 # design, not a bug. Disabled repo-wide (matches CI's `-e SC1090,SC1091`).
