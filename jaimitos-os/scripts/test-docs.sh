@@ -5,7 +5,12 @@
 #   2. every shipped-file path cited in inline code in README.md / GUIDE.md exists
 #      (scripts/, sandbox/, skills/, .claude/, .github/, toolkit-docs/, docs/dev/ — runtime
 #      state files and target-project docs are out of scope: they don't exist in this repo
-#      by design).
+#      by design);
+#   3. every "<N> shared/sourced lib(s)" count declared in README.md / GUIDE.md matches the real
+#      .claude/lib/_*.sh count. `_eval-isolation.sh` was extracted in v2.5.0 and three separate
+#      docs still said "three" a whole minor release later — exactly the rot check 1 already
+#      prevents for skills. Counts are written as digits OR as English number words, so both forms
+#      are recognized (a word form is what actually rotted).
 # Runs from the wrapper repo when available; inside an installed project (no wrapper docs)
 # it degrades to a no-op pass — install-smoke owns doc checks in that context.
 set -uo pipefail
@@ -59,6 +64,37 @@ if [ -z "$MISSING" ]; then
   pass "every shipped-file path cited in README.md / GUIDE.md exists"
 else
   fail "cited path(s) do not exist:$MISSING"
+fi
+
+# 3 — declared shared-lib counts, bound to `.claude/lib/_*.sh` (the ground truth).
+# Accepts a digit or an English number word, since the docs use both ("4 shared libs",
+# "four shared libs", "Four sourced libraries").
+lib_count_of() {   # echo the numeric value of a declared count token; empty if not a number we know
+  local w
+  w=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+  case "$w" in
+    ''|*[!0-9]*)
+      case "$w" in
+        one) printf '1' ;; two) printf '2' ;; three) printf '3' ;; four) printf '4' ;; five) printf '5' ;;
+        six) printf '6' ;; seven) printf '7' ;; eight) printf '8' ;; nine) printf '9' ;; ten) printf '10' ;;
+        *) printf '' ;;
+      esac ;;
+    *) printf '%s' "$w" ;;
+  esac
+}
+LIBS=$(find "$SCAFFOLD/.claude/lib" -maxdepth 1 -type f -name '_*.sh' 2>/dev/null | wc -l | tr -d ' ')
+BAD_LIBS=""
+for doc in "$ROOT/README.md" "$SCAFFOLD/toolkit-docs/GUIDE.md"; do
+  while IFS= read -r tok; do
+    [ -n "$tok" ] || continue
+    [ "$(lib_count_of "$tok")" = "$LIBS" ] || BAD_LIBS="$BAD_LIBS ${doc##*/}:'$tok'"
+  done < <(grep -ohiE '([0-9]+|one|two|three|four|five|six|seven|eight|nine|ten)[[:space:]]+(shared|sourced)[[:space:]]+(lib|libs|libraries)' "$doc" 2>/dev/null \
+             | awk '{print $1}')
+done
+if [ -z "$BAD_LIBS" ]; then
+  pass "all '<N> shared/sourced lib' mentions in README.md + GUIDE.md equal $LIBS (real .claude/lib/_*.sh count)"
+else
+  fail "stale shared-lib counts (real: $LIBS):$BAD_LIBS"
 fi
 
 echo ""

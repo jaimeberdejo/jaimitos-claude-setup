@@ -82,7 +82,7 @@ your-repo/
     │   ├── test-gate.sh           # opt-in deterministic test gate (LEAN_TEST_GATE)
     │   ├── commit-on-stop.sh      # honest git checkpoint each turn (secret-scans before committing)
     │   └── ownership-nudge.sh     # reminds you to ADR / teach-back / run the mapme skill after changes
-    ├── lib/                       # 3 SOURCED libraries (not event hooks)
+    ├── lib/                       # 4 SOURCED libraries (not event hooks)
     │   ├── _secret-scan.sh        # SHARED: filename+content secret scan (commit-on-stop + tick + autopilot)
     │   ├── _high-stakes.sh        # SHARED: high-stakes path list + content matcher (the supervised gate)
     │   └── _test-cmd.sh           # SHARED: resolves the project test command (test-gate + test-evidence)
@@ -423,9 +423,10 @@ decides whether that PASS is allowed to become a tick.
 | `commit-on-stop.sh` | turn end | Honest git checkpoint (only claims success when a commit happened). Runs the shared **secret-scan** and refuses — fails closed — to commit credentials. |
 | `ownership-nudge.sh` | turn end | After code changes, nudges: ADR the decision, run teach-back, run the `mapme` skill. Also nudges to update `docs/STATE.md` when a change happened outside an active phase (no `.claude/.phase-ready`) — the quick-fix path that skips `/phase`/`/wrap` otherwise leaves STATE.md silently stale. |
 
-> **Three sourced libraries**, not event hooks: `_secret-scan.sh` (filename+content secret scan),
-> `_high-stakes.sh` (the high-stakes path list + content matcher), and `_test-cmd.sh` (test-command
-> resolution). They're sourced by the hooks, `tick.sh`, and `scripts/autopilot.sh`, so the same
+> **Four sourced libraries**, not event hooks: `_secret-scan.sh` (filename+content secret scan),
+> `_high-stakes.sh` (the high-stakes path list + content matcher), `_test-cmd.sh` (test-command
+> resolution), and `_eval-isolation.sh` (the pre-grade snapshot plus the destructive/detect-only
+> restore paths). They're sourced by the hooks, `tick.sh`, and `scripts/autopilot.sh`, so the same
 > guards run everywhere — a single source of truth for each.
 
 #### The secret scan is a prefix-matcher by default — swap in a real scanner if you need one
@@ -1196,7 +1197,7 @@ ONE LINE       Automate the typing, never the judgment.
 ---
 
 ### One paragraph to remember
-Native Claude Code plus a `docs/` folder, seven short hooks, three shared libs, four per-phase-stage
+Native Claude Code plus a `docs/` folder, seven short hooks, four shared libs, four per-phase-stage
 subagents (research/plan/execute/independent verify, each independently pinnable to its own model),
 one shared completion gate, and a pack of portable skills reproduce what heavyweight frameworks
 automate — spec, roadmap, persistent state, decision log, phase execution, verification — at a

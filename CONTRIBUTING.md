@@ -37,7 +37,7 @@ A skill is a directory under `skills/<name>/` with a `SKILL.md`; support files (
 
 1. **Frontmatter** exactly like the existing skills: `name:`, and a `description:` whose text
    contains the trigger phrases (that's what auto-invocation matches on). Report-only skills add
-   `disallowed-tools: Edit, Write, MultiEdit, NotebookEdit` (see `scope-guard` for the pattern,
+   `disallowed-tools: Edit, Write, NotebookEdit` (see `scope-guard` for the pattern,
    including `allowed-tools` for a read-only git surface). Keep SKILL.md ~30–80 lines.
 2. **Register it everywhere the manifest lives** (all three, or CI catches you):
    `skills/README.md`'s table + count line, `REQUIRED_SKILLS` in `jaimitos-os/scripts/doctor.sh`,

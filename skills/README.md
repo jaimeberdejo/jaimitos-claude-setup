@@ -37,7 +37,7 @@ scaffold-aware, not fully stack-neutral.
 
 ## Design principles
 - **Report-only where it matters.** The three review skills (ship-check, scope-guard,
-  explain-diff) set `disallowed-tools: Edit, Write, MultiEdit, NotebookEdit` in their frontmatter, so
+  explain-diff) set `disallowed-tools: Edit, Write, NotebookEdit` in their frontmatter, so
   the direct file-editing tools are removed — they produce a verdict, not edits. They keep read-only
   shell access (to run `git diff`, tests, lint); scope-guard and explain-diff additionally declare an
   `allowed-tools` surface of read-only git and are instructed to use the shell for inspection only.
