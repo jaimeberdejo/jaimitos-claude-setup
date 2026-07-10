@@ -256,6 +256,14 @@ if [ -f .claude/lib/_high-stakes.sh ]; then
 else
   echo "autopilot: WARNING — .claude/lib/_high-stakes.sh not found; high-stakes gate DISABLED." >&2
 fi
+# Evaluator-isolation lib (shared with in-session /phase). eval_snapshot/eval_restore below
+# REQUIRE it — fail closed if it's missing rather than grade without the discard net.
+if [ -f .claude/lib/_eval-isolation.sh ]; then
+  . .claude/lib/_eval-isolation.sh 2>/dev/null || true
+fi
+if ! command -v eval_snapshot >/dev/null 2>&1 || ! command -v eval_restore >/dev/null 2>&1; then
+  fail ".claude/lib/_eval-isolation.sh missing/unloadable — the evaluator-change discard net is unavailable (fail-closed)."
+fi
 
 if [ "$UNBOUNDED" -eq 1 ]; then
   echo "autopilot: advancing until the roadmap is empty (safety cap $MAX_ITER). touch AGENT_STOP to halt."
@@ -270,44 +278,12 @@ fi
 # called below on a PASS. The in-session /wrap path calls the same script, so no command,
 # prompt, or model can mark roadmap work done without passing the identical gate.
 
-# Decision A — discard any file changes the EVALUATOR made before trusting its
-# verdict (so a grader that edits code into passing can't influence the ticked tree).
-# Pre-grade the builder has already committed its work, so the tracked tree is
-# normally clean ($PRE_SNAP empty). If it was dirty we can't tell builder vs
-# evaluator changes apart → STOP. Removes ONLY untracked files the evaluator created
-# (absent in $PRE_UNTRACKED); never deletes a pre-existing user untracked file.
-cleanup_eval_changes() {
-  if [ -n "$PRE_SNAP" ]; then
-    echo "autopilot: tracked tree was dirty before grading — can't isolate evaluator changes (ambiguous). STOPPING." >&2
-    return 1
-  fi
-  # The grader must not influence the ticked tree. If it COMMITTED (HEAD moved), that's a
-  # contract violation: undo the commit(s) and STOP — never tick a tree the grader altered.
-  local now_head; now_head=$(git rev-parse HEAD 2>/dev/null)
-  if [ -n "$PRE_GRADE_HEAD" ] && [ "$now_head" != "$PRE_GRADE_HEAD" ]; then
-    git reset -q --hard "$PRE_GRADE_HEAD" 2>/dev/null || true
-    echo "autopilot: evaluator COMMITTED during grading (HEAD moved $PRE_GRADE_HEAD → $now_head) — reverted and STOPPING (grader must not alter the tree)." >&2
-    return 1
-  fi
-  git reset -q --hard HEAD 2>/dev/null || true      # revert any tracked edits (tree was clean → safe)
-  local post new
-  post=$(git ls-files --others --exclude-standard 2>/dev/null | sort)
-  new=$(comm -13 <(printf '%s\n' "$PRE_UNTRACKED") <(printf '%s\n' "$post"))
-  if [ -n "$new" ]; then
-    printf '%s\n' "$new" | while IFS= read -r f; do [ -n "$f" ] && rm -f -- "$f"; done
-  fi
-  # Verify we restored the pre-grade state EXACTLY; if not, STOP (never tick on an
-  # uncertain tree).
-  if [ -n "$(git status --porcelain --untracked-files=no 2>/dev/null)" ]; then
-    echo "autopilot: could not restore tracked tree after grading — STOPPING." >&2; return 1
-  fi
-  local post2
-  post2=$(git ls-files --others --exclude-standard 2>/dev/null | sort)
-  if [ "$post2" != "$PRE_UNTRACKED" ]; then
-    echo "autopilot: untracked file set differs from pre-grade after cleanup — STOPPING." >&2; return 1
-  fi
-  return 0
-}
+# Decision A — discard any file changes the EVALUATOR made before trusting its verdict (so a grader
+# that edits code into passing can't influence the ticked tree). The mechanism now lives in the
+# shared lib .claude/lib/_eval-isolation.sh as eval_snapshot() + eval_restore() (sourced above), so
+# in-session /phase can reuse the SAME logic. Headless calls eval_restore (DESTRUCTIVE — safe here
+# because this is a throwaway worktree, tracked tree clean pre-grade). Behavior is byte-identical to
+# the former inline cleanup_eval_changes; the autopilot gate tests verify that.
 
 PREV_OPEN_SIGNATURE=""
 SAME_PHASE_FAILS=0
@@ -339,7 +315,7 @@ BASE_SIGNATURE=""
 # control prompt should force supervised review, not silently continue — so they are integrity-checked
 # here alongside the scripts. (A legitimate agent-prompt change is a supervised toolkit edit, not an
 # unattended autopilot phase.)
-GATE_CONTROL_FILES="scripts/tick.sh .claude/lib/_high-stakes.sh .claude/lib/_secret-scan.sh scripts/test-evidence.sh scripts/record-grade.sh .claude/lib/_test-cmd.sh .claude/high-stakes-path-allowlist .claude/agents/researcher.md .claude/agents/planner.md .claude/agents/executor.md .claude/agents/evaluator.md"
+GATE_CONTROL_FILES="scripts/tick.sh .claude/lib/_high-stakes.sh .claude/lib/_secret-scan.sh .claude/lib/_eval-isolation.sh scripts/test-evidence.sh scripts/record-grade.sh .claude/lib/_test-cmd.sh .claude/high-stakes-path-allowlist .claude/agents/researcher.md .claude/agents/planner.md .claude/agents/executor.md .claude/agents/evaluator.md"
 gate_control_intact() {
   local p
   for p in $GATE_CONTROL_FILES; do
@@ -510,13 +486,13 @@ for i in $(seq 1 "$MAX_ITER"); do
   # pre-grade snapshot so the (gitignored) evidence file is settled and survives cleanup.
   bash scripts/test-evidence.sh --allow-no-tests >>autopilot.log 2>&1 || true
 
-  # Snapshot the tree BEFORE grading so we can discard whatever the evaluator changes.
-  # PRE_SNAP empty ⇔ tracked tree clean (git stash create stashes only tracked work).
-  # PRE_GRADE_HEAD lets us detect (and undo) a COMMIT the evaluator makes — git reset
-  # --hard HEAD only reverts working-tree edits, not commits the grader sneaks in.
-  PRE_UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null | sort)
-  PRE_SNAP=$(git stash create 2>/dev/null)
-  PRE_GRADE_HEAD=$(git rev-parse HEAD 2>/dev/null)
+  # Snapshot the tree BEFORE grading so we can discard whatever the evaluator changes (shared lib;
+  # sets EVAL_PRE_* consumed by eval_restore below). Fail-closed: if the snapshot can't be taken,
+  # do NOT grade — better to stop than to grade without the discard net.
+  if ! eval_snapshot; then
+    echo "autopilot: could not snapshot the tree before grading — STOPPING (fail-closed)." | tee -a autopilot.log
+    break
+  fi
 
   # Independent grader: separate process, runs AS the evaluator (its system prompt +
   # no-edit-tools restriction). This is the sole gate for ticking.
@@ -548,7 +524,7 @@ for i in $(seq 1 "$MAX_ITER"); do
   echo "evaluator says: $VERDICT" | tee -a autopilot.log
 
   # Decision A: discard the evaluator's file changes BEFORE parsing/ticking/committing.
-  if ! cleanup_eval_changes; then
+  if ! eval_restore; then
     echo "autopilot: evaluator-change cleanup failed or ambiguous — not ticking. STOPPING." | tee -a autopilot.log
     break
   fi

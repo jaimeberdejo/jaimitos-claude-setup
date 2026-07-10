@@ -563,9 +563,30 @@ Both loops share the tick gate; the **headless** `scripts/autopilot.sh` adds *is
   can't corrupt your main checkout, and a high-stakes trip means the branch is **never pushed, even
   with `--pr`** (it stays local for review).
 
-The in-session `/autopilot` and `/phase`+`/wrap` modes have the independent grader and the shared
-gate, but not that isolation — **you (the watcher) are that guardrail.** Use the headless script for
-unattended runs; use the in-session modes when you want to watch.
+#### Both modes isolate the evaluator now (v2.6.0) — but differently, on purpose
+The evaluator has `Bash` (to re-run tests/typecheck/lint) and no Edit/Write tools — yet `Bash` can
+still write (`>`, `sed -i`, `tee`), and nothing watches the working tree *during* a grade. The real
+risk isn't a malicious grader but a **complacent** one: it re-runs the suite, a test writes a
+fixture, the fixture makes the grade pass. Both run modes now guard against that with one shared
+library, `.claude/lib/_eval-isolation.sh` (`eval_snapshot` + a mode-specific restore) — but the two
+modes cannot use the *same* restore, because their environments differ:
+
+| | headless `scripts/autopilot.sh` | in-session `/phase` |
+|---|---|---|
+| Environment | throwaway worktree, tracked tree clean pre-grade | your **live checkout**, possibly with uncommitted WIP |
+| On a grader write | **discards it** (`eval_restore`: `git reset --hard` + removes grader-created untracked) | **refuses** (`eval_changed_files`: names the exact files, does NOT touch the tree) |
+| Why | the worktree is disposable, so a hard reset is safe | a hard reset in a live tree could eat your WIP — so it detects, reports the precise paths, and STOPS for you to clean up |
+| Fail-closed | snapshot fails ⇒ don't grade | snapshot fails ⇒ don't grade |
+
+So the guarantee is now **symmetric in intent** (a grader that writes never influences a tick in
+either mode) while honest about the mechanism: headless *auto-cleans* because it can; interactive
+*detect-and-refuses* because auto-cleaning a live tree is the footgun, and a human is present to do
+the cleanup. The old asymmetry — headless discarded, `/phase` silently trusted the grader — was a
+real broken guarantee, fixed here.
+
+The in-session `/autopilot` and `/phase`+`/wrap` modes still lack the headless script's fresh-process
+and throwaway-worktree isolation — **you (the watcher) are that guardrail.** Use the headless script
+for unattended runs; use the in-session modes when you want to watch.
 
 ### What `/autopilot-parallel` trades for parallelism
 `/autopilot-parallel "<heading>" ...` builds several NAMED phases concurrently, each in its own

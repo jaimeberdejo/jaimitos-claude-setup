@@ -73,9 +73,21 @@ silently fall through to another phase. This is for targeted and parallel work (
    reports back what it completed. If it reports a task still red after 3 attempts, STOP and
    report the blocker exactly as it described it — do not retry the task yourself or proceed to
    step 6.
-6. When all tasks pass, invoke the `evaluator` subagent as a SELF-CHECK. If it returns
-   NEEDS_WORK, address the items and re-run it (max 2 rounds). If still NEEDS_WORK, STOP
-   and report — do not proceed.
+6. When all tasks pass, run the evaluator under isolation — the SAME discard net headless
+   `autopilot.sh` uses, so the grader can't contaminate the tree it grades (a complacent grader
+   that re-runs the suite and lets a test write a fixture that makes the grade pass is the real
+   risk — the evaluator has `Bash`, and `>` is a write). Steps:
+   - **Snapshot first (fail-closed):** `source .claude/lib/_eval-isolation.sh && eval_snapshot`.
+     If it returns non-zero, do NOT grade — report and STOP.
+   - Invoke the `evaluator` subagent as a SELF-CHECK. If it returns NEEDS_WORK, address the items
+     and re-run it (max 2 rounds; re-snapshot before each run). If still NEEDS_WORK, STOP and report.
+   - **After grading, detect (non-destructive):** run `eval_changed_files`. Unlike headless — which
+     runs in a throwaway worktree and can safely `git reset --hard` — this is your LIVE checkout, so
+     we NEVER auto-revert it. If `eval_changed_files` prints anything, the evaluator wrote to the
+     tree: treat the grade as **untrustworthy**, do NOT report the phase clean or advance to `/wrap`,
+     print the exact file list it emitted (`[modified] …` / `[created] …` / `[committed] …`) so the
+     human can remove them without guessing, note the attempt (it is a signal about the grader, not a
+     non-event), and STOP. Only when it prints nothing (returns 0) is the grade trustworthy.
 
 DO NOT tick docs/ROADMAP.md yourself. Ticking is the orchestrator's job, gated on an
 INDEPENDENT grade: under `autopilot.sh` the script ticks the phase only after a fresh

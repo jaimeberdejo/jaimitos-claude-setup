@@ -56,7 +56,7 @@ for f in CLAUDE.md .claude/settings.json \
          scripts/models.sh scripts/sync.sh scripts/doctor.sh scripts/run-guard-tests.sh \
          scripts/close-milestone.sh scripts/next-adr.sh scripts/lint-roadmap.sh \
          scripts/test-models.sh scripts/test-sync.sh scripts/test-tick.sh scripts/test-test-cmd.sh \
-         .claude/lib/_secret-scan.sh .claude/lib/_high-stakes.sh .claude/lib/_test-cmd.sh \
+         .claude/lib/_secret-scan.sh .claude/lib/_high-stakes.sh .claude/lib/_test-cmd.sh .claude/lib/_eval-isolation.sh \
          .claude/agents/researcher.md .claude/agents/planner.md .claude/agents/executor.md .claude/agents/evaluator.md \
          .claude/commands/resume.md .claude/commands/wrap.md .claude/commands/phase.md \
          .claude/commands/autopilot.md .claude/commands/autopilot-parallel.md .claude/commands/models.md \

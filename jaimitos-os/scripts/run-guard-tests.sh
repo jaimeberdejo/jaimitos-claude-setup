@@ -36,6 +36,7 @@ TESTS=(
   test-checkpoint.sh
   test-autopilot-gates.sh
   test-autopilot-parallel.sh
+  test-eval-isolation.sh
   test-tick.sh
   test-docs.sh
   test-docs-invariants.sh

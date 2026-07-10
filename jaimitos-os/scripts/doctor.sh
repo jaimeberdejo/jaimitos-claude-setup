@@ -62,7 +62,7 @@ done
 # / _test-cmd.sh would otherwise slip past as "All good" (audit H3). Test suites aren't listed here —
 # run-guard-tests.sh has its own drift guard for those.
 REQUIRED_SCRIPTS="autopilot.sh tick.sh test-evidence.sh record-grade.sh models.sh sync.sh doctor.sh close-milestone.sh next-adr.sh lint-roadmap.sh run-guard-tests.sh"
-REQUIRED_LIBS="_secret-scan _high-stakes _test-cmd"
+REQUIRED_LIBS="_secret-scan _high-stakes _test-cmd _eval-isolation"
 # Shipped project skills (install.sh copies each into .claude/skills/<name>/). setup-jaimitos-os is the
 # installer/meta skill — it is --global-skills only, never per-project, so it is NOT listed here. Keep in
 # sync with .github/scripts/install-smoke.sh (the authoritative post-install manifest gate).

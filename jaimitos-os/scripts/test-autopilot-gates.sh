@@ -18,6 +18,7 @@ RG="$SCAFFOLD/scripts/record-grade.sh"
 HS_LIB="$SCAFFOLD/.claude/lib/_high-stakes.sh"
 SS_LIB="$SCAFFOLD/.claude/lib/_secret-scan.sh"
 TC_LIB="$SCAFFOLD/.claude/lib/_test-cmd.sh"
+EI_LIB="$SCAFFOLD/.claude/lib/_eval-isolation.sh"
 
 FAILS=0
 pass() { printf '  ✓ %s\n' "$1"; }
@@ -127,6 +128,7 @@ mkrepo() {
   cp "$HS_LIB" "$REPO/.claude/lib/_high-stakes.sh"
   cp "$SS_LIB" "$REPO/.claude/lib/_secret-scan.sh"
   cp "$TC_LIB" "$REPO/.claude/lib/_test-cmd.sh"
+  cp "$EI_LIB" "$REPO/.claude/lib/_eval-isolation.sh"
   printf '{ "permissions": { "deny": ["Read(.env)"] } }\n' > "$REPO/.claude/settings.json"
   # Mirror a real install's .gitignore so log/evidence/control files stay UNTRACKED — exactly
   # like a shipped project. Without this the stub would commit autopilot.log and the .claude
