@@ -22,8 +22,12 @@ uses [Semantic Versioning](https://semver.org/).
     on macOS because BSD `wc -l` left-pads its count (STATE.md + GLOSSARY.md messages); normalized with
     `tr -d`. `test-sandbox.sh`'s docker-mount assertion compared the logical repo path, which macOS
     resolves through the `/var → /private/var` symlink; it now compares the resolved (`pwd -P`) path.
-  Verified: shellcheck clean, all 17 guard suites + install-smoke pass with the real `claude` masked
-  off PATH. Test-only + one hook-message whitespace fix; no scaffold behavior changed.
+  - **Runner-location assumption** — `test-test-cmd.sh`'s "go.mod present but go absent from PATH"
+    case simulated "go absent" with `PATH=/usr/bin:/bin`, but GitHub's ubuntu runner ships `go` in
+    `/usr/bin` (macOS keeps it in `/opt/homebrew`), so the resolver found it and emitted `go test`.
+    Rebuilt it to run against a PATH with the coreutils the harness needs but no ecosystem runner.
+  Verified: shellcheck + actionlint clean, all 17 guard suites + install-smoke pass with the real
+  `claude` masked off PATH. Test-only + one hook-message whitespace fix; no scaffold behavior changed.
 
 ## [2.6.0] — 2026-07-10
 

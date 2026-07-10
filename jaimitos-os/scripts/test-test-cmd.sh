@@ -291,7 +291,13 @@ echo "Ecosystem manifest present but its runner NOT on PATH -> falls through (ne
 echo "whose runner is missing):"
 (
   scenario_dir; : > go.mod
-  unset LEAN_TEST_CMD; PATH="/usr/bin:/bin"; export PATH   # no go stub
+  unset LEAN_TEST_CMD
+  # "PATH=/usr/bin:/bin" does NOT reliably hide `go`: GitHub's ubuntu runner ships it in /usr/bin
+  # (macOS keeps it in /opt/homebrew, which is why this only bit in CI). Build a PATH with the
+  # coreutils the harness needs (grep) but provably NO ecosystem runner, so `command -v go` fails.
+  norunner="$WORK/norunner"; mkdir -p "$norunner"
+  for _t in grep sed awk cat; do _p=$(command -v "$_t" 2>/dev/null) && ln -sf "$_p" "$norunner/$_t"; done
+  PATH="$norunner"; export PATH
   expect_loud_fallback "go.mod present but go absent from PATH"
 ) || FAILS=$((FAILS+1))
 
