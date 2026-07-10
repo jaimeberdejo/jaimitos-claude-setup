@@ -62,6 +62,7 @@ else warn "tag v$VERSION does not exist yet (create it at release time, with hum
 MISS_ERR=""; MISS_WARN=""
 while IFS= read -r v; do
   [ -n "$v" ] || continue
+  [ "$v" = "$VERSION" ] && continue          # the current release is expected untagged until release (check 2 warns)
   git rev-parse -q --verify "refs/tags/v$v" >/dev/null 2>&1 && continue
   if ver_lt "$v" "$GRANDFATHER_FLOOR"; then MISS_WARN="$MISS_WARN v$v"; else MISS_ERR="$MISS_ERR v$v"; fi
 done < <(grep -E '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' "$CHANGELOG" | sed -E 's/^## \[([0-9.]+)\].*/\1/')

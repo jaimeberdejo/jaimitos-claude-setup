@@ -8,6 +8,74 @@ uses [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [2.8.0] — 2026-07-10
+
+Hardening release acting on the repository-wide 2026-07-10 audit (`docs/dev/audits/`). It closes the
+audit's Critical/High findings on the unattended-execution safety story without adding any database,
+service, workflow engine, or crypto — every fix stays in the Git/file model and routes completion
+through the single `tick.sh` gate. `VERSION` → `2.8.0`. Not tagged (tag at release with approval).
+
+### Fixed — security & correctness (from the 2026-07-10 audit)
+- **C1 — the sandbox no longer mounts ignored secrets.** `sandbox/run-autopilot-sandboxed.sh` mounted
+  the live working dir, so a gitignored/untracked `.env`, `*.pem`, `.netrc`, `id_rsa`, `secrets/`, a
+  cache tree, or a tracked *symlink* to one rode into the bypass-mode container. It now mounts a clean,
+  tracked-only `git clone --local` staging copy — ignored/untracked content is physically absent; a
+  self-contained `.git` lets `git worktree add` work inside; a *committed* secret still fails closed.
+  The loop's `autopilot/*` branch is imported back out of the clone, failing closed + preserving the
+  clone if the import can't complete (no work lost behind a warning). (finding N-3 folded in)
+- **C2 — headless autopilot refuses to build a `Mode: supervised` phase.** It used to build a
+  supervised phase to completion before `tick.sh` refused the checkbox. A pre-build gate now parses the
+  next phase's Mode (via one shared, fail-closed parser) BEFORE spawning the builder and stops on
+  supervised / missing / duplicate / invalid Mode. New `.claude/lib/_roadmap.sh` replaces the several
+  hand-copied phase parsers (in `tick.sh`, `close-milestone.sh`, and the gap `autopilot.sh` had).
+- **H1 — the manual phase scan floor is tamper-evident.** `tick.sh` read the floor from the gitignored,
+  builder-writable `.claude/.phase-base`, which a builder could silently advance to hide commits. New
+  `scripts/start-phase.sh` records the floor in a TRACKED, committed `.claude/.phase-anchor` (clean tree
+  required; prints the judged range); `tick.sh` prefers it and prints the `BASE..HEAD` range. Advancing
+  the floor is now a visible commit, not a silent rewrite. Honest scope: tamper-EVIDENT + human-reviewed,
+  not builder-proof — headless (orchestrator-derived `TICK_BASE`) remains the trust-equivalent path.
+- **H2 — the graded test command is integrity-bound.** The tick gate graded whatever the resolver read
+  from mutable, builder-writable, un-gated sources (settings.json env block, package.json, Makefile…),
+  so a builder could swap in a no-op. New `authorized_test_cmd()` grades ONLY the `LEAN_TEST_CMD` env
+  (parent-shell, not builder-settable) or the project-owned, gate-controlled `.claude/test-command`
+  (no-ops rejected; `none: <reason>` sentinel). Evidence records command + source + config hash.
+  Migrated safely: `sync.sh` / `doctor --fix` seed `.claude/test-command` from PERSISTENT config only
+  (never the transient env), never overwrite, and fail closed if nothing safe can be derived.
+- **H3 — evaluator isolation now sees ignored files.** Snapshot/restore ignored the ignored set, so a
+  grader could create/modify an ignored fixture/cache/`.env` undetected. `_eval-isolation.sh` now
+  detects `[created-ignored]` paths (removing only those created during grading — never the builder's
+  deps) and, for a bounded sensitive allowlist (`.env`/`.pem`/`.netrc`/…), detects tampering and fails
+  closed. Documented residual: arbitrary edits to other pre-existing ignored files stay undetectable.
+- **H4 — a malformed `HIGH_STAKES_RE` fails closed.** An invalid custom regex silently disabled the
+  path gate. The matcher is now three-state (matched / clean / config-error) and EVERY caller in
+  `tick.sh` treats a config error as a hard refuse (the audit's own `return 2` fix alone would still
+  have failed open); `doctor.sh` reports a non-compiling regex as an error, not a green "customized".
+- **H5 — manual tick refuses a dirty checkout.** Exact-HEAD evidence is only honest when the checkout
+  equals HEAD; `tick.sh` now refuses a dirty tracked/untracked tree (gitignored runtime artifacts
+  exempt) before mutating ROADMAP/STATE.
+- **N-2 — a failed STATE write no longer reports success.** `tick.sh`'s `update_state` returned 0
+  unconditionally; a read-only `docs/STATE.md` yielded "✓ ticked" + exit 0. It now returns the write
+  status and tick refuses on failure, pointing at the repair path.
+- **N3 — the checkpoint hook preserves a curated staging selection** on a secret-scan abort (was a
+  whole-index `git reset`).
+- **N-1 — the local `lint-shell.sh` gate is trustworthy.** `.shellcheckrc`'s `severity=` key is
+  unsupported (CLI-only), so the local gate failed on a clean tree while CI passed; the warning floor now
+  lives in `lint-shell.sh` explicitly.
+
+### Changed / Added
+- New shared `.claude/lib/_roadmap.sh` (fail-closed phase parser) and `scripts/start-phase.sh`;
+  `.claude/test-command` is the one authorized graded command (project-owned, gate-controlled).
+- Strict `lint-roadmap.sh` schema checks (unique headings, one valid Mode, ≥1 task); new
+  `scripts/release-check.sh`; a macOS/bash-3.2 CI leg; honest three-state installer status; corrected
+  SECURITY/GUIDE/README/CONTRIBUTING/CLAUDE/install claims to match the implementation.
+- `/autopilot-parallel` was already removed in 2.7.0; confirmed clean.
+
+### Deferred (tracked follow-ups, not blocking this release)
+- **Full transactional ROADMAP+STATE replacement and a `doctor --state` cross-file repair path**
+  (audit N2/6.7). The dangerous half — a failed STATE write silently reporting success — is fixed
+  (N-2 above); the remaining two-file transactional rewrite + invariant repair is a larger, riskier
+  change deferred to a follow-up.
+
 ## [2.7.0] — 2026-07-10
 
 ### Added
