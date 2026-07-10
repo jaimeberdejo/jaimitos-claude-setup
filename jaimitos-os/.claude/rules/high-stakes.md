@@ -55,7 +55,10 @@ what's enforced), then update these globs to match. `scripts/doctor.sh` warns if
 regex at its shipped default (a sign the enforced gate was never pointed at your real paths).
 
 - **No autopilot here.** This is human-on-the-loop work: a loop may *surface* a diff,
-  but a human approves it before it lands. Keep `permission_mode: default`.
+  but a human approves it before it lands. Keep `permission_mode: default`. Claude Code's `auto`
+  mode is a useful *semantic complement* when you're at the terminal, but never the mechanism: it
+  is ignored for subagents and aborts under `-p`, so it cannot guard a headless run. The enforced
+  gate is `HIGH_STAKES_RE` + `scripts/tick.sh`.
 - **Smallest possible phases.** One reviewable change at a time. No drive-by refactors.
 - **Explainable line by line.** Record real decisions (and the alternative rejected)
   with the `adr` skill so the change is defensible later.
@@ -76,7 +79,8 @@ regex at its shipped default (a sign the enforced gate was never pointed at your
   never a rename-to-dodge-the-regex. It affects ONLY the path/keyword matcher. The
   content marker (`high-stakes-ok: <reason>`, inline on a diff line) is a completely
   separate, content-only mechanism and is unaffected by this file, and vice versa.
-  `scripts/doctor.sh` reports active allowlist entries so a suppression is never hidden.
+  `scripts/doctor.sh` reports active allowlist entries **and every active `high-stakes-ok:` content
+  marker in the tracked tree**, so neither kind of suppression is ever hidden.
 - **Over-broad match blocking a legitimate phase? Fix `HIGH_STAKES_RE` in a commit BEFORE that
   phase's base — never inside it.** Editing `_high-stakes.sh` (or the path allowlist) *within* a
   phase is itself gated: `tick.sh` forces supervised review (exit 3) on any in-phase change to the

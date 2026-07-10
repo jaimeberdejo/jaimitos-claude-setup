@@ -1,8 +1,8 @@
 ---
 name: scope-guard
-description: Checks that a change matches its stated task and nothing more. Use before committing or when reviewing what was just built — "did I stay on scope", "check this didn't touch anything it shouldn't", "review before commit". Catches helpful-over-reach: unrelated edits, drive-by refactors, unexpected deletions.
+description: Checks that a change matches its stated task and nothing more, and that its paper trail is up to date. Use before committing or when reviewing what was just built — "did I stay on scope", "check this didn't touch anything it shouldn't", "review before commit", "ready to commit", "ship it". Catches helpful-over-reach: unrelated edits, drive-by refactors, unexpected deletions.
 allowed-tools: Read, Grep, Glob, Bash(git diff *), Bash(git status *), Bash(git log *)
-disallowed-tools: Edit, Write, MultiEdit, NotebookEdit
+disallowed-tools: Edit, Write, NotebookEdit
 ---
 
 # Scope guard
@@ -24,14 +24,20 @@ looked unused. This skill catches that before it lands.
 4. **Flag the out-of-scope items explicitly**, with file and a one-line reason.
    Pay special attention to: deleted files/functions, changes in directories the
    task never mentioned, and renames that ripple wider than needed.
+5. **Check the paper trail.** If logic changed, did `docs/STATE.md` (or the task notes) get
+   updated? If a real decision was made, is there an ADR in `docs/decisions/`? Flag what's
+   missing — never auto-write it here. This is the one pre-commit check the native reviewers
+   can't make: `/code-review` and `/security-review` read the code, not the scaffold's docs.
 
 ## Verdict
-- `IN SCOPE` — everything maps to the task or directly supports it.
+- `IN SCOPE` — everything maps to the task or directly supports it, and the paper trail is current.
 - `SCOPE CREEP: <items>` — list each out-of-scope change and recommend whether to
   revert it, split it into its own commit, or keep it (with the user's say-so).
+- Report a missing STATE update or ADR alongside the verdict — it does not by itself make a
+  change out of scope, but it must not ship silently.
 
 ## Guardrails
-- **Read-only by contract.** The edit tools (Edit/Write/MultiEdit/NotebookEdit) are removed in the
+- **Read-only by contract.** The edit tools (Edit/Write/NotebookEdit) are removed in the
   frontmatter, and your shell/git access is for INSPECTION ONLY — never modify anything with it:
   no `sed -i`, `tee`, output redirection (`>`/`>>`), `rm`/`mv`/`cp` over tracked files, or
   `git add`/`commit`/`checkout`/`restore`/`stash`. You produce a verdict, not edits.

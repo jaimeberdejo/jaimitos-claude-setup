@@ -64,8 +64,6 @@ your-repo/
     │   ├── phase.md               # /phase     — build one phase (research→plan→TDD→grade; no self-tick;
     │   │                          #   optional heading argument to target a specific phase)
     │   ├── autopilot.md           # /autopilot — WATCHABLE in-session loop of N phases
-    │   ├── autopilot-parallel.md  # /autopilot-parallel — user-named independent phases built
-    │   │                          #   concurrently (isolated worktrees), integrated/ticked one at a time
     │   └── models.md              # /models    — thin wrapper around scripts/models.sh
     ├── agents/                    # one file per /phase stage, each independently model-configurable
     │   ├── researcher.md          # step 3 (research) — read-only, no Write/Edit
@@ -82,15 +80,15 @@ your-repo/
     │   ├── test-gate.sh           # opt-in deterministic test gate (LEAN_TEST_GATE)
     │   ├── commit-on-stop.sh      # honest git checkpoint each turn (secret-scans before committing)
     │   └── ownership-nudge.sh     # reminds you to ADR / teach-back / run the mapme skill after changes
-    ├── lib/                       # 3 SOURCED libraries (not event hooks)
+    ├── lib/                       # 4 SOURCED libraries (not event hooks)
     │   ├── _secret-scan.sh        # SHARED: filename+content secret scan (commit-on-stop + tick + autopilot)
     │   ├── _high-stakes.sh        # SHARED: high-stakes path list + content matcher (the supervised gate)
     │   └── _test-cmd.sh           # SHARED: resolves the project test command (test-gate + test-evidence)
-    └── skills/                    # 17 per-project skills (see skills/README.md; NOT copied here:
+    └── skills/                    # 15 per-project skills (see skills/README.md; NOT copied here:
                                     #   setup-jaimitos-os is the global-only installer meta-skill)
         ├── grill/ · to-spec/ · roadmap/ · milestone/ · adr/ · glossary/   # think → spec → plan
         ├── design-twice/ · tdd/ · diagnose/ · merge-conflicts/            # engineering
-        ├── ship-check/ · scope-guard/ · explain-diff/ · unstick/          # review + debugging (report-only x3)
+        ├── scope-guard/ · unstick/                                        # review + debugging (scope-guard is report-only)
         └── teach-back/ · mapme/ · quizme/                                 # ownership
 ```
 
@@ -423,9 +421,10 @@ decides whether that PASS is allowed to become a tick.
 | `commit-on-stop.sh` | turn end | Honest git checkpoint (only claims success when a commit happened). Runs the shared **secret-scan** and refuses — fails closed — to commit credentials. |
 | `ownership-nudge.sh` | turn end | After code changes, nudges: ADR the decision, run teach-back, run the `mapme` skill. Also nudges to update `docs/STATE.md` when a change happened outside an active phase (no `.claude/.phase-ready`) — the quick-fix path that skips `/phase`/`/wrap` otherwise leaves STATE.md silently stale. |
 
-> **Three sourced libraries**, not event hooks: `_secret-scan.sh` (filename+content secret scan),
-> `_high-stakes.sh` (the high-stakes path list + content matcher), and `_test-cmd.sh` (test-command
-> resolution). They're sourced by the hooks, `tick.sh`, and `scripts/autopilot.sh`, so the same
+> **Four sourced libraries**, not event hooks: `_secret-scan.sh` (filename+content secret scan),
+> `_high-stakes.sh` (the high-stakes path list + content matcher), `_test-cmd.sh` (test-command
+> resolution), and `_eval-isolation.sh` (the pre-grade snapshot plus the destructive/detect-only
+> restore paths). They're sourced by the hooks, `tick.sh`, and `scripts/autopilot.sh`, so the same
 > guards run everywhere — a single source of truth for each.
 
 #### The secret scan is a prefix-matcher by default — swap in a real scanner if you need one
@@ -490,10 +489,6 @@ summaries; this is where the full story lives.
   phase's `Mode:` line *before building it*, so an unattended run can't carry out a supervised
   phase's work before being blocked from ticking it. Keep high-stakes work out of the loops
   regardless — `Mode: supervised` plus a customized `HIGH_STAKES_RE` are the backstop, not the plan.
-- **`/autopilot-parallel` and a high-stakes hit:** the same `tick.sh` gate refuses the tick/push,
-  but unlike the headless script (which aborts the *entire* run) it leaves that one phase local
-  for supervised review and continues integrating the other named phases — each was independently
-  asserted by the user as non-interfering.
 - **High-stakes path allowlist** (`.claude/high-stakes-path-allowlist`) — a git-tracked, per-line,
   reason-required escape for **exact-path false positives** in the path matcher (e.g. an ADR whose
   name merely contains "money"). Purely subtractive: only an exact path with a non-empty reason is
@@ -519,9 +514,9 @@ summaries; this is where the full story lives.
   own worktree or exfiltrate; the executor's forbidden-writes rule is advisory, and the real
   protection is the orchestrator's trusted re-derivation + integrity checks + the no-credentials
   sandbox.
-- **The manual `/wrap` path is the weaker, human-supervised path — by design.** `/wrap` (and
-  `/autopilot-parallel`) call `tick.sh` directly and carry neither the trusted-base override nor
-  the gate-control byte-integrity check: they trust the session-written `.claude/.phase-base` and
+- **The manual `/wrap` path is the weaker, human-supervised path — by design.** `/wrap` calls
+  `tick.sh` directly and carries neither the trusted-base override nor
+  the gate-control byte-integrity check: it trusts the session-written `.claude/.phase-base` and
   the on-disk gate code. So (1) run `/wrap` only from a **clean working tree** — uncommitted
   changes fall outside the `${phase-base}..HEAD` scan — and (2) use headless
   `scripts/autopilot.sh` (inside the sandbox) as the hardened path for unattended operation.
@@ -534,7 +529,6 @@ summaries; this is where the full story lives.
 |---|---|---|---|---|
 | Manual | `/phase` + `/wrap` | yours | you run `/wrap` → the `tick.sh` gate, after `@evaluator` PASS | medium stakes, daily default |
 | Watchable | `/autopilot N` | one session (rots) | evaluator **subagent** → the `tick.sh` gate | a few phases you want to see |
-| Parallel watchable | `/autopilot-parallel "<heading>" ...` | one session, per-phase **worktree** during build | evaluator **subagent**, fresh per merged phase → the `tick.sh` gate | user-asserted-independent phases you want built concurrently |
 | Headless | `scripts/autopilot.sh N` | fresh per phase (no rot) | separate evaluator **process** → the `tick.sh` gate | long/overnight, low-stakes |
 
 All four route ticking through the **same** `scripts/tick.sh` gate ([Part 4](#the-completion-gate--scriptsticksh-read-this-twice)).
@@ -599,36 +593,6 @@ real broken guarantee, fixed here.
 The in-session `/autopilot` and `/phase`+`/wrap` modes still lack the headless script's fresh-process
 and throwaway-worktree isolation — **you (the watcher) are that guardrail.** Use the headless script
 for unattended runs; use the in-session modes when you want to watch.
-
-### What `/autopilot-parallel` trades for parallelism — Advanced / experimental
-> **⚠ Advanced / experimental.** Prefer `/autopilot N` or headless `scripts/autopilot.sh` unless you
-> specifically need concurrent builds of phases you're sure are disjoint. This command requires you
-> to state the literal phrase `I assert these phases are independent` before it builds — a `--yes`
-> gets typed reflexively; a sentence does not.
-
-`/autopilot-parallel "<heading>" ...` builds several NAMED phases concurrently, each in its own
-git worktree (via the Agent tool's `isolation: "worktree"`), then integrates them back **one at a
-time** — grading and ticking stay strictly sequential, because `tick.sh` is a single-writer gate
-over one `docs/ROADMAP.md`. What changes versus plain `/autopilot`:
-
-- **Gain: per-phase blast-radius isolation.** Each phase builds in a real, separate worktree —
-  stronger isolation than `/autopilot`'s single shared in-session checkout, closer to (but not the
-  same as) `scripts/autopilot.sh`'s process-level isolation.
-- **Loss: no automatic retry.** Each phase gets exactly one build attempt. A NEEDS_WORK after
-  merging is not retried automatically the way `/phase`'s internal TDD loop or `/autopilot`'s
-  findings-loop retries — it's handed back for a manual `/phase` + `/wrap` follow-up.
-- **Evaluator-change isolation is now available (v2.6.0), use it.** Each phase's grade still runs
-  in-session at integration, but you can wrap it with `.claude/lib/_eval-isolation.sh`
-  (`eval_snapshot` before, `eval_changed_files` after — the detect-and-refuse `/phase` uses), so a
-  grader that writes to the tree is caught here too. It's still not `scripts/autopilot.sh`'s
-  separate-process isolation, but the change-discard guarantee no longer has to be absent here.
-- **A genuinely new, unenforced trust assumption: human-asserted independence.** Nothing in this
-  stack mechanically verifies that two phases don't interfere. A clean `git merge` is *not* proof
-  of independence — two phases can touch entirely disjoint files and still be logically dependent
-  (e.g. one assumes an API the other was supposed to add). A merge conflict is the closest thing to
-  an after-the-fact check, and even that only catches *textual* collisions. Every other guardrail
-  in this stack is enforced by a script or an independent process; this one is enforced by nothing
-  but your own judgment before you name the phases — say so, don't paper over it.
 
 ### Never loop
 Auth, migrations against shared/prod data, money movement, irreversible deletes, external side
@@ -1092,7 +1056,7 @@ stage. How they wire into the spine:
      ↓
   STUCK?     diagnose           ← a bug to reproduce (build the red-capable loop first)
              unstick            ← 3+ attempts circling one assumption (reset the approach)
-  MERGE      merge-conflicts    ← /autopilot-parallel integration, or any stopped merge/rebase
+  MERGE      merge-conflicts    ← worktree phase-branch integration, or any stopped merge/rebase
   VOCAB      glossary           → docs/GLOSSARY.md, injected (capped) every session start
 ```
 
@@ -1122,7 +1086,7 @@ A broad pack of process skills. Map each to a stage of the loop rather than adop
 | `systematic-debugging` | When a phase stalls (the 3-strike cap trips) — same slot as the bundled `diagnose` + `unstick`. |
 | `using-git-worktrees` | Manual isolation; the headless `autopilot.sh` already does this for loops. |
 | `verification-before-completion` | Philosophically identical to the evaluator's default-FAIL + the `tick.sh` evidence gate ("evidence before assertions"). |
-| `requesting-code-review` / `receiving-code-review` | Downstream of a phase; complements `ship-check` + the evaluator. |
+| `requesting-code-review` / `receiving-code-review` | Downstream of a phase; complements native `/code-review` + the evaluator. |
 | `writing-plans` / `executing-plans` / `subagent-driven-development` | An alternative planning/execution layer — **the classic spine collision.** Don't double-plan with `/phase`; pick one. |
 
 **The biggest overlap to avoid:** superpowers' plan → execute → subagent machinery is a *second
@@ -1131,12 +1095,13 @@ systems will fight over the same files and the same "done." Use superpowers for 
 doesn't cover (brainstorming, debugging, review, verification discipline) and let `/phase` own the build.
 
 ### Don't forget the built-in layer
-Before reaching outside, the bundled skills (17 per-project — see `skills/README.md`) already
+Before reaching outside, the bundled skills (15 per-project — see `skills/README.md`) already
 cover most of the loop: `grill`/`to-spec`/`roadmap`/`milestone` (think → spec → plan),
 `design-twice`/`tdd`/`diagnose`/`merge-conflicts` (engineering), `adr`/`glossary`/`mapme`
-(knowledge), `ship-check`/`scope-guard`/`explain-diff` (review), `teach-back`/`quizme`
-(ownership), `unstick` (debugging reset). External packs are for *depth in one area*, not
-replacements — reach for them when the built-in skill isn't enough, not by default.
+(knowledge), `scope-guard` (review — the native `/code-review` and `/security-review` cover the
+rest), `teach-back`/`quizme` (ownership), `unstick` (debugging reset). External packs are for
+*depth in one area*, not replacements — reach for them when the built-in skill isn't enough, not
+by default.
 
 ### The one rule, compressed
 **Steps compose; spines collide.** Grill, brainstorm, debug, review — steps, wire them in freely. A
@@ -1158,14 +1123,12 @@ DAILY LOOP   /resume → /phase → review → teach-back → /wrap → /clear
 COMMANDS     /resume       orient at session start
              /phase        build one phase (research→plan→TDD→grade; no self-tick)
              /autopilot N   watchable in-session loop (N | 3-5 | all)
-             /autopilot-parallel "<heading>" ...   build named, user-asserted-independent
-                            phases concurrently (per-phase worktree), integrate + grade serially
              /wrap         update STATE, tick ROADMAP via the tick.sh gate, append ADRs
              /models       show/set which model each /phase stage uses (thin wrapper around scripts/models.sh)
              @evaluator     grade a phase independently
 
 SKILLS       workflow:    grill · to-spec · roadmap · milestone · adr · glossary
-                          · ship-check · scope-guard · explain-diff · unstick
+                          · scope-guard · unstick
              engineering: design-twice · tdd · diagnose · merge-conflicts
              ownership:   teach-back · mapme · quizme
              installer:   setup-jaimitos-os (install + customize; global-only)
@@ -1196,7 +1159,7 @@ ONE LINE       Automate the typing, never the judgment.
 ---
 
 ### One paragraph to remember
-Native Claude Code plus a `docs/` folder, seven short hooks, three shared libs, four per-phase-stage
+Native Claude Code plus a `docs/` folder, seven short hooks, four shared libs, four per-phase-stage
 subagents (research/plan/execute/independent verify, each independently pinnable to its own model),
 one shared completion gate, and a pack of portable skills reproduce what heavyweight frameworks
 automate — spec, roadmap, persistent state, decision log, phase execution, verification — at a

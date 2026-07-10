@@ -67,7 +67,7 @@ REQUIRED_LIBS="_secret-scan _high-stakes _test-cmd _eval-isolation"
 # Shipped project skills (install.sh copies each into .claude/skills/<name>/). setup-jaimitos-os is the
 # installer/meta skill — it is --global-skills only, never per-project, so it is NOT listed here. Keep in
 # sync with .github/scripts/install-smoke.sh (the authoritative post-install manifest gate).
-REQUIRED_SKILLS="roadmap milestone adr ship-check scope-guard explain-diff unstick teach-back mapme quizme grill to-spec glossary design-twice tdd diagnose merge-conflicts"
+REQUIRED_SKILLS="roadmap milestone adr scope-guard unstick teach-back mapme quizme grill to-spec glossary design-twice tdd diagnose merge-conflicts"
 
 echo "jaimitos-os doctor"
 [ -f .claude/.jaimitos-os-version ] && echo "jaimitos-os version: $(cat .claude/.jaimitos-os-version)"
@@ -109,7 +109,7 @@ echo "Agents, commands, rules:"
 for a in researcher planner executor evaluator; do
   [ -f ".claude/agents/$a.md" ] && ok ".claude/agents/$a.md" || bad "missing .claude/agents/$a.md"
 done
-for c in resume wrap phase autopilot autopilot-parallel models; do
+for c in resume wrap phase autopilot models; do
   [ -f ".claude/commands/$c.md" ] && ok ".claude/commands/$c.md" || bad "missing .claude/commands/$c.md"
 done
 [ -f .claude/rules/high-stakes.md ] && ok ".claude/rules/high-stakes.md" || bad "missing .claude/rules/high-stakes.md"
@@ -202,6 +202,46 @@ if [ -f "$HS_ALLOWLIST" ]; then
   [ "$HS_ACTIVE" -eq 0 ] && ok "allowlist file present, no active (reasoned) entries"
 else
   ok "no high-stakes path allowlist file — no path-gate suppressions active"
+fi
+echo ""
+
+echo "High-stakes content suppressions (inline 'high-stakes-ok:' markers — never hidden):"
+# Symmetry with the path allowlist above. That allowlist is a git-tracked FILE whose every active
+# entry doctor prints; the inline `high-stakes-ok: <reason>` marker — which suppresses the CONTENT
+# scanner one line at a time — was reported NOWHERE. Under headless autopilot the builder writes the
+# code, so it can also write the marker: an unreported suppression is an invisible one.
+# Report-only — this changes no gate. A line is listed only when it is a REAL suppression: it both
+# matches HIGH_STAKES_CONTENT_RE and carries a marker with an actual reason. Both regexes are sourced
+# from the lib rather than restated, so the definitions cannot drift from what the gate enforces.
+# Toolkit-owned files that DEFINE, DOCUMENT or TEST the marker are skipped — the lib, the rule doc,
+# toolkit-docs/, and the scripts/test-*.sh guard tests (whose fixtures are literal marked lines).
+# They suppress nothing in your code, and would otherwise flag on every healthy install.
+if [ -f "$HS_LIB" ] && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  # shellcheck source=/dev/null
+  . "$HS_LIB" 2>/dev/null || true
+  if [ -n "${HIGH_STAKES_OK_RE:-}" ] && [ -n "${HIGH_STAKES_CONTENT_RE:-}" ]; then
+    HS_OK_HITS=$(git grep -nI -E "$HIGH_STAKES_OK_RE" 2>/dev/null \
+      | grep -Ei "$HIGH_STAKES_CONTENT_RE" 2>/dev/null \
+      | grep -vE '^(\.claude/lib/_high-stakes\.sh|\.claude/rules/high-stakes\.md|scripts/test-[^:]*\.sh|toolkit-docs/[^:]*):')
+    if [ -n "$HS_OK_HITS" ]; then
+      warn "active content-gate suppressions found — these are suppressions; review every one:"
+      printf '%s\n' "$HS_OK_HITS" | while IFS= read -r hs_hit; do
+        [ -n "$hs_hit" ] || continue
+        hs_path="${hs_hit%%:*}"
+        hs_rest="${hs_hit#*:}"
+        hs_lineno="${hs_rest%%:*}"
+        hs_why="${hs_hit##*high-stakes-ok:}"
+        while [ "${hs_why# }" != "$hs_why" ]; do hs_why="${hs_why# }"; done
+        warn "  suppressed: $hs_path:$hs_lineno — $hs_why"
+      done
+    else
+      ok "no active 'high-stakes-ok:' content suppressions in the tracked tree"
+    fi
+  else
+    warn "cannot read HIGH_STAKES_OK_RE/HIGH_STAKES_CONTENT_RE from $HS_LIB — content suppressions NOT audited"
+  fi
+else
+  ok "no high-stakes lib or not a git repo — no content suppressions to audit"
 fi
 echo ""
 

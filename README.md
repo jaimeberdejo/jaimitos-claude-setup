@@ -39,9 +39,9 @@ Then it branches on whether there's an existing stack to detect:
 New to it all? Work through `PRACTICE-PROJECT.md` first.
 
 > **Two parts, how they relate:** the **`jaimitos-os/` scaffold** (hooks, commands, docs layout,
-> autopilot) and the **`skills/` pack** (18 skills; 17 are copied per-project — see
+> autopilot) and the **`skills/` pack** (16 skills; 15 are copied per-project — see
 > [`skills/README.md`](skills/README.md) for the authoritative count and catalog). Skills work
-> standalone, but several (`roadmap`, `ship-check`, `adr`, …) assume the scaffold's `docs/`
+> standalone, but several (`roadmap`, `scope-guard`, `adr`, …) assume the scaffold's `docs/`
 > layout — install both for the full experience.
 
 ---
@@ -62,11 +62,11 @@ jaimitos-claude-setup/
 │   ├── .github/workflows/jaimitos-os-ci.yml   # OPT-IN CI (install.sh --with-ci)
 │   └── .claude/
 │       ├── settings.json            # hooks → events + permissions.deny
-│       ├── commands/                # /resume /wrap /phase /autopilot /autopilot-parallel /models
+│       ├── commands/                # /resume /wrap /phase /autopilot /models
 │       ├── agents/                  # researcher, planner, executor, evaluator — one per /phase stage
 │       ├── rules/high-stakes.md     # path-scoped extra care
-│       └── hooks/                   # 7 deterministic shell hooks + 3 shared libs (_secret-scan, _high-stakes, _test-cmd)
-└── skills/                ← 18 skills (17 portable + setup-jaimitos-os installer) — see skills/README.md
+│       └── hooks/                   # 7 deterministic shell hooks + 4 shared libs (_secret-scan, _high-stakes, _test-cmd, _eval-isolation)
+└── skills/                ← 16 skills (15 portable + setup-jaimitos-os installer) — see skills/README.md
 ```
 
 > The repo-root `README.md` documents the **toolkit**, so `install.sh` never copies it into your
@@ -169,7 +169,6 @@ You drive each arrow manually for stakes that warrant it, or hand the bracket to
 | `/resume` | Reads SPEC+ROADMAP+STATE, states the single next action, then waits. Orientation only. |
 | `/phase` | Builds one roadmap phase: research-if-needed → plan → TDD → evaluator self-check. **Does not tick the roadmap** (that's gated on an independent grade). |
 | `/autopilot N` | **Watchable** in-session loop: runs N phases in your terminal, grading each via the evaluator subagent. Accepts `N`, `3-5`, or `all`. |
-| `/autopilot-parallel "<heading>" ...` | Builds **named, user-asserted-independent** phases concurrently in isolated worktrees, then integrates and grades them one at a time through the same `tick.sh` gate. Never auto-detects independence — you name the phases. |
 | `/wrap` | Session close-out: update STATE, tick ROADMAP through the shared `scripts/tick.sh` gate (evaluator PASS + fresh green tests + clean secret scan + no high-stakes), append an ADR. Never flips checkboxes by hand. |
 | `/models` | Thin wrapper around `scripts/models.sh` — shows or sets which model each `/phase` stage (research/plan/execute/verify) uses, persisted per-project in that stage's agent frontmatter. `all=X` sets all four; `reset` restores shipped defaults. |
 
@@ -185,7 +184,7 @@ You drive each arrow manually for stakes that warrant it, or hand the bracket to
 
 ## Hooks (deterministic shell — not all enforce; see Enforcement reality)
 
-Seven deterministic shell hooks plus three shared libs:
+Seven deterministic shell hooks plus four shared libs:
 
 | Hook | Event | Role |
 |---|---|---|
@@ -197,37 +196,39 @@ Seven deterministic shell hooks plus three shared libs:
 | `commit-on-stop.sh` | stop | Auto-checkpoint dirty work after a staged secret scan. |
 | `ownership-nudge.sh` | stop | Reminds you to ADR / teach-back / map architecture after code changes. Also flags when a change happened outside an active phase, so `docs/STATE.md` doesn't silently go stale. |
 
-`_secret-scan.sh`, `_high-stakes.sh`, and `_test-cmd.sh` are sourced libraries, not hooks.
+`_secret-scan.sh`, `_high-stakes.sh`, `_test-cmd.sh`, and `_eval-isolation.sh` are sourced
+libraries, not hooks.
 
 ## Skills (`skills/`)
 
-Eighteen skills — ◆ marks the seven adapted from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT):
+Sixteen skills — ◆ marks the seven adapted from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT):
 
-**Workflow (10)**
+**Workflow (8)**
 - **grill** ◆ — relentless one-question-per-turn stress-test of a plan, each question with a recommendation
 - **to-spec** ◆ — synthesize the design conversation into docs/SPEC.md (seams confirmed, measurable criterion required)
 - **roadmap** — SPEC → phased docs/ROADMAP.md with measurable "Done when:" lines
 - **milestone** — add phases mid-project / archive a finished roadmap
 - **adr** — 4-line decision records in docs/decisions/
 - **glossary** ◆ — docs/GLOSSARY.md: one-line domain definitions + rejected terms
-- **ship-check** — pre-commit verdict: tests/lint/leftovers (report-only)
-- **scope-guard** — flags out-of-scope edits and drive-by refactors (report-only)
-- **explain-diff** — self-review: what changed and where it might be wrong (report-only)
+- **scope-guard** — flags out-of-scope edits, drive-by refactors, and a stale paper trail (report-only)
 - **unstick** — breaks a circular-debugging loop by naming the shared failing assumption
 
 **Engineering (4)**
 - **design-twice** ◆ — two genuinely different designs before non-trivial code, ADR records the loser
 - **tdd** ◆ — the red→green loop with pre-agreed seams and the evaluator's own anti-pattern list
 - **diagnose** ◆ — hard-bug discipline: a tight red-capable feedback loop before any hypothesis
-- **merge-conflicts** ◆ — resolve from both sides' intent; covers /autopilot-parallel integration
+- **merge-conflicts** ◆ — resolve from both sides' intent; runs the project checks, finishes the merge
 
 **Ownership (3):** **teach-back** (explain + quiz after a phase) · **mapme** (regenerate
 docs/ARCHITECTURE.md) · **quizme** (cold-open understanding check) — plus the
 **setup-jaimitos-os** installer meta-skill (global-only).
 
-A clean pre-commit chain is **`scope-guard → explain-diff → ship-check`**. **The authoritative
-catalog (descriptions, triggers, the MIT attribution notice) is
-[`skills/README.md`](skills/README.md)** — counts live there so they can't drift here.
+A clean pre-commit chain is **`scope-guard` → `/code-review` → `/security-review`** (or `/verify`).
+Claude Code's native commands **supersede** the retired `explain-diff` (≈ `/code-review`) and
+`ship-check` (≈ `/security-review` + `/verify`) skills, dropped in v2.7.0; `scope-guard` stays
+because "did this change stay on task, and is its paper trail current?" is scaffold-specific and
+nothing native answers it. **The authoritative catalog (descriptions, triggers, the MIT attribution
+notice) is [`skills/README.md`](skills/README.md)** — counts live there so they can't drift here.
 
 ---
 
@@ -241,20 +242,17 @@ Three ways to run, in order of trust:
 | Watchable loop | `/autopilot N` (in-session) | a few phases you want to *see* run |
 | Headless loop | `bash scripts/autopilot.sh N [--no-worktree] [--pr] [--allow-dirty] [--dangerously-skip-permissions]` | long/overnight, low-stakes, reversible |
 | **Sandboxed headless (recommended for unattended)** | `bash sandbox/run-autopilot-sandboxed.sh N [--pr ...]` | the supported way to run truly unattended — builds a no-credentials container, mounts only the repo, passes only `ANTHROPIC_API_KEY`, runs the headless loop with `--dangerously-skip-permissions` inside |
-| Parallel watchable loop *(Advanced / experimental)* | `/autopilot-parallel "<heading>" ...` | phases you're **sure** don't interfere — see the caveat below |
-
-> **`/autopilot-parallel` is Advanced / experimental.** It builds named phases concurrently in
-> isolated worktrees, then integrates and grades them one at a time through the same `tick.sh` gate —
-> but it can't verify *logical* independence, so it makes you assert it (the literal phrase
-> `I assert these phases are independent`). Its guarantees are weaker than the headless script: no
-> per-child watchdog, no automatic retry. Reach for `/autopilot N` or the headless script unless you
-> specifically need concurrent builds of phases you're confident are disjoint.
 
 `scripts/autopilot.sh` accepts `N` (up to N), `N-M` (aim for N, cap M), or `all` (malformed
 counts are rejected, not ignored). **Worktree isolation is the default** — a bad run can't touch
 your checkout; `--no-worktree` opts out (runs in-place, warned loudly). `--pr` opens a PR at the
 end and never touches main (secret-scanned before any push); `--allow-dirty` skips the clean-tree
 preflight (use sparingly — it removes a safety check).
+
+That pre-push scan reads the **net** `BASE..HEAD` diff, so a secret added in one commit and deleted
+in a later one **within the same phase** nets to zero and is missed — while `--pr` still pushes the
+commit that contains it. For any run that pushes, set **`LEAN_SECRET_SCANNER=gitleaks`** (or
+`trufflehog`): it scans the range commit by commit, and is fail-closed if the tool isn't installed.
 
 **`--dangerously-skip-permissions`** — without a TTY, the default `--permission-mode acceptEdits`
 cannot approve writes to `.claude/` (the phase-tracking markers `/phase` needs) or Bash commands

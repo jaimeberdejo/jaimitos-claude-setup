@@ -59,7 +59,7 @@ for f in CLAUDE.md .claude/settings.json \
          .claude/lib/_secret-scan.sh .claude/lib/_high-stakes.sh .claude/lib/_test-cmd.sh .claude/lib/_eval-isolation.sh \
          .claude/agents/researcher.md .claude/agents/planner.md .claude/agents/executor.md .claude/agents/evaluator.md \
          .claude/commands/resume.md .claude/commands/wrap.md .claude/commands/phase.md \
-         .claude/commands/autopilot.md .claude/commands/autopilot-parallel.md .claude/commands/models.md \
+         .claude/commands/autopilot.md .claude/commands/models.md \
          .claude/high-stakes-path-allowlist \
          sandbox/Dockerfile.autopilot sandbox/run-autopilot-sandboxed.sh; do
   [ -f "$f" ] && ok "installed $f" || bad "missing $f"
@@ -68,7 +68,7 @@ done
 # SKILL.md). A bare roadmap-only check let a dropped/renamed skill ship silently (v2.3.1 fix); this loop
 # is the authoritative shipped-skill gate. The installer/meta skill setup-jaimitos-os is NOT copied
 # per-project (it installs only via --global-skills). Keep this list in sync with doctor.sh REQUIRED_SKILLS.
-for sk in roadmap milestone adr ship-check scope-guard explain-diff unstick teach-back mapme quizme \
+for sk in roadmap milestone adr scope-guard unstick teach-back mapme quizme \
           grill to-spec glossary design-twice tdd diagnose merge-conflicts; do
   [ -f ".claude/skills/$sk/SKILL.md" ] && ok "skill installed: $sk/SKILL.md" || bad "skill missing or lacks SKILL.md: .claude/skills/$sk"
 done

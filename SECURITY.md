@@ -48,6 +48,15 @@ prompt) only *asks* a model to comply.
   **fail-closed** if the tool isn't installed (the scan errors rather than silently degrading to
   the regex). `doctor.sh` hard-fails when a selected scanner is missing. Still opt-in, because it
   adds an external dependency.
+- **A secret added and then removed inside the same phase slips past the default regex scan — and
+  `--pr` still pushes the commit that contains it.** `secret_scan_diff` scans the NET two-endpoint
+  diff `BASE..HEAD`, so a credential committed in one commit and `git rm`'d in a later one within
+  the same phase nets to zero and is reported clean. The tick gate ticks, and the push gate — which
+  scans that same net diff — lets `--pr` push the whole branch, intermediate commit included. This
+  is a limit of the **default `regex` backend**, not of the gate: `LEAN_SECRET_SCANNER=gitleaks`
+  (or `trufflehog`) scans the range **commit by commit** and catches it, and is fail-closed if the
+  tool isn't installed. **Set a real backend for any run that pushes** (`--pr`), or rewrite the
+  branch history before pushing.
 - **`permissions.deny` is defense-in-depth, not a boundary.** The `Read(...)` denies are a
   real boundary; the `Bash(...)` denies are a bypassable speed-bump (`less`, `source`,
   `python -c …`). There are deliberately **no network denies** (v2.5.0 removed the old
@@ -72,6 +81,13 @@ prompt) only *asks* a model to comply.
   refuses fail-closed if secret-shaped files would ride into the mount — use it for every
   unattended run. Prefer `acceptEdits` (the default, no flag needed) whenever a human is at the
   terminal to approve prompts.
+- **Claude Code's `auto` permission mode is an in-session *semantic complement*, not a replacement
+  for the deterministic high-stakes gate.** `auto` asks a model to judge, per tool call, whether an
+  action looks dangerous — genuinely useful, and it catches things a regex never will. It cannot be
+  the mechanism here: it is **ignored for subagents** (the builder/evaluator do their work there)
+  and **aborts under `-p`** (headless, which is exactly where nobody is watching). So it adds a
+  second opinion when a human is at the terminal, while `HIGH_STAKES_RE` + `tick.sh` remain the
+  thing that actually stops an unattended loop. Run both; rely on the gate.
 - **The high-stakes gate only protects paths YOU point it at.** Out of the box,
   `HIGH_STAKES_RE` in `_high-stakes.sh` and `paths:` in `high-stakes.md` are generic
   examples. If you don't edit them to match your real auth/migration/money/delete dirs, a
@@ -91,8 +107,8 @@ prompt) only *asks* a model to comply.
   the manual `/wrap` path is weaker by design.** `scripts/autopilot.sh` re-derives the phase base
   in its own trusted shell and byte-integrity-checks every gate-control file, so a builder can
   neither forge `.claude/.phase-base` to shrink the scan window nor neuter the gate in its
-  worktree; `/wrap` (and `/autopilot-parallel`) trust the session-written base and on-disk gate
-  code and are human-supervised — run `/wrap` only from a clean working tree, and use headless
+  worktree; `/wrap` trusts the session-written base and on-disk gate
+  code and is human-supervised — run `/wrap` only from a clean working tree, and use headless
   autopilot (in the sandbox) for unattended operation. The full mechanism — trusted re-derivation,
   `TICK_BASE` ancestor validation, integrity checks, and their limits — is documented in
   [GUIDE.md Part 4, "Gate integrity & the scan window"](jaimitos-os/toolkit-docs/GUIDE.md), the

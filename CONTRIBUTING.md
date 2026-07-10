@@ -14,7 +14,7 @@ There are three distinct things in this repo. Edits go to different places:
 - **The `jaimitos-os/` scaffold** — the files that *do* get installed into a user's repo:
   `CLAUDE.md`, `SCAFFOLD.md`, `docs/`, `scripts/`, `.claude/` (hooks, commands, the
   `evaluator` agent, `rules/high-stakes.md`), and the opt-in `.github/workflows/jaimitos-os-ci.yml`.
-- **`skills/`** — the 17 portable skills, each its own dir. `install.sh` copies them into a
+- **`skills/`** — the 15 portable skills, each its own dir. `install.sh` copies them into a
   target's `.claude/skills/` (all except `setup-jaimitos-os`, which is global-only). Seven are
   adaptations of mattpocock/skills (MIT) — see `skills/README.md` § Adapted skills.
 
@@ -37,7 +37,7 @@ A skill is a directory under `skills/<name>/` with a `SKILL.md`; support files (
 
 1. **Frontmatter** exactly like the existing skills: `name:`, and a `description:` whose text
    contains the trigger phrases (that's what auto-invocation matches on). Report-only skills add
-   `disallowed-tools: Edit, Write, MultiEdit, NotebookEdit` (see `scope-guard` for the pattern,
+   `disallowed-tools: Edit, Write, NotebookEdit` (see `scope-guard` for the pattern,
    including `allowed-tools` for a read-only git surface). Keep SKILL.md ~30–80 lines.
 2. **Register it everywhere the manifest lives** (all three, or CI catches you):
    `skills/README.md`'s table + count line, `REQUIRED_SKILLS` in `jaimitos-os/scripts/doctor.sh`,
