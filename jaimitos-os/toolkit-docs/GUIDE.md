@@ -555,12 +555,16 @@ checkout) · `--no-worktree` (opt out — run IN-PLACE, mutating your current ch
 
 > **The sandbox ships with the scaffold — use it.** `sandbox/run-autopilot-sandboxed.sh` is the
 > supported path for unattended runs: it builds `sandbox/Dockerfile.autopilot` (debian-slim +
-> git/jq/node/claude CLI, non-root user) if missing, mounts ONLY the repo at `/work`, passes
-> exactly ONE credential (`ANTHROPIC_API_KEY` as an env var — documented as the single allowed
-> one), and runs `scripts/autopilot.sh <your args> --dangerously-skip-permissions` inside. It
-> refuses fail-closed if docker is missing, the key is unset, or the repo itself contains
-> secret-shaped files (per `_secret-scan.sh`'s filename rules) that the mount would carry into
-> the container. Running the bare script with the flag outside a container is on you.
+> git/jq/node/claude CLI, non-root user) if missing, mounts a **clean tracked-only clone** of the
+> repo at `/work` (a `git clone --local` of the working dir — so a gitignored/untracked `.env`,
+> `*.pem`, `.netrc`, cache tree, or a tracked symlink to one is *physically absent* from the
+> container), passes exactly ONE credential (`ANTHROPIC_API_KEY` as an env var — the single allowed
+> one, which the in-container agent necessarily has), runs `scripts/autopilot.sh <your args>
+> --dangerously-skip-permissions` inside, and imports the loop's `autopilot/*` branch back out of the
+> clone afterward (failing closed + preserving the clone if it can't). It refuses fail-closed if
+> docker is missing, the key is unset, the clean clone can't be built, or a *committed* secret-shaped
+> file (per `_secret-scan.sh`'s filename rules) would be mounted. Running the bare script with the
+> flag outside a container is on you.
 
 ### What the headless script adds over the in-session loops
 Both loops share the tick gate; the **headless** `scripts/autopilot.sh` adds *isolation* on top:

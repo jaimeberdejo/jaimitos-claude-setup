@@ -22,6 +22,8 @@ RUN apt-get update \
 RUN useradd -m -u 1000 autopilot
 USER autopilot
 
-# The repo is mounted here by run-autopilot-sandboxed.sh (-v "$PWD":/work).
+# A CLEAN, tracked-only clone of the repo is mounted here by run-autopilot-sandboxed.sh
+# (git clone --local of the working dir → -v "$STAGE/repo":/work), so ignored/untracked secrets
+# are physically absent from the container.
 WORKDIR /work
 ENTRYPOINT ["bash"]

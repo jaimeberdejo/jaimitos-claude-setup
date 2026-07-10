@@ -77,15 +77,17 @@ prompt) only *asks* a model to comply.
   wedged headless `claude` subtree is contained rather than spawning a runaway; but that is a
   *liveness/containment* fix, not a security boundary, and does nothing to relax the sandbox-only
   rule. **The supported mitigation ships with the scaffold: `sandbox/run-autopilot-sandboxed.sh`**
-  builds a no-credentials container, mounts the repo, passes only `ANTHROPIC_API_KEY`, and refuses
-  fail-closed if a **tracked or unignored** secret-shaped file would ride into the mount. Note the
-  residual: the wrapper's preflight scan is scoped to tracked/unignored files, so a **gitignored**
-  secret (`.env`, `*.pem`, `.netrc`, …) that is still physically present in the repo dir is NOT
-  flagged and, under the current bind-mount, still enters the container — prefer *removing* real
-  credentials from the working tree, not merely gitignoring them, before an unattended run. (A
-  clean tracked-only staging mount that closes this is planned.) Use the wrapper for every
-  unattended run, and prefer `acceptEdits` (the default, no flag needed) whenever a human is at the
-  terminal to approve prompts.
+  builds a no-credentials container and mounts a **clean, tracked-only clone** of the repo — built
+  with `git clone --local`, so a **gitignored or untracked** secret (`.env`, `*.pem`, `.netrc`,
+  `id_rsa`, `secrets/`, a cache tree, or even a tracked *symlink* pointing at one) is **physically
+  absent** from the container, not merely unscanned. A secret-shaped file that is actually *committed*
+  still fails closed (a committed secret rides into any checkout). Exactly ONE credential is passed —
+  `ANTHROPIC_API_KEY` — which the agent inside the container necessarily has (it must, to call the
+  API); the guarantee is "no *other* credential and no *ignored* secret rides in", not "the agent has
+  no credentials." Work the loop produces (an `autopilot/*` branch) is imported back out of the clone
+  after the run, and if it cannot be imported the wrapper fails closed and preserves the clone rather
+  than losing the work. Use the wrapper for every unattended run, and prefer `acceptEdits` (the
+  default, no flag needed) whenever a human is at the terminal to approve prompts.
 - **Claude Code's `auto` permission mode is an in-session *semantic complement*, not a replacement
   for the deterministic high-stakes gate.** `auto` asks a model to judge, per tool call, whether an
   action looks dangerous — genuinely useful, and it catches things a regex never will. It cannot be
