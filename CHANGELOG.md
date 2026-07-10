@@ -6,7 +6,21 @@ uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-_Nothing yet._
+### Fixed — CI / cross-platform test portability
+- **Master CI is green again.** The v2.6.0 guard suite had never actually run in CI: the shellcheck
+  step failed first (a `lint-shell.sh` doc comment whose leading token `shellcheck` was misparsed as a
+  directive → SC1073/1072; and `LEAN_CHECKPOINT= bash …` in `test-doctor.sh` → SC1007), which masked
+  the guard tests entirely. Fixed both, plus the failures the guard tests then surfaced:
+  - **`claude`-less runner** — `test-doctor.sh` and the `test-sandbox.sh` sandbox-gate tests run
+    `doctor.sh`/`autopilot.sh`, which correctly treat a missing `claude` CLI as fatal; CI installs no
+    `claude`. Both now stub a no-op `claude` on `PATH` so the tests assert scaffold/gate behavior, not
+    the runner's tool availability (the same pattern the other harnesses already use).
+  - **BSD-vs-GNU portability** — `session-start.sh` printed a ragged `truncated — … is       40 lines`
+    on macOS because BSD `wc -l` left-pads its count (STATE.md + GLOSSARY.md messages); normalized with
+    `tr -d`. `test-sandbox.sh`'s docker-mount assertion compared the logical repo path, which macOS
+    resolves through the `/var → /private/var` symlink; it now compares the resolved (`pwd -P`) path.
+  Verified: shellcheck clean, all 17 guard suites + install-smoke pass with the real `claude` masked
+  off PATH. Test-only + one hook-message whitespace fix; no scaffold behavior changed.
 
 ## [2.6.0] — 2026-07-10
 

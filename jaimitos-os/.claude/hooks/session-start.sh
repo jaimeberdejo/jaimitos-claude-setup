@@ -29,7 +29,7 @@ if [ -f docs/STATE.md ]; then
   # Cap it: STATE is meant to be short (current state + next action), but nothing forces that, and
   # this is injected into context every session. Bound the one previously-uncapped read.
   head -60 docs/STATE.md
-  s_lines=$(wc -l < docs/STATE.md 2>/dev/null || echo 0)
+  s_lines=$(wc -l < docs/STATE.md 2>/dev/null | tr -d '[:space:]')   # tr: BSD wc left-pads the count; strip it so the message reads cleanly on macOS + Linux
   if [ "${s_lines:-0}" -gt 60 ] 2>/dev/null; then
     echo "(truncated — STATE.md is $s_lines lines; keep it short: current state + the single next action)"
   fi
@@ -50,7 +50,7 @@ if [ -f docs/GLOSSARY.md ]; then
   # Same capped-read pattern as STATE.md above: the glossary skill keeps it tight, but nothing
   # forces that, and this is injected into every session.
   head -30 docs/GLOSSARY.md
-  g_lines=$(wc -l < docs/GLOSSARY.md 2>/dev/null || echo 0)
+  g_lines=$(wc -l < docs/GLOSSARY.md 2>/dev/null | tr -d '[:space:]')   # tr: BSD wc left-pads the count; strip it so the message reads cleanly on macOS + Linux
   if [ "${g_lines:-0}" -gt 30 ] 2>/dev/null; then
     echo "(truncated — GLOSSARY.md is $g_lines lines; keep the most load-bearing terms in the first 30)"
   fi

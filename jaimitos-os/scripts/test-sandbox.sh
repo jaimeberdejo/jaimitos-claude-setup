@@ -33,6 +33,13 @@ esac
 EOF
 chmod +x "$WORK/bin/docker"
 
+# Stub `claude` too: the autopilot sandbox-gate tests below run the REAL autopilot.sh, whose preflight
+# refuses to start without `claude` on PATH — and CI intentionally has no `claude`. The bare-host banner
+# (test 9) is emitted only once a real run proceeds PAST that preflight, so without a stub the banner
+# path is unreachable claude-less. doctor/autopilot don't execute it, only `command -v claude` it.
+printf '#!/usr/bin/env bash\nexit 0\n' > "$WORK/bin/claude"; chmod +x "$WORK/bin/claude"
+export PATH="$WORK/bin:$PATH"
+
 # mkrepo: throwaway git repo with the scan lib in place; cd's the current shell into it.
 mkrepo() {
   REPO="$WORK/$1"; rm -rf "$REPO"; mkdir -p "$REPO/.claude/lib" "$REPO/scripts"
@@ -97,7 +104,7 @@ ARGS="$(cat "$WORK/docker-args" 2>/dev/null || true)"
 # credential and the non-secret JAIMITOS_SANDBOXED=1 marker (so autopilot's in-container run knows
 # it IS sandboxed). No other mount, no other credential.
 { [ "$rc" -eq 0 ] && [ -n "$ARGS" ] \
-  && printf '%s\n' "$ARGS" | grep -qx -- "$REPO:/work" \
+  && printf '%s\n' "$ARGS" | grep -qx -- "$(cd "$REPO" && pwd -P):/work" \
   && [ "$(printf '%s\n' "$ARGS" | grep -cx -- '-v')" -eq 1 ] \
   && printf '%s\n' "$ARGS" | grep -qx -- "ANTHROPIC_API_KEY" \
   && printf '%s\n' "$ARGS" | grep -qx -- "JAIMITOS_SANDBOXED=1" \

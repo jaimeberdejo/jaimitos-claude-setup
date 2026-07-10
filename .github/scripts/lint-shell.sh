@@ -3,7 +3,7 @@
 # .github/scripts/ so it never ships into a target project). Mirrors what CI checks, in one place
 # you can run locally: `bash .github/scripts/lint-shell.sh`.
 #
-#   shellcheck  — BLOCKING. Honors the repo-root .shellcheckrc (severity=warning, SC1090/SC1091
+#   `shellcheck` — BLOCKING. Honors the repo-root .shellcheckrc (severity=warning, SC1090/SC1091
 #                 disabled). A finding fails this script (exit 1). shellcheck is REQUIRED here (it's
 #                 the whole point) — if it's not installed, that's an error, not a skip.
 #   shfmt -d    — ADVISORY (for now). Prints formatting diffs but does NOT fail the script: the

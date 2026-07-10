@@ -13,6 +13,17 @@ fail() { printf '  ✗ %s\n' "$1"; FAILS=$((FAILS+1)); }
 
 WORK="$(mktemp -d 2>/dev/null || mktemp -d -t leanstack-doc)"
 trap 'rm -rf "$WORK" 2>/dev/null' EXIT
+
+# doctor.sh counts a missing `claude` CLI as a hard problem (correct for a real operator's machine),
+# but CI intentionally does NOT install `claude` (the workflow says so). Without a stub, every doctor
+# run below that asserts exit 0 (the pristine-scaffold control + the team-warn advisory checks) would
+# fail on that tooling check alone — not on any scaffold defect. Put a no-op `claude` on PATH so
+# doctor's exit code reflects SCAFFOLD integrity (missing files / bad JSON), which is what these tests
+# assert. jq + git stay real (present locally and in CI). doctor only does `command -v claude`.
+STUB_BIN="$WORK/bin"; mkdir -p "$STUB_BIN"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$STUB_BIN/claude"; chmod +x "$STUB_BIN/claude"
+export PATH="$STUB_BIN:$PATH"
+
 REPO="$WORK/proj"; mkdir -p "$REPO"
 cp -R "$SC/." "$REPO/"
 cd "$REPO" || exit 1
@@ -150,7 +161,7 @@ echo "Team repo warn: >1 contributor + LEAN_CHECKPOINT not off → warn; off (en
 echo ""
 mkscaffold "$WORK/team"
 ( cd "$WORK/team" && git -c user.email=other@example.com -c user.name=Other commit -q --allow-empty -m "second author" )
-( cd "$WORK/team" && LEAN_CHECKPOINT= bash scripts/doctor.sh > "$WORK/team.out" 2>&1 ); teamrc=$?
+( cd "$WORK/team" && LEAN_CHECKPOINT='' bash scripts/doctor.sh > "$WORK/team.out" 2>&1 ); teamrc=$?
 grep -q "team repo detected" "$WORK/team.out" \
   && pass "team: 2 simulated authors + checkpoint on → 'team repo detected' warn" \
   || fail "team: 2-author repo did not warn about LEAN_CHECKPOINT"
@@ -162,7 +173,7 @@ grep -q "team repo detected" "$WORK/team.off.out" \
   || pass "team: LEAN_CHECKPOINT=off in the env silences the warn"
 # The settings.json env block is the persistent place to set it — doctor must honor it too.
 ( cd "$WORK/team" && jq '.env.LEAN_CHECKPOINT = "off"' .claude/settings.json > s.tmp && mv s.tmp .claude/settings.json )
-( cd "$WORK/team" && LEAN_CHECKPOINT= bash scripts/doctor.sh > "$WORK/team.set.out" 2>&1 )
+( cd "$WORK/team" && LEAN_CHECKPOINT='' bash scripts/doctor.sh > "$WORK/team.set.out" 2>&1 )
 grep -q "team repo detected" "$WORK/team.set.out" \
   && fail "team: settings.json env.LEAN_CHECKPOINT=off still warned" \
   || pass "team: LEAN_CHECKPOINT=off in settings.json's env block silences the warn"
