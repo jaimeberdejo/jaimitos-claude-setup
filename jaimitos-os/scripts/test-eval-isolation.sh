@@ -104,6 +104,42 @@ out=$(eval_changed_files); rc=$?
   && pass "eval_changed_files with a dirty start reports only the grader's change, not the user's WIP" \
   || fail "eval_changed_files leaked user WIP into the report (rc=$rc): $out"
 
+# --- H3: ignored-file blindness + D4 sensitive-file guard ---
+# I1 — a grader that creates an IGNORED fixture is DETECTED (interactive) and REMOVED (headless).
+mkrepo i1; printf 'generated/\n.env\ntmp/\n' > .gitignore; git add .gitignore; git commit -qm ignore
+eval_snapshot || fail "i1: snapshot failed"
+mkdir -p generated; printf '{"x":1}\n' > generated/fixture.json      # grader creates an ignored fixture
+out=$(eval_changed_files); rc=$?
+{ [ "$rc" = 1 ] && printf '%s\n' "$out" | grep -q '\[created-ignored\] generated'; } \
+  && pass "eval_changed_files DETECTS a grader-created ignored fixture (was invisible — H3)" \
+  || fail "created ignored fixture not detected (rc=$rc): $out"
+if eval_restore; then
+  [ ! -e generated/fixture.json ] && pass "eval_restore REMOVES the grader-created ignored fixture" \
+    || fail "created ignored fixture not removed by restore"
+else fail "eval_restore returned non-zero (i1)"; fi
+
+# I2 — a pre-existing ignored dependency tree (node_modules/) is PRESERVED by restore (not wiped).
+mkrepo i2; printf 'node_modules/\n' > .gitignore; git add .gitignore; git commit -qm ignore
+mkdir -p node_modules/dep; printf 'module\n' > node_modules/dep/index.js   # deps present BEFORE grading
+eval_snapshot || fail "i2: snapshot failed"
+printf 'x\n' > src/scratch_by_grader_ignored.txt 2>/dev/null || true       # (tracked-dir noise, ignored later)
+eval_restore >/dev/null 2>&1
+[ -f node_modules/dep/index.js ] && pass "eval_restore PRESERVES a pre-existing ignored dep tree (node_modules kept)" \
+  || fail "eval_restore wiped node_modules (would break the evidence re-run)"
+
+# I3 (D4) — a grader that REWRITES a pre-existing SENSITIVE ignored file (.env) is detected and makes
+# restore fail closed (git never had its content, so it cannot be restored — it must STOP, not pass).
+mkrepo i3; printf '.env\n' > .gitignore; git add .gitignore; git commit -qm ignore
+printf 'SECRET=original\n' > .env                                    # pre-existing ignored secret
+eval_snapshot || fail "i3: snapshot failed"
+printf 'SECRET=exfiltrated_or_tampered\n' > .env                     # grader rewrites it
+out=$(eval_changed_files); rc=$?
+{ [ "$rc" = 1 ] && printf '%s\n' "$out" | grep -q '\[tampered-ignored\] .env'; } \
+  && pass "eval_changed_files DETECTS a rewritten pre-existing sensitive .env (D4)" \
+  || fail "tampered .env not detected (rc=$rc): $out"
+eval_restore >/dev/null 2>&1 && fail "eval_restore should FAIL CLOSED on a tampered sensitive file" \
+  || pass "eval_restore FAILS CLOSED on a rewritten sensitive .env (cannot restore → STOP)"
+
 echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All eval-isolation tests passed."; exit 0
 else echo "$FAILS eval-isolation test(s) FAILED."; exit 1; fi

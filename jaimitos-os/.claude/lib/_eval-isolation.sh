@@ -21,6 +21,41 @@
 #
 # Sourcing only defines the functions; running this file directly is a harmless no-op.
 
+# --- ignored-file blindness (finding H3) + sensitive-file guard (D4) --------------------------------
+# git stash create + `ls-files --others --exclude-standard` both EXCLUDE ignored files, so an evaluator
+# (or a test it runs) could create/modify an ignored fixture/cache/db/.env and the old snapshot saw
+# nothing. We add a CHEAP, path-only ignored snapshot and a BOUNDED sensitive-file hash:
+#   • `--directory` collapses a fully-ignored dir (node_modules/, .venv/) to ONE entry, so new fixture
+#     dirs (tmp/, generated/) and root-level ignored files (a .db, .coverage) still appear but we never
+#     walk a dependency tree. Newly-appeared ignored paths are then detectable + removable.
+#   • Modifying a PRE-EXISTING ignored file can't be seen by a path diff (git never recorded its
+#     content). We hash ONLY a small, sensitive allowlist of ignored files (.env/.pem/.netrc/…), taken
+#     from the SAME collapsed listing, so a rogue grader rewriting a real .env is caught — WITHOUT
+#     hashing caches or dependency trees. Arbitrary modification of every other pre-existing ignored
+#     file remains structurally undetectable under this lean design (documented residual).
+_eval_hash() { { shasum -a 256 "$1" 2>/dev/null || sha256sum "$1" 2>/dev/null; } | cut -d' ' -f1; }
+_eval_ignored_list() { git ls-files --others --ignored --exclude-standard --directory 2>/dev/null | sort; }
+# from an ignored `--directory` listing on stdin, print entries whose basename is sensitive (skips
+# collapsed dirs — trailing / — so we never descend into a node_modules/.venv the listing collapsed).
+_eval_sensitive_filter() {
+  local p b
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    case "$p" in */) continue ;; esac
+    b=${p##*/}
+    case "$b" in
+      .env|.env.*|.netrc|*.pem|*.key|id_rsa*|credentials*.json|*.tfvars) printf '%s\n' "$p" ;;
+    esac
+  done
+}
+# echo "<sha>  <path>" for each pre-existing sensitive ignored file (input: an ignored --directory list).
+_eval_sensitive_hashes() {
+  local f
+  _eval_sensitive_filter | while IFS= read -r f; do
+    [ -f "$f" ] && printf '%s  %s\n' "$(_eval_hash "$f")" "$f"
+  done
+}
+
 # eval_snapshot: record the tree state the grader must not alter.
 #   EVAL_PRE_UNTRACKED  — sorted untracked (non-ignored) paths at snapshot time
 #   EVAL_PRE_SNAP       — `git stash create` ref; EMPTY iff the tracked tree is clean. This does
@@ -40,7 +75,25 @@ eval_snapshot() {
   }
   EVAL_PRE_UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null | sort)
   EVAL_PRE_SNAP=$(git stash create 2>/dev/null)
+  EVAL_PRE_IGNORED=$(_eval_ignored_list)                                 # H3: ignored set (dirs collapsed)
+  EVAL_PRE_SENSITIVE=$(printf '%s\n' "$EVAL_PRE_IGNORED" | _eval_sensitive_hashes)   # D4: sensitive-file hashes
   return 0
+}
+
+# _eval_new_ignored: paths present in the ignored set NOW but not at snapshot (created during grading).
+_eval_new_ignored() {
+  comm -13 <(printf '%s\n' "${EVAL_PRE_IGNORED:-}") <(_eval_ignored_list)
+}
+# _eval_tampered_sensitive: pre-existing sensitive ignored files whose hash changed since the snapshot
+# (or that vanished). Echoes the offending paths.
+_eval_tampered_sensitive() {
+  local sha path now
+  printf '%s\n' "${EVAL_PRE_SENSITIVE:-}" | while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    sha=${line%% *}; path=${line#*  }
+    now=$( [ -f "$path" ] && _eval_hash "$path" || echo "MISSING" )
+    [ "$now" != "$sha" ] && printf '%s\n' "$path"
+  done
 }
 
 # eval_restore: DESTRUCTIVE post-grade cleanup for the HEADLESS/throwaway-worktree path. Byte-for-
@@ -74,6 +127,23 @@ eval_restore() {
   if [ "$post2" != "$EVAL_PRE_UNTRACKED" ]; then
     echo "eval-isolation: untracked file set differs from pre-grade after cleanup — STOPPING." >&2; return 1
   fi
+  # H3: remove IGNORED files/dirs the grader created during the run (only those that appeared since the
+  # snapshot — never a blanket `git clean -fdx`, which would wipe the builder's node_modules/.venv and
+  # break the post-grade evidence re-run). Preserving snapshot-time ignored files keeps deps intact.
+  local new_ign
+  new_ign=$(_eval_new_ignored)
+  if [ -n "$new_ign" ]; then
+    printf '%s\n' "$new_ign" | while IFS= read -r p; do [ -n "$p" ] && rm -rf -- "$p" 2>/dev/null || true; done
+  fi
+  # D4: a rewritten PRE-EXISTING sensitive ignored file (a real .env, *.pem, …) cannot be restored (git
+  # never had its content) — so treat it as a hard STOP, not a silent cleanup.
+  local tampered
+  tampered=$(_eval_tampered_sensitive)
+  if [ -n "$tampered" ]; then
+    echo "eval-isolation: evaluator modified pre-existing SENSITIVE ignored file(s) — cannot restore, STOPPING:" >&2
+    printf '%s\n' "$tampered" | sed 's/^/    /' >&2
+    return 1
+  fi
   return 0
 }
 
@@ -103,6 +173,13 @@ eval_changed_files() {
   post=$(git ls-files --others --exclude-standard 2>/dev/null | sort)
   new=$(comm -13 <(printf '%s\n' "$EVAL_PRE_UNTRACKED") <(printf '%s\n' "$post"))
   [ -n "$new" ] && out="${out}$(printf '%s\n' "$new" | sed 's/^/[created] /')"$'\n'
+  # H3: ignored files/dirs the grader created (invisible to the untracked list above).
+  local new_ign tampered
+  new_ign=$(_eval_new_ignored)
+  [ -n "$new_ign" ] && out="${out}$(printf '%s\n' "$new_ign" | sed 's/^/[created-ignored] /')"$'\n'
+  # D4: a rewritten pre-existing sensitive ignored file.
+  tampered=$(_eval_tampered_sensitive)
+  [ -n "$tampered" ] && out="${out}$(printf '%s\n' "$tampered" | sed 's/^/[tampered-ignored] /')"$'\n'
   if [ -n "$(printf '%s' "$out" | tr -d '[:space:]')" ]; then
     printf '%s' "$out" | sed '/^[[:space:]]*$/d'
     return 1
