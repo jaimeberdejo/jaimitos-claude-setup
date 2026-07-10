@@ -32,6 +32,12 @@ done
 
 refuse() { echo "close-milestone: REFUSED — $1" >&2; exit 1; }
 
+# Shared roadmap parser — the SAME first-open-heading + Mode classification tick.sh uses, via one
+# library instead of a hand-copied awk block. Sourced best-effort: close-milestone refuses on ANY
+# open item regardless of Mode, so if the lib were somehow absent the classification just degrades to
+# a generic message (never a wrong "safe to close").
+[ -f .claude/lib/_roadmap.sh ] && . .claude/lib/_roadmap.sh 2>/dev/null || true
+
 [ -f "$ROADMAP" ] || refuse "no $ROADMAP to close."
 # Anchored to actual list-item lines (start of line, optional leading whitespace) — a plain
 # substring grep also matches the roadmap skill's own instructional legend line
@@ -42,16 +48,17 @@ grep -qE '^[[:space:]]*- \[[ xX]\] ' "$ROADMAP" 2>/dev/null || refuse "no phases
 # items remain". Three cases: (a) a supervised phase awaiting explicit human approval (name it +
 # point at tick.sh --supervised-approved — the new v2.4.0 path so a supervised phase is no longer a
 # dead end), (b) an unresolved evaluator finding (NEXT_FINDINGS.md) gating it, (c) plain unfinished
-# work. The heading anchor + Mode: awk mirror tick.sh's own parse.
+# work. The heading + Mode classification come from the shared _roadmap.sh parser.
 if grep -qE '^[[:space:]]*- \[ \] ' "$ROADMAP" 2>/dev/null; then
-  first_open=$(awk '/^## /{h=$0} /^[[:space:]]*- \[ \] /{if(h!=""){print h; exit}}' "$ROADMAP")
-  first_mode=$(PH="$first_open" awk '
-    $0==ENVIRON["PH"] {inphase=1; next}
-    /^## / && inphase {inphase=0}
-    inphase && /^[[:space:]]*Mode:/ {print tolower($0); exit}
-  ' "$ROADMAP")
+  if command -v roadmap_first_open_heading >/dev/null 2>&1; then
+    first_open=$(roadmap_first_open_heading "$ROADMAP" 2>/dev/null || true)
+    first_mode=$(roadmap_phase_mode "$ROADMAP" "$first_open" 2>/dev/null || true)
+  else
+    first_open=$(awk '/^## /{h=$0} /^[[:space:]]*- \[ \] /{if(h!=""){print h; exit}}' "$ROADMAP")
+    first_mode=""
+  fi
   case "$first_mode" in
-    *supervised*)
+    supervised)
       echo "close-milestone: the first open phase is SUPERVISED and awaiting human approval:" >&2
       echo "close-milestone:   ${first_open#\#\# }" >&2
       echo "close-milestone:   approve + tick it with:" >&2

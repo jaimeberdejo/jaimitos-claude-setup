@@ -37,6 +37,7 @@ TESTS=(
   test-autopilot-gates.sh
   test-eval-isolation.sh
   test-tick.sh
+  test-roadmap-lib.sh
   test-docs.sh
   test-docs-invariants.sh
   test-close-milestone.sh

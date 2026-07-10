@@ -36,6 +36,7 @@ mkrepo() {
   cp "$TICK" "$REPO/scripts/tick.sh"
   cp "$HS_LIB" "$REPO/.claude/lib/_high-stakes.sh"
   cp "$SS_LIB" "$REPO/.claude/lib/_secret-scan.sh"
+  cp "$SCAFFOLD/.claude/lib/_roadmap.sh" "$REPO/.claude/lib/_roadmap.sh"
   printf '## Phase 1 — Work\n\n- [ ] do the work\n' > "$REPO/docs/ROADMAP.md"
   printf 'next: work\n' > "$REPO/docs/STATE.md"
   cat > "$REPO/.gitignore" <<'GI'
@@ -151,18 +152,18 @@ mkrepo t9d .claude/high-stakes-path-allowlist 'src/foo.py: reviewed, safe'; good
 { [ "$rc" = 3 ] && ! ticked "$REPO" && [ ! -f "$REPO/NEXT_FINDINGS.md" ]; } \
   && pass "phase edits high-stakes-path-allowlist → exit 3 (no self-exempt)" || fail "allowlist-in-diff not gated (rc=$rc)"
 
-# 9f (H4/N-4) — a malformed HIGH_STAKES_RE must make tick REFUSE (fail-closed), NOT tick. Before the
+# 9g (H4/N-4) — a malformed HIGH_STAKES_RE must make tick REFUSE (fail-closed), NOT tick. Before the
 # three-state matcher + three-way caller, `if HS=$(high_stakes_match ...)` swallowed the matcher's
 # error rc exactly like "no match", so a typo'd ENFORCED regex silently disabled the gate and the
 # phase auto-ticked. The malformed regex is committed BEFORE the phase base (so editing the lib is not
 # itself the in-phase gate-config change 9d/9e cover) — this isolates the matcher-error path.
-mkrepo t9f
+mkrepo t9g
 # overwrite the copied lib's regex with an uncompilable one, and re-baseline so the edit is pre-phase
 sed -i.bak "s|^HIGH_STAKES_RE=.*|HIGH_STAKES_RE='['|" "$REPO/.claude/lib/_high-stakes.sh" && rm -f "$REPO/.claude/lib/_high-stakes.sh.bak"
 ( cd "$REPO" && git add -A && git commit -q -m 'break the regex (pre-phase)' \
     && git rev-parse HEAD > .claude/.phase-base \
     && printf 'def widget2(): return 2\n' > src/widget2.py && git add -A && git commit -q -m 'phase work' )
-HEAD=$(git -C "$REPO" rev-parse HEAD); good_grade t9f; good_evidence t9f; rc=$(runtick "$REPO")
+HEAD=$(git -C "$REPO" rev-parse HEAD); good_grade t9g; good_evidence t9g; rc=$(runtick "$REPO")
 { [ "$rc" != 0 ] && ! ticked "$REPO"; } \
   && pass "malformed HIGH_STAKES_RE → tick refuses (fail-closed, rc=$rc), not ticked" \
   || fail "malformed HIGH_STAKES_RE FAILED OPEN — tick proceeded (rc=$rc)"
@@ -184,7 +185,7 @@ good_grade t9e; good_evidence t9e; rc=$(runtick "$REPO")
 # diff) must still suppress a high-stakes path changed in the phase → exit 0 ticks. Proves the guard
 # fires ONLY on an in-phase gate-config change and does not break legitimate pre-existing allowlists.
 REPO="$WORK/t9f"; rm -rf "$REPO"; mkdir -p "$REPO/.claude/lib" "$REPO/scripts" "$REPO/docs"
-cp "$TICK" "$REPO/scripts/tick.sh"; cp "$HS_LIB" "$REPO/.claude/lib/_high-stakes.sh"; cp "$SS_LIB" "$REPO/.claude/lib/_secret-scan.sh"
+cp "$TICK" "$REPO/scripts/tick.sh"; cp "$HS_LIB" "$REPO/.claude/lib/_high-stakes.sh"; cp "$SS_LIB" "$REPO/.claude/lib/_secret-scan.sh"; cp "$SCAFFOLD/.claude/lib/_roadmap.sh" "$REPO/.claude/lib/_roadmap.sh"
 printf '## Phase 1 — Work\n\n- [ ] do the work\n' > "$REPO/docs/ROADMAP.md"
 printf 'next: work\n' > "$REPO/docs/STATE.md"
 printf 'auth/login.py: reviewed at init, pre-existing entry\n' > "$REPO/.claude/high-stakes-path-allowlist"
@@ -476,7 +477,7 @@ PASS" ) >/dev/null 2>&1; grc=$?
 # tick reaches the base check (they're verified first); the refusal must name "ancestor" so this only
 # passes when THAT guard fires (dropping the guard lets tick scan an arbitrary B..C range and tick → red).
 REPO="$WORK/t15"; rm -rf "$REPO"; mkdir -p "$REPO/.claude/lib" "$REPO/scripts" "$REPO/docs"
-cp "$TICK" "$REPO/scripts/tick.sh"; cp "$HS_LIB" "$REPO/.claude/lib/_high-stakes.sh"; cp "$SS_LIB" "$REPO/.claude/lib/_secret-scan.sh"
+cp "$TICK" "$REPO/scripts/tick.sh"; cp "$HS_LIB" "$REPO/.claude/lib/_high-stakes.sh"; cp "$SS_LIB" "$REPO/.claude/lib/_secret-scan.sh"; cp "$SCAFFOLD/.claude/lib/_roadmap.sh" "$REPO/.claude/lib/_roadmap.sh"
 printf '## Phase 1 — Work\n\n- [ ] do the work\n' > "$REPO/docs/ROADMAP.md"
 printf 'next: work\n' > "$REPO/docs/STATE.md"
 printf '.claude/.phase-base\n.claude/.phase-grade\n.claude/.tick-evidence.json\nNEXT_FINDINGS.md\n' > "$REPO/.gitignore"

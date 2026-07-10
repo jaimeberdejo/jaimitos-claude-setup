@@ -237,9 +237,11 @@ git merge-base --is-ancestor "$BASE_SHA" "$HEAD" 2>/dev/null \
 RANGE="${BASE_SHA}..HEAD"
 [ -f .claude/lib/_secret-scan.sh ] && . .claude/lib/_secret-scan.sh 2>/dev/null || true
 [ -f .claude/lib/_high-stakes.sh ] && . .claude/lib/_high-stakes.sh 2>/dev/null || true
+[ -f .claude/lib/_roadmap.sh ]     && . .claude/lib/_roadmap.sh     2>/dev/null || true
 
-command -v secret_scan_diff  >/dev/null 2>&1 || refuse "secret-scan library unavailable — fail-closed"
-command -v high_stakes_match >/dev/null 2>&1 || refuse "high-stakes library unavailable — fail-closed"
+command -v secret_scan_diff   >/dev/null 2>&1 || refuse "secret-scan library unavailable — fail-closed"
+command -v high_stakes_match  >/dev/null 2>&1 || refuse "high-stakes library unavailable — fail-closed"
+command -v roadmap_phase_mode >/dev/null 2>&1 || refuse "roadmap parser library unavailable — fail-closed"
 
 SF=$(secret_scan_diff "$RANGE"); SRC=$?
 if [ "$SRC" -ne 0 ]; then
@@ -291,13 +293,14 @@ fi
 
 # Mode: supervised — the author flagged this phase as human-on-the-loop. Enforce it (the tag
 # used to be advisory/unparsed): refuse to auto-tick, same supervised exit as a high-stakes hit.
-PHASE_MODE=$(PH="$heading" awk '
-  $0==ENVIRON["PH"] {inphase=1; next}
-  /^## / && inphase {inphase=0}
-  inphase && /^[[:space:]]*Mode:/ {print tolower($0); exit}
-' "$ROADMAP")
+# Parse via the SHARED fail-closed parser (_roadmap.sh): rc 2 (duplicate/invalid Mode) is a hard
+# refuse — a phase with two Mode: lines, or `Mode: superviced`, must never be waved through as
+# "not supervised". An ABSENT Mode line (rc 0 + empty) stays loopable, preserving legacy behavior
+# (a phase without a Mode line still ticks; only autopilot's unattended pre-build gate refuses it).
+PHASE_MODE=$(roadmap_phase_mode "$ROADMAP" "$heading"); pm_rc=$?
+[ "$pm_rc" = 2 ] && refuse "phase Mode: is duplicate or invalid — fail-closed (fix the Mode: line in $ROADMAP)"
 case "$PHASE_MODE" in
-  *supervised*)
+  supervised)
     # Everything above (grade, evidence, secret, gate-config, high-stakes path+content) has already
     # run and would have exited before reaching here — so this approval clears ONLY the supervised
     # refusal, never any other gate. Valid approval → fall through to the open-item + tick logic below.

@@ -19,6 +19,7 @@ HS_LIB="$SCAFFOLD/.claude/lib/_high-stakes.sh"
 SS_LIB="$SCAFFOLD/.claude/lib/_secret-scan.sh"
 TC_LIB="$SCAFFOLD/.claude/lib/_test-cmd.sh"
 EI_LIB="$SCAFFOLD/.claude/lib/_eval-isolation.sh"
+RM_LIB="$SCAFFOLD/.claude/lib/_roadmap.sh"
 
 FAILS=0
 pass() { printf '  ✓ %s\n' "$1"; }
@@ -129,6 +130,7 @@ mkrepo() {
   cp "$SS_LIB" "$REPO/.claude/lib/_secret-scan.sh"
   cp "$TC_LIB" "$REPO/.claude/lib/_test-cmd.sh"
   cp "$EI_LIB" "$REPO/.claude/lib/_eval-isolation.sh"
+  cp "$RM_LIB" "$REPO/.claude/lib/_roadmap.sh"
   printf '{ "permissions": { "deny": ["Read(.env)"] } }\n' > "$REPO/.claude/settings.json"
   # Mirror a real install's .gitignore so log/evidence/control files stay UNTRACKED — exactly
   # like a shipped project. Without this the stub would commit autopilot.log and the .claude
@@ -148,7 +150,10 @@ test-results.json
 .claude/.autopilot.lock
 .claude/.last-changed
 GI
-  printf '## Phase 1 — Work\n\n- [ ] do the work\n' > "$REPO/docs/ROADMAP.md"
+  # A realistic phase: Mode is MANDATORY per the roadmap template + skill, and autopilot's pre-build
+  # gate now refuses to build a phase without a valid Mode (C2). Default to loopable so the
+  # control-flow tests below (which expect a build) proceed; the supervised case is tested explicitly.
+  printf '## Phase 1 — Work\n\n- [ ] do the work\nDone when: it works\nMode: loopable\n' > "$REPO/docs/ROADMAP.md"
   printf 'next: work\n' > "$REPO/docs/STATE.md"
   ( cd "$REPO" && git init -q && git config user.email t@t.t && git config user.name t \
       && git config gc.auto 0 && git add -A && git commit -q -m init )
@@ -443,6 +448,38 @@ ticked "$REPO" && fail "watchdog abort → phase ticked" || pass "watchdog abort
 mkrepo r28; BUILDER_MODE=clean EVAL_MODE=pass; export BUILDER_MODE EVAL_MODE; run "$REPO" 1 --no-worktree --allow-dirty >/dev/null
 { [ -s "$REPO/autopilot.log" ] && grep -q "builder-stub:" "$REPO/autopilot.log"; } \
   && pass "autopilot.log non-empty and captures the child's stdout (empty-log fix)" || fail "autopilot.log empty or missing child output"
+
+# 29 (C2) — a Mode: supervised NEXT phase must NOT invoke the builder AT ALL. tick.sh's Mode: refusal
+# only protects the checkbox — it runs after the phase is fully built, so an unattended loop would
+# carry out a supervised phase's actual work (incl. any live external effect) before being blocked from
+# ticking it. The pre-build gate must stop BEFORE the builder spawn. Assert via CLAUDE_ARGS_LOG that
+# NEITHER the builder (`-p /phase`) NOR the evaluator (`--agent`) was ever invoked.
+mkrepo r29
+printf '## Phase 1 — Danger\n\n- [ ] do the work\nDone when: it is done\nMode: supervised\n' > "$REPO/docs/ROADMAP.md"
+( cd "$REPO" && git add -A && git commit -q -m 'supervised phase' )
+rm -f "$WORK/args29.log"
+BUILDER_MODE=clean EVAL_MODE=pass CLAUDE_ARGS_LOG="$WORK/args29.log"; export BUILDER_MODE EVAL_MODE CLAUDE_ARGS_LOG
+run "$REPO" 1 --no-worktree --allow-dirty >/dev/null
+unset CLAUDE_ARGS_LOG
+{ [ ! -f "$WORK/args29.log" ] || ! grep -q -- '-p /phase' "$WORK/args29.log"; } \
+  && pass "supervised next phase → builder NEVER invoked (pre-build gate)" || fail "BUILDER RAN on a supervised phase (C2 REGRESSION)"
+{ [ ! -f "$WORK/args29.log" ] || ! grep -q -- '--agent' "$WORK/args29.log"; } \
+  && pass "supervised next phase → evaluator never invoked" || fail "evaluator ran on a supervised phase"
+ticked "$REPO" && fail "supervised phase was ticked" || pass "supervised phase left unticked"
+grep -qi 'supervised' "$WORK/out" && pass "pre-build refusal names the supervised phase" || fail "no supervised refusal message"
+
+# 30 (C2/I4) — a NEXT phase whose Mode: is MISSING/DUPLICATE/INVALID also fails closed: no build.
+# (Mode is mandatory per the roadmap template + skill; an unclassified phase must not run unattended.)
+mkrepo r30
+printf '## Phase 1 — Unlabeled\n\n- [ ] do the work\nDone when: done\n' > "$REPO/docs/ROADMAP.md"   # NO Mode line
+( cd "$REPO" && git add -A && git commit -q -m 'no-mode phase' )
+rm -f "$WORK/args30.log"
+BUILDER_MODE=clean EVAL_MODE=pass CLAUDE_ARGS_LOG="$WORK/args30.log"; export BUILDER_MODE EVAL_MODE CLAUDE_ARGS_LOG
+run "$REPO" 1 --no-worktree --allow-dirty >/dev/null
+unset CLAUDE_ARGS_LOG
+{ [ ! -f "$WORK/args30.log" ] || ! grep -q -- '-p /phase' "$WORK/args30.log"; } \
+  && pass "missing-Mode next phase → builder never invoked (fail-closed)" || fail "builder RAN on a Mode-less phase (I4)"
+ticked "$REPO" && fail "Mode-less phase was ticked" || pass "Mode-less phase left unticked"
 
 echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All autopilot gate tests passed."; exit 0

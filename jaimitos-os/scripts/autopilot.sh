@@ -310,6 +310,15 @@ fi
 if ! command -v eval_snapshot >/dev/null 2>&1 || ! command -v eval_restore >/dev/null 2>&1; then
   fail ".claude/lib/_eval-isolation.sh missing/unloadable — the evaluator-change discard net is unavailable (fail-closed)."
 fi
+# Shared roadmap parser — the pre-build supervised gate (C2) REQUIRES it. Fail closed if missing:
+# without it we cannot determine the next phase's Mode before spawning the builder, and a supervised
+# phase could be built unattended.
+if [ -f .claude/lib/_roadmap.sh ]; then
+  . .claude/lib/_roadmap.sh 2>/dev/null || true
+fi
+if ! command -v roadmap_first_open_heading >/dev/null 2>&1 || ! command -v roadmap_phase_mode >/dev/null 2>&1; then
+  fail ".claude/lib/_roadmap.sh missing/unloadable — cannot check the next phase's Mode: before building (fail-closed)."
+fi
 
 if [ "$UNBOUNDED" -eq 1 ]; then
   echo "autopilot: advancing until the roadmap is empty (safety cap $MAX_ITER). touch AGENT_STOP to halt."
@@ -361,7 +370,7 @@ BASE_SIGNATURE=""
 # control prompt should force supervised review, not silently continue — so they are integrity-checked
 # here alongside the scripts. (A legitimate agent-prompt change is a supervised toolkit edit, not an
 # unattended autopilot phase.)
-GATE_CONTROL_FILES="scripts/tick.sh .claude/lib/_high-stakes.sh .claude/lib/_secret-scan.sh .claude/lib/_eval-isolation.sh scripts/test-evidence.sh scripts/record-grade.sh .claude/lib/_test-cmd.sh .claude/high-stakes-path-allowlist .claude/agents/researcher.md .claude/agents/planner.md .claude/agents/executor.md .claude/agents/evaluator.md"
+GATE_CONTROL_FILES="scripts/tick.sh .claude/lib/_high-stakes.sh .claude/lib/_secret-scan.sh .claude/lib/_eval-isolation.sh .claude/lib/_roadmap.sh scripts/test-evidence.sh scripts/record-grade.sh .claude/lib/_test-cmd.sh .claude/high-stakes-path-allowlist .claude/agents/researcher.md .claude/agents/planner.md .claude/agents/executor.md .claude/agents/evaluator.md"
 gate_control_intact() {
   local p
   for p in $GATE_CONTROL_FILES; do
@@ -481,6 +490,35 @@ for i in $(seq 1 "$MAX_ITER"); do
   fi
 
   echo ""; echo "=== iteration $i / $MAX_ITER ==="
+
+  # --- pre-build supervised gate (C2) ---
+  # Resolve the next open phase and its Mode: BEFORE spawning the builder. tick.sh's Mode: supervised
+  # refusal only protects the CHECKBOX — it runs after the phase is fully built, so without this an
+  # unattended loop would carry out a supervised phase's actual work (auth, money, migration, deletion,
+  # deploy, webhook — any live external effect it requires) before being blocked from ticking it. This
+  # is the headless equivalent of the in-session /autopilot command's own pre-build check
+  # (.claude/commands/autopilot.md). Fail closed on supervised AND on a missing/duplicate/invalid Mode
+  # (Mode is mandatory per the roadmap template + skill — an unclassified phase must not run unattended).
+  NEXT_HEADING=$(roadmap_first_open_heading docs/ROADMAP.md); nh_rc=$?
+  if [ "$nh_rc" != 0 ]; then
+    echo "autopilot: ⛔ cannot resolve a single next open phase (rc=$nh_rc; duplicate/ambiguous heading?) — refusing to build unattended." | tee -a "$AUTOPILOT_LOG"; break
+  fi
+  NEXT_MODE=$(roadmap_phase_mode docs/ROADMAP.md "$NEXT_HEADING"); nm_rc=$?
+  if [ "$nm_rc" != 0 ]; then
+    echo "autopilot: ⛔ next phase Mode: is duplicate/invalid (rc=$nm_rc) — refusing to build: $NEXT_HEADING" | tee -a "$AUTOPILOT_LOG"; break
+  fi
+  case "$NEXT_MODE" in
+    supervised)
+      echo "autopilot: ⛔ next phase is Mode: supervised — NOT building it unattended:" | tee -a "$AUTOPILOT_LOG"
+      echo "autopilot:    $NEXT_HEADING" | tee -a "$AUTOPILOT_LOG"
+      echo "autopilot:    Build it with plain /phase under human review, then approve at HEAD:" | tee -a "$AUTOPILOT_LOG"
+      echo "autopilot:      bash scripts/tick.sh --supervised-approved \"$NEXT_HEADING\" --note \"<why it's safe>\"" | tee -a "$AUTOPILOT_LOG"; break ;;
+    loopable) : ;;   # classified low-risk — ok to build
+    "" )
+      echo "autopilot: ⛔ next phase has NO Mode: line — refusing to build unattended (add 'Mode: loopable' or 'Mode: supervised'): $NEXT_HEADING" | tee -a "$AUTOPILOT_LOG"; break ;;
+    *)
+      echo "autopilot: ⛔ next phase has an unexpected Mode ('$NEXT_MODE') — refusing to build: $NEXT_HEADING" | tee -a "$AUTOPILOT_LOG"; break ;;
+  esac
 
   # Builder: fresh context, builds ONE phase, does NOT tick the roadmap. Run under the watchdog so a
   # wedged builder (and its nested claude subtree) is timed-out / stop-able / lock-checked instead of

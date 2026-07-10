@@ -65,7 +65,7 @@ jaimitos-claude-setup/
 │       ├── commands/                # /resume /wrap /phase /autopilot /models
 │       ├── agents/                  # researcher, planner, executor, evaluator — one per /phase stage
 │       ├── rules/high-stakes.md     # path-scoped extra care
-│       └── hooks/                   # 7 deterministic shell hooks + 4 shared libs (_secret-scan, _high-stakes, _test-cmd, _eval-isolation)
+│       └── hooks/                   # 7 deterministic shell hooks + 5 shared libs (_secret-scan, _high-stakes, _test-cmd, _eval-isolation, _roadmap)
 └── skills/                ← 16 skills (15 portable + setup-jaimitos-os installer) — see skills/README.md
 ```
 
@@ -184,7 +184,7 @@ You drive each arrow manually for stakes that warrant it, or hand the bracket to
 
 ## Hooks (deterministic shell — not all enforce; see Enforcement reality)
 
-Seven deterministic shell hooks plus four shared libs:
+Seven deterministic shell hooks plus five shared libs:
 
 | Hook | Event | Role |
 |---|---|---|

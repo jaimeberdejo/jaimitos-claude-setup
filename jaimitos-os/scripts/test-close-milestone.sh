@@ -20,8 +20,10 @@ trap 'rm -rf "$WORK" 2>/dev/null' EXIT
 
 # mkrepo <name> <roadmap-body>: repo with scripts/close-milestone.sh + a STATE auto-block.
 mkrepo() {
-  REPO="$WORK/$1"; rm -rf "$REPO"; mkdir -p "$REPO/scripts" "$REPO/docs"
+  REPO="$WORK/$1"; rm -rf "$REPO"; mkdir -p "$REPO/scripts" "$REPO/docs" "$REPO/.claude/lib"
   cp "$CLOSE" "$REPO/scripts/close-milestone.sh"
+  # close-milestone now classifies the first open phase's Mode via the shared parser.
+  cp "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/.claude/lib/_roadmap.sh" "$REPO/.claude/lib/_roadmap.sh"
   printf '%s\n' "$2" > "$REPO/docs/ROADMAP.md"
   printf '# State\n\n## Auto status\n<!-- lean:auto:begin -->\n- something\n<!-- lean:auto:end -->\n\n## Now\nhi\n' > "$REPO/docs/STATE.md"
   printf 'NEXT_FINDINGS.md\n' > "$REPO/.gitignore"
