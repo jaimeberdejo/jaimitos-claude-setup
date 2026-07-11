@@ -67,3 +67,5 @@ secrets/
 *.tfvars
 .envrc
 .netrc
+docs/*.tick-tmp
+docs/*.tick-bak

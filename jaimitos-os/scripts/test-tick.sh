@@ -524,38 +524,110 @@ rc=$(runtick "$REPO")
   && pass "only gitignored artifacts dirty → still ticks (exemption preserved)" || fail "ignored-only dirty blocked the tick (rc=$rc)"
 
 echo ""
-echo "Checked STATE write (N-2) — a FAILED docs/STATE.md write must NOT report success. Before the fix"
-echo "tick.sh called update_state with no error check, then printed '✓ ticked' and exit 0 on a failed"
-echo "write, leaving ROADMAP ticked but STATE stale and the caller believing it succeeded:"
-# 16d — make docs/STATE.md unwritable so the append/rewrite fails; tick must exit non-zero, no '✓ ticked'.
-mkrepo t16d; good_grade t16d; good_evidence t16d
-chmod 0444 "$REPO/docs/STATE.md"
-rc=$(runtick "$REPO")
-chmod 0644 "$REPO/docs/STATE.md" 2>/dev/null || true
-{ [ "$rc" != 0 ] && ! grep -q '✓ ticked' "$WORK/out"; } \
-  && pass "failed STATE write → non-zero exit, no '✓ ticked' (N-2)" \
-  || fail "failed STATE write reported success (rc=$rc, out follows)"; [ "$rc" = 0 ] && tail -3 "$WORK/out"
+echo "Rollback-safe ROADMAP/STATE completion (F4) — a completion ends with BOTH files updated or BOTH at"
+echo "their pre-tick state; no '✓ ticked' until both succeed; a read-only STATE is caught BEFORE any"
+echo "mutation (N-2: never half-apply). Permission-injection cases are root-guarded (root bypasses chmod)."
+NONROOT=1; [ "$(id -u 2>/dev/null || echo 0)" -eq 0 ] && NONROOT=0
 
-# 16e — the recovery message on a failed STATE write must name ONLY real, supported actions: it must
-# NOT reference the never-implemented `doctor.sh --state`, and every `scripts/<name>.sh` command it
-# shows must actually exist. Regression for the dangling doctor.sh --state reference (removed v2.8.1).
-mkrepo t16e; good_grade t16e; good_evidence t16e
-chmod 0444 "$REPO/docs/STATE.md"
-rc=$(runtick "$REPO")
-chmod 0644 "$REPO/docs/STATE.md" 2>/dev/null || true
-recovery=$(grep -F 'STATE update FAILED' "$WORK/out" 2>/dev/null || true)
-# a) the failure path fired: non-zero exit, a recovery message printed, no false '✓ ticked'
-a_ok=0; { [ "$rc" != 0 ] && [ -n "$recovery" ] && ! grep -q '✓ ticked' "$WORK/out"; } || a_ok=1
-# b) it must NOT point at the non-existent `doctor.sh --state` (nor any bare `--state` flag)
-b_ok=0; printf '%s\n' "$recovery" | grep -qE '\-\-state' && b_ok=1
-# c) every `scripts/<name>.sh` the message names must exist in the repo (no dangling command refs)
-c_ok=0
-for s in $(printf '%s\n' "$recovery" | grep -oE 'scripts/[A-Za-z0-9_-]+\.sh' | sort -u); do
-  [ -f "$REPO/$s" ] || { c_ok=1; break; }
-done
-{ [ "$a_ok" = 0 ] && [ "$b_ok" = 0 ] && [ "$c_ok" = 0 ]; } \
-  && pass "failed STATE write → recovery names only existing commands, no doctor.sh --state (v2.8.1)" \
-  || fail "recovery message inaccurate (rc=$rc a=$a_ok nostate=$b_ok cmds=$c_ok): $recovery"
+# Fault-injection stubs: mv/cp that fail on a chosen target/source (portable, any user). Used to force a
+# replacement or a rollback failure without relying on filesystem permissions.
+STUBBIN="$WORK/faultbin"; mkdir -p "$STUBBIN"
+cat > "$STUBBIN/mv" <<'M'
+#!/bin/sh
+for last in "$@"; do :; done
+if [ -n "${FAIL_MV_TARGET:-}" ]; then case "$last" in *"$FAIL_MV_TARGET") echo "stub mv: injected failure" >&2; exit 1 ;; esac; fi
+exec /bin/mv "$@"
+M
+cat > "$STUBBIN/cp" <<'C'
+#!/bin/sh
+if [ -n "${FAIL_CP_SRC:-}" ]; then case "$1" in *"$FAIL_CP_SRC") echo "stub cp: injected failure" >&2; exit 1 ;; esac; fi
+exec /bin/cp "$@"
+C
+chmod +x "$STUBBIN/mv" "$STUBBIN/cp"
+runtick_fault() { local r="$1"; shift; ( cd "$r" && PATH="$STUBBIN:$PATH" bash scripts/tick.sh "$@" ) >"$WORK/out" 2>&1; echo $?; }
+
+# 16d (N-2 + F4) — read-only docs/STATE.md → tick refuses BEFORE mutating, no '✓ ticked', ROADMAP NOT
+# ticked (the old code left ROADMAP ticked with STATE stale; the transaction never half-applies now).
+if [ "$NONROOT" = 1 ]; then
+  mkrepo t16d; good_grade t16d; good_evidence t16d
+  chmod 0444 "$REPO/docs/STATE.md"
+  rc=$(runtick "$REPO"); chmod 0644 "$REPO/docs/STATE.md" 2>/dev/null || true
+  { [ "$rc" != 0 ] && ! grep -q '✓ ticked' "$WORK/out" && ! ticked "$REPO"; } \
+    && pass "read-only STATE → refuse before mutating, no '✓ ticked', ROADMAP NOT ticked (N-2 + F4)" \
+    || fail "read-only STATE mishandled (rc=$rc, ticked=$(ticked "$REPO" && echo yes))"
+else pass "(root: skipped read-only-STATE chmod test — root bypasses permissions)"; fi
+
+# 16e — the refusal message names ONLY real, supported actions: no never-implemented doctor.sh --state,
+# and every scripts/<name>.sh it references must exist. Regression for the dangling reference (v2.8.1).
+if [ "$NONROOT" = 1 ]; then
+  mkrepo t16e; good_grade t16e; good_evidence t16e
+  chmod 0444 "$REPO/docs/STATE.md"; rc=$(runtick "$REPO"); chmod 0644 "$REPO/docs/STATE.md" 2>/dev/null || true
+  b_ok=0; grep -qE '\-\-state' "$WORK/out" && b_ok=1
+  c_ok=0; for s in $(grep -oE 'scripts/[A-Za-z0-9_-]+\.sh' "$WORK/out" | sort -u); do [ -f "$REPO/$s" ] || { c_ok=1; break; }; done
+  { [ "$rc" != 0 ] && [ "$b_ok" = 0 ] && [ "$c_ok" = 0 ]; } \
+    && pass "refusal names only existing commands, no doctor.sh --state (v2.8.1)" \
+    || fail "refusal message inaccurate (rc=$rc nostate=$b_ok cmds=$c_ok)"
+else pass "(root: skipped refusal-message test)"; fi
+
+# F4-1 — ROADMAP temp generation fails (docs/ read-only) → refuse, nothing ticked.
+if [ "$NONROOT" = 1 ]; then
+  mkrepo f4a; good_grade f4a; good_evidence f4a; chmod 0555 "$REPO/docs"
+  rc=$(runtick "$REPO"); chmod 0755 "$REPO/docs" 2>/dev/null || true
+  { [ "$rc" != 0 ] && ! grep -q '✓ ticked' "$WORK/out" && ! ticked "$REPO"; } \
+    && pass "F4: ROADMAP temp-gen fails → refuse, nothing ticked" || fail "F4 ROADMAP-gen (rc=$rc)"
+else pass "(root: skipped ROADMAP-gen-fail)"; fi
+
+# F4-2 — STATE temp generation fails (STATE unreadable) → refuse, nothing ticked.
+if [ "$NONROOT" = 1 ]; then
+  mkrepo f4b; good_grade f4b; good_evidence f4b; chmod 0000 "$REPO/docs/STATE.md"
+  rc=$(runtick "$REPO"); chmod 0644 "$REPO/docs/STATE.md" 2>/dev/null || true
+  { [ "$rc" != 0 ] && ! ticked "$REPO"; } \
+    && pass "F4: STATE temp-gen fails → refuse, nothing ticked" || fail "F4 STATE-gen (rc=$rc)"
+else pass "(root: skipped STATE-gen-fail)"; fi
+
+# F4-3 — first replacement (ROADMAP mv) fails → refuse, not ticked.
+mkrepo f4c; good_grade f4c; good_evidence f4c
+export FAIL_MV_TARGET=docs/ROADMAP.md; rc=$(runtick_fault "$REPO"); unset FAIL_MV_TARGET
+{ [ "$rc" != 0 ] && ! grep -q '✓ ticked' "$WORK/out" && ! ticked "$REPO"; } \
+  && pass "F4: ROADMAP replacement fails → refuse, not ticked" || fail "F4 first-replacement (rc=$rc)"
+
+# F4-4/5 — second replacement (STATE mv) fails AFTER ROADMAP replaced → BOTH roll back (successful
+# rollback): ROADMAP restored to pre-tick (not ticked) AND STATE unchanged.
+mkrepo f4d; good_grade f4d; good_evidence f4d; orig=$(cat "$REPO/docs/STATE.md")
+export FAIL_MV_TARGET=docs/STATE.md; rc=$(runtick_fault "$REPO"); unset FAIL_MV_TARGET
+{ [ "$rc" != 0 ] && ! grep -q '✓ ticked' "$WORK/out" && ! ticked "$REPO" && [ "$(cat "$REPO/docs/STATE.md")" = "$orig" ]; } \
+  && pass "F4: STATE replacement fails → BOTH rolled back (ROADMAP restored, STATE unchanged)" || fail "F4 rollback (rc=$rc)"
+
+# F4-6 — rollback ITSELF fails (STATE mv fails AND the ROADMAP restore cp fails) → backups PRESERVED,
+# recovery printed, exit non-zero.
+mkrepo f4e; good_grade f4e; good_evidence f4e
+export FAIL_MV_TARGET=docs/STATE.md FAIL_CP_SRC=ROADMAP.md.tick-bak
+rc=$(runtick_fault "$REPO"); unset FAIL_MV_TARGET FAIL_CP_SRC
+{ [ "$rc" != 0 ] && grep -qi 'PRESERVED' "$WORK/out" && [ -f "$REPO/docs/ROADMAP.md.tick-bak" ]; } \
+  && pass "F4: rollback failure → backups preserved, recovery printed, exit non-zero" \
+  || fail "F4 rollback-fail (rc=$rc bak=$([ -f "$REPO/docs/ROADMAP.md.tick-bak" ] && echo yes))"
+rm -f "$REPO/docs/ROADMAP.md.tick-bak" "$REPO/docs/STATE.md.tick-bak" 2>/dev/null || true
+
+# F4-7 — successful RETRY after a failed attempt (no injection) → ticks, both updated, no leftovers.
+mkrepo f4f; good_grade f4f; good_evidence f4f
+export FAIL_MV_TARGET=docs/STATE.md; rc1=$(runtick_fault "$REPO"); unset FAIL_MV_TARGET
+rc2=$(runtick "$REPO")
+{ [ "$rc1" != 0 ] && [ "$rc2" = 0 ] && ticked "$REPO" && grep -q 'lean:auto:begin' "$REPO/docs/STATE.md" \
+  && [ ! -f "$REPO/docs/ROADMAP.md.tick-bak" ]; } \
+  && pass "F4: retry after a failed attempt succeeds (both updated, no leftovers)" || fail "F4 retry (rc1=$rc1 rc2=$rc2)"
+
+# F4-8 — ordinary successful tick → BOTH files updated, '✓ ticked', temps/backups cleaned.
+mkrepo f4g; good_grade f4g; good_evidence f4g; rc=$(runtick "$REPO")
+{ [ "$rc" = 0 ] && grep -q '✓ ticked' "$WORK/out" && ticked "$REPO" && grep -q 'Last ticked' "$REPO/docs/STATE.md" \
+  && [ ! -f "$REPO/docs/ROADMAP.md.tick-tmp" ] && [ ! -f "$REPO/docs/ROADMAP.md.tick-bak" ]; } \
+  && pass "F4: ordinary tick updates BOTH files and cleans temps/backups" || fail "F4 ordinary tick (rc=$rc)"
+
+# F4-9 — a leftover *.tick-* artifact from an interrupted prior run → refuse clearly.
+mkrepo f4h; good_grade f4h; good_evidence f4h
+cp "$REPO/docs/ROADMAP.md" "$REPO/docs/ROADMAP.md.tick-bak"
+rc=$(runtick "$REPO"); rm -f "$REPO/docs/ROADMAP.md.tick-bak" 2>/dev/null || true
+{ [ "$rc" != 0 ] && grep -qi 'leftover completion-transaction' "$WORK/out"; } \
+  && pass "F4: leftover *.tick-* artifact → refuse clearly (interrupted prior run)" || fail "F4 leftover (rc=$rc)"
 
 echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All tick gate + evidence tests passed."; exit 0
