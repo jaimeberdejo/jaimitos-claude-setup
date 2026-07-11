@@ -48,6 +48,7 @@ TESTS=(
   test-sandbox.sh
   test-sync.sh
   test-test-cmd.sh
+  test-release-check.sh
 )
 
 # Drift guard: every scripts/test-*.sh MUST be listed above, or a newly-added guard test would

@@ -1,0 +1,15 @@
+# .claude/eval-fixture-paths — ignored fixture/output dirs the evaluator-isolation check should track
+# DEEPLY (finding F6). One directory per line; blank lines and lines starting with # are ignored.
+#
+# Why: _eval-isolation.sh collapses a pre-existing ignored dir to one entry (so it never walks
+# node_modules/.venv/caches), which hides a NEW file created inside such a dir — a complacent grader
+# could write a fixture there that makes the post-grade evidence re-run pass. List ONLY small, declared
+# fixture/output dirs here (never dependency/cache trees); files under them are hashed so a created or
+# modified fixture during grading is detected (interactive) or removed/STOP'd (headless).
+#
+# Example:
+# tests/fixtures
+# generated
+# testdata
+#
+# (Empty by default — the residual is documented; opt in per project.)

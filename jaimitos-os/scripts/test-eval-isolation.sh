@@ -140,6 +140,35 @@ out=$(eval_changed_files); rc=$?
 eval_restore >/dev/null 2>&1 && fail "eval_restore should FAIL CLOSED on a tampered sensitive file" \
   || pass "eval_restore FAILS CLOSED on a rewritten sensitive .env (cannot restore → STOP)"
 
+# F6 — a NEW file inside a PRE-EXISTING ignored dir listed in .claude/eval-fixture-paths is detected
+# (the --directory collapse would otherwise hide it), removed by headless restore, and a pre-existing
+# fixture is preserved.
+mkrepo f6a
+printf 'generated/\n' > .gitignore
+mkdir -p .claude generated; printf 'generated\n' > .claude/eval-fixture-paths
+printf 'pre\n' > generated/existing.json           # pre-existing ignored fixture
+git add .gitignore .claude/eval-fixture-paths >/dev/null 2>&1; git commit -qm cfg >/dev/null 2>&1
+eval_snapshot || fail "f6a: snapshot failed"
+printf '{"x":1}\n' > generated/new-fixture.json     # grader creates a NEW fixture in the collapsed dir
+out=$(eval_changed_files); rc=$?
+{ [ "$rc" = 1 ] && printf '%s\n' "$out" | grep -q '\[fixture-changed\] generated/new-fixture.json'; } \
+  && pass "F6: created file in a pre-existing configured fixture dir is DETECTED (interactive)" \
+  || fail "F6 created fixture not detected (rc=$rc): $out"
+eval_restore >/dev/null 2>&1
+{ [ ! -f generated/new-fixture.json ] && [ -f generated/existing.json ]; } \
+  && pass "F6: headless restore removes the created fixture, keeps the pre-existing one" \
+  || fail "F6 restore mishandled fixtures (new exists=$([ -f generated/new-fixture.json ] && echo y), pre kept=$([ -f generated/existing.json ] && echo y))"
+
+# F6b — a MODIFIED pre-existing fixture (content the grader changed) → headless restore FAILS CLOSED.
+mkrepo f6b
+printf 'generated/\n' > .gitignore; mkdir -p .claude generated; printf 'generated\n' > .claude/eval-fixture-paths
+printf 'orig\n' > generated/existing.json
+git add .gitignore .claude/eval-fixture-paths >/dev/null 2>&1; git commit -qm cfg >/dev/null 2>&1
+eval_snapshot || fail "f6b: snapshot failed"
+printf 'TAMPERED\n' > generated/existing.json
+eval_restore >/dev/null 2>&1 && fail "F6: restore should FAIL CLOSED on a modified pre-existing fixture" \
+  || pass "F6: headless restore FAILS CLOSED on a modified pre-existing fixture"
+
 echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All eval-isolation tests passed."; exit 0
 else echo "$FAILS eval-isolation test(s) FAILED."; exit 1; fi

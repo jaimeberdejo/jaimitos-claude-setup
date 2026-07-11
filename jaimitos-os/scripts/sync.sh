@@ -85,7 +85,7 @@ sha256_of() {
 # install.sh's manifest writer — keep the two case patterns identical).
 project_owned() {
   case "$1" in
-    docs/*|CLAUDE.md|SCAFFOLD.md|.gitignore|.claude/high-stakes-path-allowlist|.claude/test-command) return 0 ;;
+    docs/*|CLAUDE.md|SCAFFOLD.md|.gitignore|.claude/high-stakes-path-allowlist|.claude/test-command|.claude/eval-fixture-paths) return 0 ;;
     *) return 1 ;;
   esac
 }

@@ -56,6 +56,27 @@ _eval_sensitive_hashes() {
   done
 }
 
+# --- configured fixture-path snapshot (finding F6) ------------------------------------------------
+# The `--directory` collapse above hides a NEW file created inside a PRE-EXISTING ignored dir (e.g. a
+# grader writing generated/new-fixture.json when generated/ already existed), which can influence the
+# post-grade evidence re-run. A project opts specific ignored fixture/output dirs into deeper tracking
+# via .claude/eval-fixture-paths (one dir per line; blank/`#` ignored). ONLY those declared dirs are
+# walked — never node_modules/.venv/caches — so this stays bounded. Files under them are hashed so a
+# created OR modified fixture is detected. Residual (documented): dirs NOT listed keep the collapse.
+_eval_fixture_dirs() { [ -f .claude/eval-fixture-paths ] && grep -vE '^[[:space:]]*(#|$)' .claude/eval-fixture-paths 2>/dev/null | sed 's#/*[[:space:]]*$##'; }
+_eval_fixture_hashes() {
+  local d f
+  _eval_fixture_dirs | while IFS= read -r d; do
+    [ -n "$d" ] && [ -d "$d" ] || continue
+    find "$d" -type f 2>/dev/null | while IFS= read -r f; do [ -f "$f" ] && printf '%s  %s\n' "$(_eval_hash "$f")" "$f"; done
+  done
+}
+# created-or-modified fixture files since snapshot (paths only, sorted-unique).
+_eval_changed_fixtures() {
+  comm -13 <(printf '%s\n' "${EVAL_PRE_FIXTURES:-}" | sort) <(_eval_fixture_hashes | sort) \
+    | sed 's/^[0-9a-f]*  //' | sed '/^[[:space:]]*$/d' | sort -u
+}
+
 # eval_snapshot: record the tree state the grader must not alter.
 #   EVAL_PRE_UNTRACKED  — sorted untracked (non-ignored) paths at snapshot time
 #   EVAL_PRE_SNAP       — `git stash create` ref; EMPTY iff the tracked tree is clean. This does
@@ -77,6 +98,7 @@ eval_snapshot() {
   EVAL_PRE_SNAP=$(git stash create 2>/dev/null)
   EVAL_PRE_IGNORED=$(_eval_ignored_list)                                 # H3: ignored set (dirs collapsed)
   EVAL_PRE_SENSITIVE=$(printf '%s\n' "$EVAL_PRE_IGNORED" | _eval_sensitive_hashes)   # D4: sensitive-file hashes
+  EVAL_PRE_FIXTURES=$(_eval_fixture_hashes)                                          # F6: configured fixture-dir hashes
   return 0
 }
 
@@ -144,6 +166,23 @@ eval_restore() {
     printf '%s\n' "$tampered" | sed 's/^/    /' >&2
     return 1
   fi
+  # F6: files created/modified under a configured fixture dir (deeper than the --directory collapse).
+  # Remove ones CREATED during grading; a MODIFIED pre-existing fixture can't be restored → STOP.
+  local fx_changed fx_pre_paths
+  fx_changed=$(_eval_changed_fixtures)
+  if [ -n "$fx_changed" ]; then
+    fx_pre_paths=$(printf '%s\n' "${EVAL_PRE_FIXTURES:-}" | sed 's/^[0-9a-f]*  //')
+    printf '%s\n' "$fx_changed" | while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      printf '%s\n' "$fx_pre_paths" | grep -qxF "$f" || rm -f -- "$f" 2>/dev/null || true
+    done
+    local still; still=$(_eval_changed_fixtures)
+    if [ -n "$still" ]; then
+      echo "eval-isolation: evaluator modified pre-existing fixture file(s) under a configured dir — cannot restore, STOPPING:" >&2
+      printf '%s\n' "$still" | sed 's/^/    /' >&2
+      return 1
+    fi
+  fi
   return 0
 }
 
@@ -180,6 +219,9 @@ eval_changed_files() {
   # D4: a rewritten pre-existing sensitive ignored file.
   tampered=$(_eval_tampered_sensitive)
   [ -n "$tampered" ] && out="${out}$(printf '%s\n' "$tampered" | sed 's/^/[tampered-ignored] /')"$'\n'
+  # F6: a created/modified file under a configured fixture dir (deeper than the --directory collapse).
+  local fx; fx=$(_eval_changed_fixtures)
+  [ -n "$fx" ] && out="${out}$(printf '%s\n' "$fx" | sed 's/^/[fixture-changed] /')"$'\n'
   if [ -n "$(printf '%s' "$out" | tr -d '[:space:]')" ]; then
     printf '%s' "$out" | sed '/^[[:space:]]*$/d'
     return 1
