@@ -76,7 +76,11 @@ echo ""
 echo "Fail-CLOSED: a syntactically INVALID HIGH_STAKES_RE must return a CONFIGURATION ERROR (rc 2),"
 echo "never a silent no-match (rc 1) that fails OPEN — finding H4. rc 2 is a distinct third state so"
 echo "callers can refuse rather than treat a broken gate as 'no high-stakes paths here':"
-for bad in '[' '(' '*' 'a\' '[z-a]' '\'; do
+# Every pattern here must be an INVALID ERE on BOTH GNU and BSD grep. A leading quantifier
+# ('*', '+', '?') is NOT portable: GNU grep treats it as a literal (valid, rc 1) while BSD grep
+# errors (rc 2) — so it cannot stand in for "malformed" (it made this test fail-OPEN-looking on
+# Linux CI). Use unambiguous malformations only: unclosed '['/'(', bad range, bad interval, stray '\'.
+for bad in '[' '(' 'a{2,1}' 'a\' '[z-a]' '\'; do
   ( HIGH_STAKES_RE="$bad" high_stakes_match "auth/login.py" >/dev/null 2>&1 )
   rc=$?
   if [ "$rc" -eq 2 ]; then printf '  ✓ malformed %-6s -> rc 2 (config error, fail-closed)\n' "'$bad'"
