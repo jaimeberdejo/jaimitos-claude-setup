@@ -38,18 +38,24 @@ fi
 # (porcelain is "XY <path>"); survives spaces & renames where awk '{print $2}' would mangle.
 CHANGED=$(git status --porcelain 2>/dev/null | cut -c4-)
 
-# Preserve the user's curated staging selection (finding N3): capture what was ALREADY staged before
-# we `git add -A`, so that if we abort (secret hit / missing scan lib) we can restore EXACTLY that set
-# instead of `git reset`-ing the whole index and destroying a subset the user staged by hand.
-# Newline-delimited; `IFS= read -r` keeps paths with spaces intact (a literal newline in a filename is
-# pathological and not supported — the file is simply left unstaged, never mis-staged).
-PRESTAGED=$(git diff --cached --name-only 2>/dev/null || true)
+# Preserve the user's EXACT curated staging (finding N3 + F5): snapshot the RAW git index before we
+# `git add -A`, so an abort (secret hit / missing scan lib) restores the byte-for-byte index —
+# partial (hunk-)staged files, staged renames, deletions, mode changes, and intent-to-add — which a
+# name-only re-`git add` cannot reproduce. `--git-path index` resolves the real index even for a
+# linked worktree (whose `.git` is a pointer file). Fall back to `git reset` only if the snapshot
+# can't be taken. The working tree is never touched by any of this.
+INDEX_FILE=$(git rev-parse --git-path index 2>/dev/null)
+INDEX_SNAP=""
+if [ -n "$INDEX_FILE" ] && [ -f "$INDEX_FILE" ]; then
+  INDEX_SNAP=$(mktemp 2>/dev/null || echo "${TMPDIR:-/tmp}/lean-index.$$")
+  cp "$INDEX_FILE" "$INDEX_SNAP" 2>/dev/null || INDEX_SNAP=""
+fi
+trap '[ -n "$INDEX_SNAP" ] && rm -f "$INDEX_SNAP" 2>/dev/null' EXIT
 restore_prestaged() {
-  git reset -q 2>/dev/null || true               # unstage the add -A
-  [ -n "$PRESTAGED" ] || return 0
-  printf '%s\n' "$PRESTAGED" | while IFS= read -r f; do
-    [ -n "$f" ] && git add -- "$f" 2>/dev/null || true
-  done
+  if [ -n "$INDEX_SNAP" ] && [ -f "$INDEX_SNAP" ] && [ -n "$INDEX_FILE" ]; then
+    cp "$INDEX_SNAP" "$INDEX_FILE" 2>/dev/null && return 0
+  fi
+  git reset -q 2>/dev/null || true               # fallback: best-effort unstage
 }
 
 git add -A 2>/dev/null

@@ -63,6 +63,38 @@ fire "$REPO" "$J"
   && ok "secret abort PRESERVES the pre-staged subset (curated.txt still staged, leak.txt not) — N3" \
   || no "prestage-preserved" "STAGED=$(git -C "$REPO" diff --cached --name-only | tr '\n' ' ') OUT=$OUT"
 
+# F5 — exact index restore: an abort must restore the byte-for-byte index, incl. states a name-only
+# re-`git add` cannot reproduce. Compare the FULL cached diff (not just names) before/after the abort.
+# F5a — PARTIALLY staged file: stage V1 while the working tree holds V2. Name-based restore would
+# re-stage V2; the raw-index snapshot restores V1.
+mkrepo f5a
+printf 'l1\n' > "$REPO/part.txt"; git -C "$REPO" add part.txt; git -C "$REPO" commit -qm b
+printf 'l1\nSTAGED\n' > "$REPO/part.txt"; git -C "$REPO" add part.txt      # stage V1
+printf 'l1\nSTAGED\nUNSTAGED\n' > "$REPO/part.txt"                          # working tree = V2
+before="$(git -C "$REPO" diff --cached)"
+printf 'k=AKIAIOSFODNN7EXAMPLE\n' > "$REPO/leak.txt"; fire "$REPO" "$J"
+after="$(git -C "$REPO" diff --cached)"
+{ contains "$OUT" "SECRET GUARD" && [ "$before" = "$after" ]; } \
+  && ok "F5: partially-staged file preserved EXACTLY on abort (staged V1, not re-staged V2)" \
+  || no "F5-partial" "cached diff changed after abort"
+# F5b — staged rename preserved.
+mkrepo f5b
+echo hi > "$REPO/old.txt"; git -C "$REPO" add old.txt; git -C "$REPO" commit -qm b
+git -C "$REPO" mv old.txt new.txt
+before="$(git -C "$REPO" diff --cached -M --name-status)"
+printf 'k=AKIAIOSFODNN7EXAMPLE\n' > "$REPO/leak.txt"; fire "$REPO" "$J"
+after="$(git -C "$REPO" diff --cached -M --name-status)"
+{ contains "$OUT" "SECRET GUARD" && [ "$before" = "$after" ]; } \
+  && ok "F5: staged rename preserved on abort" || no "F5-rename" "before=[$before] after=[$after]"
+# F5c — intent-to-add entry preserved.
+mkrepo f5c
+echo hi > "$REPO/ita.txt"; git -C "$REPO" add -N ita.txt
+before="$(git -C "$REPO" ls-files -s)"
+printf 'k=AKIAIOSFODNN7EXAMPLE\n' > "$REPO/leak.txt"; fire "$REPO" "$J"
+after="$(git -C "$REPO" ls-files -s)"
+{ contains "$OUT" "SECRET GUARD" && [ "$before" = "$after" ]; } \
+  && ok "F5: intent-to-add entry preserved on abort" || no "F5-ita" "index changed after abort"
+
 mkrepo t7c; echo o>"$REPO/s.pem"; git -C "$REPO" add -f s.pem; git -C "$REPO" commit -qm p
 echo m>>"$REPO/s.pem"; fire "$REPO" "$J"
 contains "$OUT" "filename] s.pem" && [ "$CN" = 2 ] && ok "tracked secret filename (.pem): abort" || no "secret-filename" "OUT=$OUT CN=$CN"
