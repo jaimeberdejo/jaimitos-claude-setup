@@ -45,6 +45,21 @@ case "${1:-}" in
     exit 0 ;;
 esac
 
+# F2 — reject forwarded options that break the export contract BEFORE any container starts.
+# --no-worktree makes scripts/autopilot.sh commit on the clone's CURRENT branch instead of an
+# autopilot/* branch; the export step below keys on autopilot/* and would then find "nothing to
+# import" and discard the clone — losing the work. The sandbox ALWAYS uses an isolated worktree, so
+# --no-worktree is unsupported here. Refuse it up front rather than silently forward a lossy option.
+for _a in "$@"; do
+  case "$_a" in
+    --no-worktree)
+      echo "sandbox: ⛔ --no-worktree is not supported inside the sandbox: it makes the loop commit on the" >&2
+      echo "sandbox:   clone's current branch instead of an autopilot/* branch, which the export step cannot" >&2
+      echo "sandbox:   reliably recover (work would be lost). Drop it — the sandbox always runs in a worktree." >&2
+      exit 2 ;;
+  esac
+done
+
 command -v docker >/dev/null 2>&1 || {
   echo "sandbox: ⛔ docker is required — install Docker (or Podman with a docker alias) first." >&2
   echo "sandbox:   Unattended --dangerously-skip-permissions runs are ONLY supported inside this container." >&2
@@ -111,6 +126,11 @@ if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
   }
 fi
 
+# F2 — snapshot the clone's ref tips + HEAD BEFORE the run, so afterwards we can detect ALL work the
+# container produced (not just autopilot/* branches: also a commit on the current branch, a detached
+# HEAD, or dirty/untracked files) and never delete the clone while such work is unexported.
+PRE_TIPS=$( { git -C "$STAGE/repo" for-each-ref --format='%(objectname)'; git -C "$STAGE/repo" rev-parse HEAD; } 2>/dev/null | sort -u )
+
 # -i always (stdin for the loop); -t only when we actually have a TTY.
 TTY_FLAG=""
 [ -t 0 ] && [ -t 1 ] && TTY_FLAG="-t"
@@ -124,34 +144,65 @@ docker run --rm -i $TTY_FLAG \
   "$IMAGE" scripts/autopilot.sh "$@" --dangerously-skip-permissions
 run_rc=$?
 
-# --- export the loop's work back, fail-closed (correction C-A) ---
-# The mounted clone is not the live repo, so any autopilot/* branch the loop produced lives only in
-# the clone. From here we assume work exists until proven otherwise, so an unexpected death preserves
-# the clone rather than discarding uncommitted-back work.
+# --- export the loop's work back, fail-closed (correction C-A + F2) ---
+# The mounted clone is not the live repo, so ALL work the loop produced lives only in the clone. From
+# here we assume work exists until proven otherwise, so an unexpected death preserves the clone rather
+# than discarding uncommitted-back work.
 PRESERVE_STAGE=1
 git -C "$STAGE/repo" worktree prune >/dev/null 2>&1 || true
+
 PRODUCED=$(git -C "$STAGE/repo" for-each-ref --format='%(refname:short)' 'refs/heads/autopilot/*' 2>/dev/null || true)
-if [ -z "$PRODUCED" ]; then
-  # No autopilot/* branch → the loop produced nothing to import → safe to discard the clone.
+
+# F2 — inventory ALL work the run produced, not just autopilot/*. `rev-list <post tips> --not <pre tips>`
+# is exactly the commits created during the run; comparing it to the autopilot/*-only set reveals work
+# OFF the export channel (a commit on the current branch or a detached HEAD) that a plain autopilot/*
+# import would strand. CLONE_DIRTY catches uncommitted tracked + untracked work.
+POST_TIPS=$( { git -C "$STAGE/repo" for-each-ref --format='%(objectname)'; git -C "$STAGE/repo" rev-parse HEAD; } 2>/dev/null | sort -u )
+# shellcheck disable=SC2086
+NEW_ALL=$(git -C "$STAGE/repo" rev-list $POST_TIPS --not $PRE_TIPS 2>/dev/null | sort)
+# shellcheck disable=SC2086
+NEW_AUTOPILOT=$(git -C "$STAGE/repo" rev-list --glob=refs/heads/autopilot/* --not $PRE_TIPS 2>/dev/null | sort)
+OFF_CHANNEL=""; [ "$NEW_ALL" != "$NEW_AUTOPILOT" ] && OFF_CHANNEL=1
+CLONE_DIRTY=$(git -C "$STAGE/repo" status --porcelain 2>/dev/null)
+
+if [ -z "$PRODUCED" ] && [ -z "$OFF_CHANNEL" ] && [ -z "$CLONE_DIRTY" ]; then
+  # Genuinely nothing produced anywhere → safe to discard the clone.
   PRESERVE_STAGE=0
-  echo "sandbox: run finished (rc=$run_rc); no autopilot/* branch was produced — nothing to import."
+  echo "sandbox: run finished (rc=$run_rc); no work was produced in the clone — nothing to import."
   exit "$run_rc"
 fi
-# Work exists — import it into THIS repo. ALWAYS attempt, even after a container failure (rc!=0). Never
-# force: a non-fast-forward or an existing same-name branch must be PRESERVED for the human to resolve,
-# not clobbered.
-if git fetch --no-tags "$STAGE/repo" 'refs/heads/autopilot/*:refs/heads/autopilot/*' 2>"$STAGE/fetch.err"; then
+
+# Work exists. Import the autopilot/* branch(es) first (the supported channel). ALWAYS attempt, even
+# after a partial container failure (rc!=0). Never force: a non-fast-forward or an existing same-name
+# branch must be PRESERVED for the human to resolve, not clobbered.
+IMPORT_OK=1
+if [ -n "$PRODUCED" ]; then
+  if git fetch --no-tags "$STAGE/repo" 'refs/heads/autopilot/*:refs/heads/autopilot/*' 2>"$STAGE/fetch.err"; then
+    echo "sandbox: imported autopilot/* branch(es) into this repo:"
+    printf '%s\n' "$PRODUCED" | sed 's/^/sandbox:   /'
+  else
+    IMPORT_OK=0
+  fi
+fi
+
+# Fully exported (autopilot/* imported AND nothing off-channel/dirty) → delete the clone. Otherwise
+# PRESERVE it and print exact recovery — work is NEVER discarded behind a warning.
+if [ "$IMPORT_OK" = 1 ] && [ -z "$OFF_CHANNEL" ] && [ -z "$CLONE_DIRTY" ]; then
   PRESERVE_STAGE=0
-  echo "sandbox: imported autopilot/* branch(es) into this repo:"
-  printf '%s\n' "$PRODUCED" | sed 's/^/sandbox:   /'
   echo "sandbox: staging clone removed."
   exit "$run_rc"
 fi
-# Import failed and work exists → fail closed, keep the clone (PRESERVE_STAGE stays 1).
-echo "sandbox: ⛔ the run produced autopilot/* work but it could NOT be imported into this repo:" >&2
-sed 's/^/sandbox:   /' "$STAGE/fetch.err" >&2 2>/dev/null || true
-echo "sandbox:   (Likely a non-fast-forward, or a branch of the same name already exists here.)" >&2
-echo "sandbox:   Your work is PRESERVED in the staging clone — recover it, then remove the clone:" >&2
-echo "sandbox:     git fetch \"$STAGE/repo\" 'refs/heads/autopilot/*:refs/heads/autopilot/*'" >&2
-echo "sandbox:     # resolve the conflict (rename/merge), then:  rm -rf \"$STAGE\"" >&2
+
+echo "sandbox: ⛔ the run produced work that could NOT be fully exported into this repo — PRESERVED:" >&2
+if [ "$IMPORT_OK" = 0 ]; then
+  echo "sandbox:   - autopilot/* import failed (likely a non-fast-forward or a same-name branch here):" >&2
+  sed 's/^/sandbox:       /' "$STAGE/fetch.err" >&2 2>/dev/null || true
+fi
+[ -n "$OFF_CHANNEL" ] && echo "sandbox:   - commit(s) on a non-autopilot branch or a detached HEAD in the clone" >&2
+[ -n "$CLONE_DIRTY" ] && echo "sandbox:   - uncommitted / untracked changes in the clone's working tree" >&2
+echo "sandbox:   Recover from the preserved staging clone, then remove it:" >&2
+echo "sandbox:     git -C \"$STAGE/repo\" log --all --oneline        # inspect what the run produced" >&2
+echo "sandbox:     git -C \"$STAGE/repo\" status                     # any uncommitted work" >&2
+echo "sandbox:     git fetch \"$STAGE/repo\" 'refs/heads/*:refs/heads/recovered/*'   # pull branches over" >&2
+echo "sandbox:     rm -rf \"$STAGE\"                                  # when you're done" >&2
 exit 4

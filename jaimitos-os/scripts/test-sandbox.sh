@@ -62,6 +62,26 @@ case "${1:-}" in
       git -C "$src" add -A 2>/dev/null
       git -C "$src" -c user.email=c@c.c -c user.name=c commit -q -m "autopilot container commit" 2>/dev/null
     fi
+    # F2 loss-of-work fixtures: work produced OFF the autopilot/* channel that the exporter must NOT
+    # discard. STUB_MAKE_CURRENT commits on the clone's current branch (the --no-worktree hazard);
+    # STUB_MAKE_DETACHED commits on a detached HEAD; STUB_MAKE_DIRTY/UNTRACKED leave uncommitted work.
+    if [ "${STUB_MAKE_CURRENT:-0}" = "1" ] && [ -d "$src/.git" ]; then
+      echo "work on the current branch" > "$src/on-current-branch.txt"
+      git -C "$src" add -A 2>/dev/null
+      git -C "$src" -c user.email=c@c.c -c user.name=c commit -q -m "commit on current branch" 2>/dev/null
+    fi
+    if [ "${STUB_MAKE_DETACHED:-0}" = "1" ] && [ -d "$src/.git" ]; then
+      git -C "$src" checkout -q --detach 2>/dev/null
+      echo "detached work" > "$src/detached-work.txt"
+      git -C "$src" add -A 2>/dev/null
+      git -C "$src" -c user.email=c@c.c -c user.name=c commit -q -m "detached-HEAD commit" 2>/dev/null
+    fi
+    if [ "${STUB_MAKE_DIRTY:-0}" = "1" ] && [ -d "$src/.git" ]; then
+      printf '\n# uncommitted change\n' >> "$src/scripts/autopilot.sh"   # modify a tracked file
+    fi
+    if [ "${STUB_MAKE_UNTRACKED:-0}" = "1" ]; then
+      echo "untracked artifact" > "$src/untracked-artifact.txt"
+    fi
     exit "${STUB_RUN_RC:-0}" ;;
   *)     exit 0 ;;
 esac
@@ -206,8 +226,8 @@ rc=$(STUB_MAKE_REF=1 run_wrapper 1)
 # E2 — the container produces NOTHING → the wrapper cleans up and returns the run's exit code.
 mkrepo te2
 rc=$(STUB_MAKE_REF=0 STUB_RUN_RC=0 run_wrapper 1)
-{ [ "$rc" -eq 0 ] && grep -q "no autopilot/\* branch was produced" "$WORK/out"; } \
-  && pass "no branch produced → clean exit, nothing imported" \
+{ [ "$rc" -eq 0 ] && grep -q "no work was produced" "$WORK/out"; } \
+  && pass "no work produced → clean exit, nothing imported" \
   || fail "no-work export path wrong (rc=$rc)"
 
 # E3 (C-A) — the container FAILS (rc!=0) AFTER committing an autopilot/* branch → the work is STILL
@@ -225,9 +245,54 @@ git checkout -q -b autopilot/teststamp
 printf 'diverging host work\n' > host-side.txt; git add -A; git commit -q -m 'host diverged'
 git checkout -q -                          # back off the branch so the wrapper's fetch targets it
 rc=$(STUB_MAKE_REF=1 STUB_RUN_RC=0 run_wrapper 1)
-{ [ "$rc" -ne 0 ] && grep -q "could NOT be imported" "$WORK/out" && grep -q "PRESERVED" "$WORK/out"; } \
+{ [ "$rc" -ne 0 ] && grep -q "PRESERVED" "$WORK/out"; } \
   && pass "non-fast-forward import → fail-closed (non-zero), recovery path printed, clone preserved" \
   || fail "non-ff import did not fail closed / preserve work (rc=$rc)"
+
+# ---- F2: NO produced work is ever discarded (not just autopilot/*) ----
+
+# F2a — --no-worktree is REJECTED before any container starts. Forwarded into the sandbox it makes
+# autopilot commit on the clone's CURRENT branch (not autopilot/*), which the export step cannot
+# recover — so the wrapper must refuse it up front rather than silently forward it.
+mkrepo tf2a
+rm -f "$WORK/docker-args"
+rc=$(run_wrapper 1 --no-worktree)
+{ [ "$rc" -ne 0 ] && grep -qi "no-worktree" "$WORK/out" && [ ! -f "$WORK/docker-args" ]; } \
+  && pass "F2: --no-worktree rejected before the container (no docker run)" \
+  || fail "F2: --no-worktree not rejected (rc=$rc, docker-args exists=$([ -f "$WORK/docker-args" ] && echo yes))"
+
+# helper: extract the preserved staging-clone path from the recovery output, and clean it up.
+clone_path() { grep -oE '/[^ "]*/repo' "$WORK/out" | head -1; }
+
+# F2b — the container commits on the clone's CURRENT branch (not autopilot/*): the wrapper must NOT
+# delete the clone. Preserve it + print recovery (pre-fix it printed 'nothing to import' and deleted it).
+mkrepo tf2b
+rc=$(STUB_MAKE_CURRENT=1 run_wrapper 1); CD=$(clone_path)
+{ [ "$rc" -ne 0 ] && [ -n "$CD" ] && [ -d "$CD" ] && grep -qi "PRESERVED" "$WORK/out"; } \
+  && pass "F2: commit on current branch → clone PRESERVED + recovery (work not lost)" \
+  || fail "F2: current-branch work discarded (rc=$rc, clone='$CD' exists=$([ -d "$CD" ] && echo yes))"
+[ -n "$CD" ] && rm -rf "$(dirname "$CD")" 2>/dev/null
+
+# F2c — a detached-HEAD commit in the clone → preserved (not on any branch, easy to lose).
+mkrepo tf2c
+rc=$(STUB_MAKE_DETACHED=1 run_wrapper 1); CD=$(clone_path)
+{ [ "$rc" -ne 0 ] && [ -d "$CD" ]; } \
+  && pass "F2: detached-HEAD commit → clone preserved" || fail "F2: detached commit lost (rc=$rc)"
+[ -n "$CD" ] && rm -rf "$(dirname "$CD")" 2>/dev/null
+
+# F2d — a dirty TRACKED change left in the clone → preserved.
+mkrepo tf2d
+rc=$(STUB_MAKE_DIRTY=1 run_wrapper 1); CD=$(clone_path)
+{ [ "$rc" -ne 0 ] && [ -d "$CD" ]; } \
+  && pass "F2: dirty tracked change → clone preserved" || fail "F2: dirty work lost (rc=$rc)"
+[ -n "$CD" ] && rm -rf "$(dirname "$CD")" 2>/dev/null
+
+# F2e — an UNTRACKED file left in the clone → preserved.
+mkrepo tf2e
+rc=$(STUB_MAKE_UNTRACKED=1 run_wrapper 1); CD=$(clone_path)
+{ [ "$rc" -ne 0 ] && [ -d "$CD" ]; } \
+  && pass "F2: untracked artifact → clone preserved" || fail "F2: untracked work lost (rc=$rc)"
+[ -n "$CD" ] && rm -rf "$(dirname "$CD")" 2>/dev/null
 
 # 4b — missing image → docker build invoked against sandbox/Dockerfile.autopilot before run.
 mkrepo t4b
