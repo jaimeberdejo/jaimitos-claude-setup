@@ -7,6 +7,14 @@ Close out this session:
 2. **Roadmap ticking is gated — you may NOT flip `- [ ]` → `- [x]` by hand.** The ONLY way to
    mark a phase done is the shared gate, scripts/tick.sh, exactly as the headless loop uses it.
    If (and only if) a phase is genuinely complete and you want to tick it:
+
+   **First, verify freshly.** Re-run the project's verification commands *now*, after the final
+   commit — not from memory, and not from a run that predates the last edit. Name the exact
+   commands, read the exit codes, and disclose new warnings plus any check you skipped and why.
+   "It should pass" and "the executor said it passed" are not evidence. If the phase's "Done when:"
+   asks for an integration result, a passing unit suite does not substitute for it. If the required
+   evidence cannot be produced, STOP and report the blocker — never grade an unverified tree.
+
    a. **Grade under isolation** — the same discard net `/phase` and headless `autopilot.sh` use, so
       the grader cannot contaminate the tree it is grading. (The evaluator has no Edit/Write tools,
       but it does have `Bash`, and `>` is a write: a complacent grader that re-runs the suite and

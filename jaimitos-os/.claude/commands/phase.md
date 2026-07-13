@@ -79,7 +79,15 @@ of roadmap order; bare `/phase` (no argument) is unchanged.
    reports back what it completed. If it reports a task still red after 3 attempts, STOP and
    report the blocker exactly as it described it — do not retry the task yourself or proceed to
    step 6.
-6. When all tasks pass, run the evaluator under isolation — the SAME discard net headless
+5b. **Fresh verification (before you hand anything to the grader).** The executor's report is a
+   *claim*, not evidence — "the agent said it passed" has never been evidence. Re-run the project's
+   verification commands yourself, **after the executor's final commit**, and read the output: a
+   green run from before the last edit says nothing about the code that exists now. Name the exact
+   commands, disclose new warnings, and disclose any check you skipped and why. If the phase's
+   "Done when:" calls for an integration or end-to-end result, a passing unit suite does not
+   substitute for it. If you cannot produce the required evidence, STOP — do not proceed to step 6
+   and do not describe an unverified result as a passing one.
+6. When all tasks pass and step 5b is green, run the evaluator under isolation — the SAME discard net headless
    `autopilot.sh` uses, so the grader can't contaminate the tree it grades (a complacent grader
    that re-runs the suite and lets a test write a fixture that makes the grade pass is the real
    risk — the evaluator has `Bash`, and `>` is a write). Steps:
