@@ -148,6 +148,73 @@ mkrepo m11 "$SUP_DONE"; rc=$(runclose "$REPO" --name v7)
   && pass "approved+ticked supervised phase (- [x]) no longer blocks → closes" \
   || fail "ticked supervised phase wrongly blocked the close (rc=$rc)"
 
+# --- architecture staleness notice (v2.11.0) ------------------------------------------------------
+# Per-phase review structurally cannot see ten individually-fine phases composing into a
+# pass-through layer. The milestone boundary is the only place that view exists — and until now
+# close-milestone.sh checked open items, findings and roadmap shape, but NEVER architecture.
+# The notice is NON-FATAL, exactly like the Ownership-gaps one: it informs, it never blocks.
+#
+# "This milestone" = since the previous close (the commit that created the newest
+# docs/archive/ROADMAP-*.md), so the notice fires when a WHOLE milestone was built without ever
+# refreshing the map — not on every close, which would be noise nobody reads.
+
+# arch_repo <name>: a closable repo whose previous milestone was already archived.
+arch_repo() {
+  mkrepo "$1" "$DONE"
+  ( cd "$REPO" && mkdir -p docs/archive && printf '# old\n' > docs/archive/ROADMAP-m1.md \
+      && git add -A && git commit -q -m "close previous milestone" )
+}
+commit_code()  { ( cd "$1" && mkdir -p src && printf 'x=%s\n' "$2" > "src/app$2.py" && git add -A && git commit -q -m "code $2" ); }
+commit_arch()  { ( cd "$1" && printf '# Architecture\n\n## Module map\n- %s\n' "$2" > docs/ARCHITECTURE.md && git add -A && git commit -q -m "mapme refresh" ); }
+
+# 12 — a whole milestone of code landed and docs/ARCHITECTURE.md was never refreshed → NOTE, but
+# the close still succeeds (rc 0). This is the gap v2.11.0 exists to close.
+# Built by hand (not arch_repo) so the map is written BEFORE the archive commit that starts this
+# milestone — i.e. the map is a leftover from the PREVIOUS milestone, which is the real scenario.
+mkrepo m12 "$DONE"
+( cd "$REPO" && printf '# Architecture\n\n## Module map\n- old\n' > docs/ARCHITECTURE.md && git add -A && git commit -q -m "arch (previous milestone)" )
+( cd "$REPO" && mkdir -p docs/archive && printf '# old\n' > docs/archive/ROADMAP-m1.md && git add -A && git commit -q -m "close previous milestone" )
+commit_code "$REPO" 1; commit_code "$REPO" 2
+rc=$(runclose "$REPO" --name v1)
+{ [ "$rc" = 0 ] && grep -q "NOTE — docs/ARCHITECTURE.md was not refreshed" "$WORK/out" && grep -q "mapme" "$WORK/out"; } \
+  && pass "stale architecture map across a whole milestone → NOTE (names mapme), close still succeeds" \
+  || fail "stale architecture map was not surfaced at the milestone boundary (rc=$rc)"
+
+# 13 — the map WAS refreshed during this milestone → silent. The notice must not cry wolf, or it
+# becomes the kind of always-on warning people learn to scroll past.
+arch_repo m13
+commit_code "$REPO" 1
+commit_arch "$REPO" "fresh"
+rc=$(runclose "$REPO" --name v1)
+{ [ "$rc" = 0 ] && ! grep -q "NOTE — docs/ARCHITECTURE.md" "$WORK/out"; } \
+  && pass "architecture map refreshed during the milestone → no notice (never cries wolf)" \
+  || fail "notice fired even though ARCHITECTURE.md was refreshed this milestone (rc=$rc)"
+
+# 14 — no architecture map at all, but code shipped → NOTE pointing at mapme.
+arch_repo m14
+commit_code "$REPO" 1
+rc=$(runclose "$REPO" --name v1)
+{ [ "$rc" = 0 ] && grep -q "NOTE — no docs/ARCHITECTURE.md" "$WORK/out" && grep -q "mapme" "$WORK/out"; } \
+  && pass "no architecture map + shipped code → NOTE (names mapme), close still succeeds" \
+  || fail "missing architecture map was not surfaced (rc=$rc)"
+
+# 15 — a docs-only milestone touched no code → nothing to re-map, so no notice.
+arch_repo m15
+( cd "$REPO" && printf 'note\n' >> docs/STATE.md && git add -A && git commit -q -m "docs only" )
+rc=$(runclose "$REPO" --name v1)
+{ [ "$rc" = 0 ] && ! grep -q "NOTE — no docs/ARCHITECTURE.md" "$WORK/out" && ! grep -q "NOTE — docs/ARCHITECTURE.md" "$WORK/out"; } \
+  && pass "docs-only milestone (no code commits) → no architecture notice" \
+  || fail "architecture notice fired on a docs-only milestone (rc=$rc)"
+
+# 16 — the notice NEVER blocks: a repo that would otherwise close cleanly still closes, and the
+# roadmap is really archived, even with the notice printed.
+arch_repo m16
+commit_code "$REPO" 1
+rc=$(runclose "$REPO" --name v9)
+{ [ "$rc" = 0 ] && [ -f "$REPO/docs/archive/ROADMAP-v9.md" ] && [ -f "$REPO/docs/ROADMAP.md" ]; } \
+  && pass "architecture notice is non-fatal — roadmap still archived and a fresh one scaffolded" \
+  || fail "architecture notice blocked the close (rc=$rc)"
+
 echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All milestone closure tests passed."; exit 0
 else echo "$FAILS milestone test(s) FAILED."; echo "--- last output ---"; tail -n 15 "$WORK/out" 2>/dev/null; exit 1; fi

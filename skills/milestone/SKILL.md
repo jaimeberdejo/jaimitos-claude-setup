@@ -91,12 +91,29 @@ Closure is **gated by a script** — you do NOT archive by hand, and there is no
      relaxes no other gate), then re-run the close.
    - **Unresolved evaluator finding** (`NEXT_FINDINGS.md`) — resolve it and finish the open phase.
    - **Plain unfinished work** — finish or remove the open items.
-   If it refuses, resolve the listed items first — do not work around it. It may also print a
-   non-fatal `NOTE — ... Ownership gaps ...` line — that never blocks the close, but read the listed
-   `## Ownership gaps` entries from `docs/STATE.md` aloud to the user before continuing. On
-   success it `git mv`s `docs/ROADMAP.md` → `docs/archive/ROADMAP-<label>.md` (label = `--name`,
+   If it refuses, resolve the listed items first — do not work around it. It may also print
+   non-fatal `NOTE —` lines; these never block the close, but you must act on them:
+   - `... Ownership gaps ...` — read the listed `## Ownership gaps` entries from `docs/STATE.md`
+     aloud to the user before continuing.
+   - `... ARCHITECTURE.md was not refreshed ...` / `... no docs/ARCHITECTURE.md ...` — do step 1b.
+
+   On success it `git mv`s `docs/ROADMAP.md` → `docs/archive/ROADMAP-<label>.md` (label = `--name`,
    else a `VERSION` file, else the latest git tag, else the date), writes a fresh empty
    `docs/ROADMAP.md`, and resets the `docs/STATE.md` auto-block.
+
+1b. **The architecture pass — the one review only this boundary can do.** Per-phase review is
+   diff-bound: the evaluator grades one phase's changes, so ten individually-clean phases can still
+   compose into a pass-through layer and nothing catches it. This is the only point where anyone
+   looks at the whole.
+
+   **Dispatch `mapme` into a subagent** (Task tool) rather than running it inline — it reads the
+   whole codebase, and that belongs in its own context, not in the one you are about to write the
+   next roadmap in. Ask it to refresh `docs/ARCHITECTURE.md` from the code and report its
+   **architectural friction** findings (`Strong` / `Worth exploring` / `Speculative`).
+
+   Then, with the user: carry any **Strong** finding into the next roadmap as a real phase (Mode A
+   above). A Strong finding that nobody schedules is a finding that will be rediscovered, identically,
+   at the next milestone. Do not refactor here — `mapme` reports, it never fixes.
    > **Follow-up (not yet implemented):** closing a *slice* of a milestone (archiving only some
    > phases while leaving others open) is out of scope here — `close-milestone.sh` is all-or-nothing.
    > Track it separately if you need partial closure.

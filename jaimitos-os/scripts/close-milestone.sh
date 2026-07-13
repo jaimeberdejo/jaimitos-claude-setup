@@ -92,6 +92,32 @@ if [ -f "$STATE" ] && grep -qx '## Ownership gaps' "$STATE" 2>/dev/null; then
   [ "${open_gaps:-0}" -gt 0 ] && echo "close-milestone: NOTE — docs/STATE.md has open '## Ownership gaps' entries; carrying them into the next milestone unresolved." >&2
 fi
 
+# Non-fatal notice: architectural drift across the milestone.
+# Per-PHASE review structurally cannot see this. The evaluator grades a phase diff, so ten
+# individually-clean phases can still compose into a pass-through layer, and nobody is looking at
+# the whole. The milestone boundary is the only place that view exists — so surface it here.
+# NEVER blocks the close (same contract as the Ownership-gaps notice above): a stale map is a
+# prompt to run `mapme`, not a reason to trap a finished milestone.
+#
+# "This milestone" = since the previous close (the commit that created the newest
+# docs/archive/ROADMAP-*.md). Scoping it that way means the notice fires when a WHOLE milestone was
+# built without ever refreshing the map — not on every close, which would be noise nobody reads.
+# Fail-open throughout: a shallow clone or an odd history yields no notice, never a false alarm.
+ARCH="docs/ARCHITECTURE.md"
+ms_start=$(git log -1 --format=%H -- docs/archive 2>/dev/null || true)
+RANGE="${ms_start:+$ms_start..}HEAD"
+# Code = anything outside docs/. A docs-only milestone has nothing to re-map.
+code_commits=$(git log --oneline "$RANGE" -- . ':(exclude)docs' 2>/dev/null | wc -l | tr -d ' ')
+if [ "${code_commits:-0}" -gt 0 ]; then
+  if [ ! -f "$ARCH" ]; then
+    echo "close-milestone: NOTE — no $ARCH, but $code_commits code commit(s) landed this milestone. Run the \`mapme\` skill (it also flags architectural friction: shallow modules, pass-through layers, leaky seams)." >&2
+  else
+    arch_touched=$(git log --oneline "$RANGE" -- "$ARCH" 2>/dev/null | wc -l | tr -d ' ')
+    [ "${arch_touched:-0}" -eq 0 ] && \
+      echo "close-milestone: NOTE — $ARCH was not refreshed during this milestone ($code_commits code commit(s) since the last close). Run the \`mapme\` skill; carry any Strong friction findings into the next roadmap." >&2
+  fi
+fi
+
 # Pick the archive label.
 if [ -z "$NAME" ]; then
   if [ -f VERSION ]; then
