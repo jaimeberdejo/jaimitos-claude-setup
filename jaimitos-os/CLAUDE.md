@@ -41,7 +41,7 @@
   to redirect a running loop.
 - **Closing a milestone / bumping VERSION / tagging is its own checkpoint:** state that question
   explicitly and wait for an explicit yes — never inferred from a broader "go ahead"/"continue",
-  even when the roadmap's last phase just ticked. (Loop mechanics: toolkit-docs GUIDE Parts 4–5.)
+  even when the roadmap's last phase just ticked.
 
 ## Ownership (understand what gets built)
 - Before /wrap on a non-trivial phase, run `teach-back` — Claude explains it and

@@ -40,6 +40,15 @@ assert_absent "docs/ROADMAP.md" '`- [x]`' \
               "shipped ROADMAP.md scaffold's legend prose does not use literal '- [x]' bracket syntax"
 
 echo ""
+echo "shipped CLAUDE.md cites nothing the installed project cannot open"
+echo "(CLAUDE.md ships verbatim into every project; install.sh deliberately excludes toolkit-docs/,"
+echo " so a 'see the GUIDE' pointer there is a dead end for every user — found by dogfooding"
+echo " the diagnose skill in v2.10.0)"
+echo ""
+assert_absent "CLAUDE.md" "toolkit-docs" \
+              "shipped CLAUDE.md does not point users at toolkit-docs/ (never installed)"
+
+echo ""
 echo "engineering disciplines (v2.10.0) — the contracts the skills/agents are supposed to carry"
 echo "(prose, so only greppable: these prove the RULE IS STATED, never that it was FOLLOWED —"
 echo " see docs/dev/AUTHORING.md on deterministic vs model-dependent guarantees)"
