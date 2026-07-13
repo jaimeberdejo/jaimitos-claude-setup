@@ -51,7 +51,9 @@ CANDS=$(grep -ohE '`[^` ]+`' "$ROOT/README.md" "$SCAFFOLD/toolkit-docs/GUIDE.md"
   | tr -d '\140' | sort -u \
   | grep -E '^(scripts/|sandbox/|skills/|\.claude/|\.github/|toolkit-docs/|docs/dev/|jaimitos-os/|install\.sh$)' \
   | grep -vE '[<>*{}|]|\.\.\.|/$' \
-  | grep -vE '^\.claude/\.')                       # .claude/.phase-base etc. = runtime state
+  | grep -vE '^\.claude/\.' \
+  | grep -vxF '.claude/test-command')              # runtime state, out of scope: .claude/.phase-base etc. (dotfiles) plus the
+                                                   # non-dotfile graded-command file sync.sh seeds from config (D1) — never in repo/scaffold
 while IFS= read -r p; do
   [ -n "$p" ] || continue
   if [ -e "$ROOT/$p" ] || [ -e "$SCAFFOLD/$p" ]; then continue; fi
