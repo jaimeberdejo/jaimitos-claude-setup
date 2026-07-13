@@ -13,6 +13,37 @@ the area you're touching.
 > isolate* (technique). `unstick` is for when you've made 3+ attempts that keep failing the same
 > way (process — reset the approach). If you're mid-diagnose and going in circles, switch.
 
+Scale the process to the bug. A one-line typo with an obvious stack trace does not need an
+incident review; a wrong-answer-under-load bug does. Skipping phases is fine — saying which, and
+why, is not optional.
+
+## Name what you actually know
+Most bad debugging is a confident sentence that mixes these up. Keep them separate, out loud:
+
+| | |
+|---|---|
+| **Symptom** | What the user sees. Never the thing you fix. |
+| **Root cause** | The thing that, changed, makes the symptom go away *and stay* away. |
+| **Contributing condition** | Real, load-bearing, but not sufficient on its own (a timing window, a config value, a data shape). |
+| **Unverified hypothesis** | A guess with a prediction attached. Say "I think", and say what would disprove it. |
+| **Confirmed evidence** | You ran something and read the output. Nothing else counts. |
+| **Unresolved uncertainty** | What you still don't know. **Report it — do not round it up to a conclusion.** |
+
+**Never present a hypothesis as evidence.** If you did not run it and read the output, it is a
+guess, and it must be labelled as one.
+
+## No speculative fix loops
+- **A fix without new evidence is a guess.** Don't stack guesses: change one thing, re-run the
+  loop, read the result.
+- **A speculative change that didn't work gets reverted** before the next attempt. Otherwise you
+  are debugging a codebase nobody has ever run.
+- **Three failed fixes = stop fixing.** You are no longer wrong about a detail, you are probably
+  wrong about the shape of the problem. Re-read Phase 1, or question the architecture (each fix
+  revealing new coupling *somewhere else* is the tell), and say so to the user. Do not attempt
+  fix #4 on the same theory.
+- **A regression?** Find the first bad commit — `git log` the area, `git bisect run` your Phase 1
+  loop. A bisect that names the commit beats three hours of hypotheses.
+
 ## Phase 1 — Build a feedback loop
 **This is the skill.** If you have a **tight** pass/fail signal that goes red on *this* bug, you
 will find the cause; bisection, hypotheses, and instrumentation all just consume it. Spend

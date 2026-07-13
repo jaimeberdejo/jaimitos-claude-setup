@@ -41,13 +41,49 @@ seams are **pre-agreed, not improvised mid-loop**:
   test → one implementation → repeat, each test a tracer bullet.
 
 ## Rules of the loop
-- **Red before green.** Failing test first, then only enough code to pass it. Run the test and
-  see it fail — a test that never went red proves nothing.
+- **Red before green.** Failing test first, then only enough code to pass it.
+- **The red must be meaningful.** Run the test, watch it fail, and confirm it failed *for the
+  reason you intended* — because the behavior is missing. A failure from a typo, a bad import, or
+  a broken fixture is not red, it's broken: fix it and re-run until it fails correctly. A test
+  that passes on its first run is testing behavior that already existed — the seam is wrong.
 - **One slice at a time.** One seam, one test, one minimal implementation per cycle. Commit each
   green slice (small, single-purpose commits).
+- **Green means green, and quiet.** The targeted test passes *and* the output is clean. New errors
+  or warnings are a finding, not noise.
+- **Then run the wider suite.** A targeted green proves the slice; only the relevant wider suite
+  proves you broke nothing else. The slice isn't done until both are green.
+- **Protect existing behavior.** When you change something that already works, its regression test
+  comes first — that red is what proves the old behavior was real.
 - **Stuck at red after 3 attempts?** Stop and report the blocker — never skip ahead or weaken the
   test to get past it.
 - **Refactoring is not part of the loop.** It's a separate, deliberate pass after green — with
   the tests as the safety net.
+
+## When production code has to come first
+Sometimes it genuinely does: a `prototype` whose behavior can't be named until it runs, generated
+code, a config change with no seam. That's allowed — **but the exception is explicit, never
+silent.** Record which code preceded its test, why no red was reachable first, and which test
+covers it now. An unrecorded exception isn't an exception; it's just skipped TDD.
+
+**Never claim TDD was followed if no meaningful red was ever observed.** "The tests pass" is not
+evidence of TDD: a test written after the code passes on its first run and proves nothing about
+whether it can fail.
+
+## Evidence
+When a phase asks you to show the loop was real, this is the shape. Keep it in the artifacts the
+phase already has (the plan file, the commit message) — a two-line change does not need its own
+evidence file.
+
+```md
+### TDD evidence
+- Behavioral seam:
+- Red command:
+- Observed failure:
+- Why the failure was expected:
+- Minimal implementation:
+- Green command:
+- Wider verification:
+- Exception, if any:
+```
 
 <!-- Adapted from mattpocock/skills (MIT) — https://github.com/mattpocock/skills -->
