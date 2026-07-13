@@ -14,9 +14,14 @@ There are three distinct things in this repo. Edits go to different places:
 - **The `jaimitos-os/` scaffold** — the files that *do* get installed into a user's repo:
   `CLAUDE.md`, `SCAFFOLD.md`, `docs/`, `scripts/`, `.claude/` (hooks, commands, the
   `evaluator` agent, `rules/high-stakes.md`), and the opt-in `.github/workflows/jaimitos-os-ci.yml`.
-- **`skills/`** — the 15 portable skills, each its own dir. `install.sh` copies them into a
-  target's `.claude/skills/` (all except `setup-jaimitos-os`, which is global-only). Seven are
-  adaptations of mattpocock/skills (MIT) — see `skills/README.md` § Adapted skills.
+- **`skills/`** — the portable skills, each its own dir. `install.sh` copies them into a
+  target's `.claude/skills/` (all except `setup-jaimitos-os`, which is global-only). Several are
+  adaptations of mattpocock/skills and obra/superpowers (both MIT) — see `skills/README.md`
+  § Adapted skills, and `integrations/upstreams.lock.json` for the pinned provenance.
+  The authoritative catalog and count live in `skills/README.md` — don't restate them here.
+- **`.claude/skills/`** (repo root) — **maintainer-only** tooling (`skill-creator`,
+  `agent-creator`). `install.sh` reads only `jaimitos-os/` and `skills/`, so nothing here can ever
+  reach a user project. See `docs/dev/AUTHORING.md` before adding a skill or an agent.
 
 ## The "ship by directory" boundary — don't break it
 
@@ -30,22 +35,38 @@ So:
 - The install **smoke test** (`.github/scripts/install-smoke.sh`) asserts no tool-doc
   pollution, no README clobber, idempotency, and `.gitignore` merge — keep it green.
 
-## Adding a skill
+## Adding a skill or an agent
 
-A skill is a directory under `skills/<name>/` with a `SKILL.md`; support files (extra `.md`s, a
-`scripts/` subdir) are optional. To add one:
+**Read [`docs/dev/AUTHORING.md`](docs/dev/AUTHORING.md) first** — it is the authoritative guide
+(when to use a skill vs an agent vs a command vs a script; invocation and context cost; authority;
+output contracts; removal; and exactly which guarantees are deterministic vs model-dependent).
+The `skill-creator` and `agent-creator` maintainer skills in the repo-root `.claude/skills/`
+apply it, and will tell you when the answer is "don't".
 
-1. **Frontmatter** exactly like the existing skills: `name:`, and a `description:` whose text
-   contains the trigger phrases (that's what auto-invocation matches on). Report-only skills add
-   `disallowed-tools: Edit, Write, NotebookEdit` (see `scope-guard` for the pattern,
-   including `allowed-tools` for a read-only git surface). Keep SKILL.md ~30–80 lines.
-2. **Register it everywhere the manifest lives** (all three, or CI catches you):
-   `skills/README.md`'s table + count line, `REQUIRED_SKILLS` in `jaimitos-os/scripts/doctor.sh`,
-   and the shipped-skill loop in `.github/scripts/install-smoke.sh`.
-3. If it's adapted from someone else's work, add the one-line attribution comment at the bottom
-   of SKILL.md and extend the "Adapted skills" notice in `skills/README.md`.
+The short version. A skill is a directory under `skills/<name>/` with a `SKILL.md`; support files
+(extra `.md`s, a `scripts/` subdir) are optional.
+
+1. **Frontmatter** like the existing skills: `name:` (must equal the directory), and a
+   `description:` carrying the trigger phrases. A skill that should never auto-fire sets
+   `disable-model-invocation: true` — it then costs **zero** always-loaded context (`prototype`,
+   `review-feedback`). Report-only skills add `disallowed-tools: Edit, Write, NotebookEdit` (see
+   `scope-guard`). Keep SKILL.md ~30–80 lines.
+2. **Register it in one place:** the catalog table in `skills/README.md`. That is the authoritative
+   catalog and **the only file where a skill count lives**. `doctor.sh` derives its expected set
+   from the install manifest and `install-smoke.sh` derives its set from `skills/` — neither needs
+   editing, and no other doc should restate a count. (`test-skills.sh` enforces catalog ⇔ directory;
+   `test-docs.sh` fails any stale count you reintroduce.)
+3. If it's adapted from someone else's work, add the one-line attribution comment at the bottom of
+   SKILL.md, extend the "Adapted skills" notice in `skills/README.md`, and record the pinned SHA and
+   your deviations in `integrations/upstreams.lock.json`.
 4. Artifacts go under `docs/` (SPEC/ROADMAP/STATE/decisions/GLOSSARY) — never introduce a second
-   work queue or an external-tracker dependency.
+   work queue or an external-tracker dependency. No skill may tick a phase.
+5. Run `bash jaimitos-os/scripts/test-skills.sh` and `bash jaimitos-os/scripts/run-guard-tests.sh`.
+
+**Agents** (`jaimitos-os/.claude/agents/`) are a control-plane change and need human review. They use
+**camelCase** frontmatter (`tools`, `disallowedTools`, `permissionMode`) — the hyphenated skill fields
+are silently ignored there — and every agent definition must be added to `GATE_CONTROL_FILES` in
+`autopilot.sh`. `test-agents.sh` enforces both. Default to not adding one.
 
 ## How synced files change (the manifest contract)
 

@@ -24,6 +24,11 @@ Follow the `tdd` skill (.claude/skills/tdd/) as YOUR TDD manual — its loop rul
 discipline (seams already fixed in docs/SPEC.md or the plan file are used without re-asking), and
 its anti-patterns, which are exactly what the evaluator grades against.
 
+When the plan leaves a shape decision to you (where an interface goes, what a helper hides), use
+the `module-design` skill (.claude/skills/module-design/) as the vocabulary — depth, seam,
+leverage, locality, the deletion test. The evaluator grades your module boundaries in exactly
+those terms. It is a reference, not a licence to redesign: the plan already made the calls.
+
 ## Constraints (same as /phase's existing rules — you are not exempt from them)
 - Touch src/, tests/, and docs/ freely. You MAY touch project config/manifests when the task
   genuinely needs it — call it out explicitly. Never touch unrelated files.
@@ -41,6 +46,26 @@ its anti-patterns, which are exactly what the evaluator grades against.
   independent evaluator PASS.
 - Do not invoke the evaluator yourself — that is the orchestrating session's job.
 
+## Verify before you claim anything
+A claim you have not verified **in this message** is not a report, it's a guess. Before you say a
+task is done, fixed, or passing:
+
+1. Name the exact command that would prove it.
+2. Run it — fully, freshly, **after your last edit**. A green run from before your final change
+   proves nothing about the code that exists now.
+3. Read the output and the exit code. Don't skim it.
+4. State the claim *with* the evidence, or state the actual status.
+
+- **Ban "should work", "probably fixed", "looks right".** Either you ran it or you didn't.
+- **Disclose warnings.** New warnings or noisy output are a finding, not background.
+- **Disclose what you skipped** and why — a check you didn't run is not a check that passed.
+- **Disclose unverified assumptions.** Say "I could not verify X" rather than quietly assuming it.
+- **A unit test is not an integration check.** If the phase's "Done when:" asks for an end-to-end
+  or integration result, a passing unit suite does not substitute for it.
+- **If the required evidence can't be produced, you have not succeeded** — report the blocker.
+  Never dress an unverified result up as a passing one.
+
 ## Output
-End with: which tasks you completed, which (if any) you could not finish and why, and the
-current HEAD commit so the orchestrating session can hand off to the evaluator.
+End with: which tasks you completed, which (if any) you could not finish and why, the exact
+verification commands you ran with their results (including warnings and anything skipped), and
+the current HEAD commit so the orchestrating session can hand off to the evaluator.

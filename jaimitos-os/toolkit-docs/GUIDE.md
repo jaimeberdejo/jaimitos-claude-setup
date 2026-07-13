@@ -84,8 +84,9 @@ your-repo/
     │   ├── _secret-scan.sh        # SHARED: filename+content secret scan (commit-on-stop + tick + autopilot)
     │   ├── _high-stakes.sh        # SHARED: high-stakes path list + content matcher (the supervised gate)
     │   └── _test-cmd.sh           # SHARED: resolves the project test command (test-gate + test-evidence)
-    └── skills/                    # 15 per-project skills (see skills/README.md; NOT copied here:
-                                    #   setup-jaimitos-os is the global-only installer meta-skill)
+    └── skills/                    # the per-project skill pack (catalog + count: skills/README.md;
+                                    #   NOT copied here: setup-jaimitos-os is the global-only
+                                    #   installer meta-skill)
         ├── grill/ · to-spec/ · roadmap/ · milestone/ · adr/ · glossary/   # think → spec → plan
         ├── design-twice/ · tdd/ · diagnose/ · merge-conflicts/            # engineering
         ├── scope-guard/ · unstick/                                        # review + debugging (scope-guard is report-only)
@@ -1127,7 +1128,7 @@ systems will fight over the same files and the same "done." Use superpowers for 
 doesn't cover (brainstorming, debugging, review, verification discipline) and let `/phase` own the build.
 
 ### Don't forget the built-in layer
-Before reaching outside, the bundled skills (15 per-project — see `skills/README.md`) already
+Before reaching outside, the bundled skills (see `skills/README.md`) already
 cover most of the loop: `grill`/`to-spec`/`roadmap`/`milestone` (think → spec → plan),
 `design-twice`/`tdd`/`diagnose`/`merge-conflicts` (engineering), `adr`/`glossary`/`mapme`
 (knowledge), `scope-guard` (review — the native `/code-review` and `/security-review` cover the

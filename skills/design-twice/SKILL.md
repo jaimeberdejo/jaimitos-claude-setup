@@ -9,6 +9,9 @@ Your first idea is unlikely to be the best one. For any non-trivial design — a
 public interface, a phase with more than ~3 tasks — sketch **two genuinely different** designs
 before writing the plan or the code.
 
+Compare them in the `module-design` vocabulary — depth, seam, leverage, locality, the deletion
+test. This skill picks a design and records it; `module-design` is the language it picks in.
+
 ## Steps
 1. **Frame the problem**: the constraints any design must satisfy, the dependencies it rests on,
    and one rough illustrative sketch to make the constraints concrete (not a proposal).

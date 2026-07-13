@@ -3,10 +3,21 @@
 > Part of **[jaimitos-claude-setup](../README.md)** — see the repo-root README for the full
 > picture and how these pair with the jaimitos-os scaffold.
 
-This is the **complete index of all 16 skills** — 8 workflow + 4 engineering + 3 ownership +
-the installer meta-skill; 15 install per-project (everything except the installer). (The three
-ownership skills have a deeper writeup in the [Ownership](#ownership) section below; the seven
-skills marked ◆ are adapted from mattpocock/skills — see [Adapted skills](#adapted-skills).)
+This is the **complete index of all 19 skills** — 8 workflow + 6 engineering + 1 review +
+3 ownership + the installer meta-skill; 18 install per-project (everything except the installer).
+**This file is the authoritative catalog: the skill count lives here and nowhere else** — the other
+docs link to it rather than restate a number that would go stale. (The three ownership skills have
+a deeper writeup in the [Ownership](#ownership) section below; skills marked ◆ are adapted from
+mattpocock/skills and ◇ from obra/superpowers — see [Adapted skills](#adapted-skills).)
+
+Two skills are **user-invoked** (`prototype`, `review-feedback`): they set
+`disable-model-invocation: true`, so they never auto-fire and cost **zero** always-loaded context —
+you invoke them by name. Everything else is model-invoked and pays for its `description:` in the
+context window on every turn.
+
+> Maintainer-only tooling (`skill-creator`, `agent-creator`) lives in the toolkit repo's own
+> `.claude/skills/` and is **not** part of this catalog — `install.sh` reads only `jaimitos-os/`
+> and `skills/`, so it can never reach a user project. See `docs/dev/AUTHORING.md`.
 
 These are small (a file or two each), no external dependencies. They encode workflows the base
 model doesn't reliably do unprompted. They're largely portable and stack-agnostic — they read
@@ -28,6 +39,9 @@ scaffold-aware, not fully stack-neutral.
 | **tdd** ◆ | engineering | build test-first | The red→green loop plus what makes tests worth keeping: pre-agreed seams (from SPEC/plan), anti-patterns (the same list the evaluator grades against), mocking rules. The executor's TDD manual |
 | **diagnose** ◆ | engineering | hit a hard bug / regression | Diagnosis discipline: build a tight red-capable feedback loop BEFORE hypothesizing (10 ordered ways), minimise, ranked falsifiable hypotheses, instrument, fix + regression test (3+ circular attempts instead? → `unstick`) |
 | **merge-conflicts** ◆ | engineering | a merge/rebase stops on conflicts | Resolves from both sides' intent (never inventing behavior), runs the project checks, finishes the merge; covers the worktree phase-branch integration case |
+| **module-design** ◆ | engineering | shape an interface / place a seam | The deep-module vocabulary — depth, seam, leverage, locality, the deletion test — that `design-twice`, the planner, the executor and the evaluator all judge in. A reference: it decides nothing and owns no artifact |
+| **prototype** ◆ | engineering | need to answer one design question | *User-invoked.* Throwaway code that answers ONE stated question, isolated from production paths. May inform a scoped research phase, but **never** satisfies production or release criteria; can't tick |
+| **review-feedback** ◇ | review | got review comments / a NEEDS_WORK | *User-invoked.* Classifies each comment (actionable · out of scope · misunderstanding · already addressed · conflicting · unsafe · harmful), verifies it against the code, implements what's right and pushes back with reasons on what isn't |
 | **teach-back** | ownership | finish a non-trivial phase | Claude explains what it built and quizzes you; gaps go to docs/STATE.md "Ownership gaps" |
 | **mapme** | ownership | made big structural changes | Refreshes docs/ARCHITECTURE.md from the actual code |
 | **quizme** | ownership | want to test understanding | Cold-opens a quiz on the codebase to measure how well you know it |
@@ -50,18 +64,28 @@ scaffold-aware, not fully stack-neutral.
 - **Small.** One file each — low context cost, easy to read and adapt. Edit them; they're yours.
 
 ## Adapted skills
-The seven skills marked ◆ (grill, to-spec, glossary, design-twice, tdd, diagnose,
-merge-conflicts) are adaptations of skills from
+The skills marked ◆ (grill, to-spec, glossary, design-twice, tdd, diagnose, merge-conflicts,
+module-design, prototype) are adaptations of skills from
 [mattpocock/skills](https://github.com/mattpocock/skills), © Matt Pocock, MIT license — thank
 you. They are rewritten, not copied: Matt's originals are tracker-centric (GitHub Issues,
 `CONTEXT.md`, a work-queue subsystem of their own); these versions are docs-centric (`docs/SPEC.md`,
 `docs/ROADMAP.md`, `docs/decisions/` with the 4-line ADR format, `docs/GLOSSARY.md`) and wire
 into this scaffold's pipeline (executor↔tdd, planner↔design-twice, roadmap↔grill,
-worktree-integration↔merge-conflicts). Each adapted SKILL.md carries a one-line attribution
-comment; this paragraph is the full notice.
+worktree-integration↔merge-conflicts, evaluator↔module-design).
+
+The skill marked ◇ (review-feedback) is adapted from
+[obra/superpowers](https://github.com/obra/superpowers), © Jesse Vincent, MIT license — thank you.
+`tdd` and `diagnose` also absorbed material from superpowers' `test-driven-development` and
+`systematic-debugging` in v2.10.0.
+
+Each adapted SKILL.md carries a one-line attribution comment. The pinned upstream commits, the
+exact files consulted, and every deliberate deviation are recorded in
+[`integrations/upstreams.lock.json`](../integrations/upstreams.lock.json) — including the upstream
+workflows we deliberately **rejected** (competing planners, executors, orchestrators and completion
+gates) and why.
 
 ## Install
-**Easiest — the repo installer** copies all 15 portable skills per-project (and
+**Easiest — the repo installer** copies every portable skill in the table above per-project (and
 `setup-jaimitos-os` only with `--global-skills`):
 ```bash
 bash /path/to/jaimitos-claude-setup/install.sh .                 # per-project skills

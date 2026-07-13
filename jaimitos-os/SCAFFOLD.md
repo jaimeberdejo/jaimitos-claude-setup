@@ -17,9 +17,10 @@ project (so it doesn't pollute it); read it on GitHub:
   guard libs (`_secret-scan.sh`, `_high-stakes.sh`, `_test-cmd.sh`), and
   `.claude/.jaimitos-manifest` (the sha256 baseline `scripts/sync.sh` uses to update the
   scaffold without clobbering your customizations).
-- **.claude/skills/** — 15 skills: think→spec→plan (grill, to-spec, roadmap, milestone, adr,
-  glossary), engineering (design-twice, tdd, diagnose, merge-conflicts), review (scope-guard,
-  unstick), ownership (teach-back, mapme, quizme). Catalog:
+- **.claude/skills/** — the bundled skill pack: think→spec→plan (grill, to-spec, roadmap,
+  milestone, adr, glossary), engineering (design-twice, module-design, tdd, diagnose, prototype,
+  merge-conflicts), review (scope-guard, review-feedback, unstick), ownership (teach-back, mapme,
+  quizme). The authoritative catalog — and the only place a count lives — is
   `skills/README.md` in the toolkit repo.
 - **docs/** — SPEC/ROADMAP/STATE/ARCHITECTURE templates + `decisions/` for ADRs.
 - **scripts/** — `autopilot.sh` (guarded autonomous loop), `tick.sh` (the completion gate),

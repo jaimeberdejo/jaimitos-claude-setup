@@ -32,14 +32,35 @@ TOTAL=$(find "$ROOT/skills" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')
 PORTABLE=$((TOTAL - 1))   # setup-jaimitos-os is global-only, never per-project
 
 # 1 — declared "<N> skills" counts. Every such mention must be the total or the portable count.
+# skills/README.md is the authoritative catalog and README.md may restate the count; the other three
+# docs deliberately carry NO count (v2.10.0 removed them — a count in five places is four places to
+# forget). They are still scanned, so re-introducing one is a hard fail unless it happens to be right.
+# Counts are written as digits OR as English number words — and the word form is the one that
+# actually rotted ("Sixteen skills" sat in README.md through three releases because a digits-only
+# regex never looked at it). Recognize both.
+skill_count_of() {   # echo the numeric value of a count token; empty if it isn't one we know
+  case "$(printf '%s' "$1" | tr 'A-Z' 'a-z')" in
+    [0-9]*)     printf '%s' "$1" ;;
+    ten)        echo 10 ;; eleven)   echo 11 ;; twelve)    echo 12 ;; thirteen) echo 13 ;;
+    fourteen)   echo 14 ;; fifteen)  echo 15 ;; sixteen)   echo 16 ;; seventeen) echo 17 ;;
+    eighteen)   echo 18 ;; nineteen) echo 19 ;; twenty)    echo 20 ;; twenty-one) echo 21 ;;
+    *)          printf '' ;;
+  esac
+}
 BAD_COUNTS=""
-for doc in "$ROOT/README.md" "$ROOT/skills/README.md"; do
-  while IFS= read -r n; do
-    [ "$n" = "$TOTAL" ] || [ "$n" = "$PORTABLE" ] || BAD_COUNTS="$BAD_COUNTS ${doc##*/}:$n"
-  done < <(grep -oE '[0-9]+ (portable )?skills' "$doc" 2>/dev/null | grep -oE '^[0-9]+')
+for doc in "$ROOT/README.md" "$ROOT/skills/README.md" \
+           "$ROOT/CONTRIBUTING.md" "$SCAFFOLD/toolkit-docs/GUIDE.md" "$SCAFFOLD/SCAFFOLD.md"; do
+  [ -f "$doc" ] || continue
+  while IFS= read -r tok; do
+    [ -n "$tok" ] || continue
+    n="$(skill_count_of "$tok")"
+    [ -n "$n" ] || continue                    # not a count token we recognize — nothing to check
+    [ "$n" = "$TOTAL" ] || [ "$n" = "$PORTABLE" ] || BAD_COUNTS="$BAD_COUNTS ${doc##*/}:'$tok'"
+  done < <(grep -oiE '([0-9]+|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|twenty-one) (portable |per-project )?skills' "$doc" 2>/dev/null \
+             | awk '{print $1}')
 done
 if [ -z "$BAD_COUNTS" ]; then
-  pass "all '<N> skills' mentions in README.md + skills/README.md equal $TOTAL (total) or $PORTABLE (per-project)"
+  pass "every '<N> skills' mention (README, skills/README, CONTRIBUTING, GUIDE, SCAFFOLD) equals $TOTAL (total) or $PORTABLE (per-project)"
 else
   fail "stale skill counts (real: $TOTAL total / $PORTABLE per-project):$BAD_COUNTS"
 fi

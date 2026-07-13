@@ -8,6 +8,8 @@
 
 ## Working agreement
 - TDD always: a failing test before implementation. No exceptions on logic code.
+- Sole exception — `prototype`: throwaway, isolated from production/runtime paths, never
+  accepted as production implementation evidence.
 - One feature/phase per session. Small, single-purpose commits.
 - At session start, read docs/SPEC.md, docs/ROADMAP.md, docs/STATE.md.
 - Real decisions get a 4-line ADR in docs/decisions/.

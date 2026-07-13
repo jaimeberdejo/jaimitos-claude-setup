@@ -39,7 +39,7 @@ Then it branches on whether there's an existing stack to detect:
 New to it all? Work through `PRACTICE-PROJECT.md` first.
 
 > **Two parts, how they relate:** the **`jaimitos-os/` scaffold** (hooks, commands, docs layout,
-> autopilot) and the **`skills/` pack** (16 skills; 15 are copied per-project — see
+> autopilot) and the **`skills/` pack** (all copied per-project except the installer — see
 > [`skills/README.md`](skills/README.md) for the authoritative count and catalog). Skills work
 > standalone, but several (`roadmap`, `scope-guard`, `adr`, …) assume the scaffold's `docs/`
 > layout — install both for the full experience.
@@ -66,7 +66,7 @@ jaimitos-claude-setup/
 │       ├── agents/                  # researcher, planner, executor, evaluator — one per /phase stage
 │       ├── rules/high-stakes.md     # path-scoped extra care
 │       └── hooks/                   # 7 deterministic shell hooks + 5 shared libs (_secret-scan, _high-stakes, _test-cmd, _eval-isolation, _roadmap)
-└── skills/                ← 16 skills (15 portable + setup-jaimitos-os installer) — see skills/README.md
+└── skills/                ← the skill pack (portable + setup-jaimitos-os installer) — see skills/README.md
 ```
 
 > The repo-root `README.md` documents the **toolkit**, so `install.sh` never copies it into your
@@ -201,9 +201,11 @@ libraries, not hooks.
 
 ## Skills (`skills/`)
 
-Sixteen skills — ◆ marks the seven adapted from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT):
+◆ marks the skills adapted from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT),
+◇ those from [obra/superpowers](https://github.com/obra/superpowers) (MIT). Pinned provenance:
+[`integrations/upstreams.lock.json`](integrations/upstreams.lock.json).
 
-**Workflow (8)**
+**Workflow**
 - **grill** ◆ — relentless one-question-per-turn stress-test of a plan, each question with a recommendation
 - **to-spec** ◆ — synthesize the design conversation into docs/SPEC.md (seams confirmed, measurable criterion required)
 - **roadmap** — SPEC → phased docs/ROADMAP.md with measurable "Done when:" lines
@@ -213,15 +215,20 @@ Sixteen skills — ◆ marks the seven adapted from [mattpocock/skills](https://
 - **scope-guard** — flags out-of-scope edits, drive-by refactors, and a stale paper trail (report-only)
 - **unstick** — breaks a circular-debugging loop by naming the shared failing assumption
 
-**Engineering (4)**
+**Engineering**
 - **design-twice** ◆ — two genuinely different designs before non-trivial code, ADR records the loser
-- **tdd** ◆ — the red→green loop with pre-agreed seams and the evaluator's own anti-pattern list
-- **diagnose** ◆ — hard-bug discipline: a tight red-capable feedback loop before any hypothesis
+- **module-design** ◆ — the deep-module vocabulary (depth, seam, leverage, locality, the deletion test) that design-twice, the planner, the executor and the evaluator all judge in
+- **tdd** ◆ — the red→green loop, with an observed *meaningful* red and an explicit exception when code must precede the test
+- **diagnose** ◆ — hard-bug discipline: a tight red-capable feedback loop before any hypothesis; no speculative fix loops
+- **prototype** ◆ — *user-invoked.* Throwaway code answering ONE stated question; never counts as production evidence
 - **merge-conflicts** ◆ — resolve from both sides' intent; runs the project checks, finishes the merge
 
-**Ownership (3):** **teach-back** (explain + quiz after a phase) · **mapme** (regenerate
-docs/ARCHITECTURE.md) · **quizme** (cold-open understanding check) — plus the
-**setup-jaimitos-os** installer meta-skill (global-only).
+**Review**
+- **review-feedback** ◇ — *user-invoked.* Classify each review comment, verify it against the code, implement what's right, push back with reasons on what isn't
+
+**Ownership:** **teach-back** (explain + quiz after a phase) · **mapme** (regenerate
+docs/ARCHITECTURE.md, and flag architectural friction) · **quizme** (cold-open understanding
+check) — plus the **setup-jaimitos-os** installer meta-skill (global-only).
 
 A clean pre-commit chain is **`scope-guard` → `/code-review` → `/security-review`** (or `/verify`).
 Claude Code's native commands **supersede** the retired `explain-diff` (≈ `/code-review`) and

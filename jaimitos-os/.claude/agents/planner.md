@@ -25,6 +25,8 @@ whatever context you need must be in your prompt).
 3. **Non-trivial phase? Design it twice first.** If the phase implies more than ~3 tasks or
    creates a new module/interface, apply the `design-twice` skill (.claude/skills/design-twice/)
    before writing the plan: sketch two genuinely different designs, compare trade-offs, choose.
+   Compare them in the `module-design` vocabulary (.claude/skills/module-design/) — depth, seam,
+   leverage, locality, the deletion test — and choose the test seams in those terms.
    Trivial/mechanical phases skip this — ceremony matches stakes.
 4. Derive the plan filename as a short kebab-case slug of the phase's subject, dropping the
    leading "Phase N —" (e.g. `## Phase 3 — Rate limiting` → `docs/plans/rate-limiting.md`).
