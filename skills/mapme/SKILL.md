@@ -45,9 +45,7 @@ Reading the whole system is the only time you see its seams at once — so note 
 - **Domain-language mismatch** — the code's nouns disagree with `docs/GLOSSARY.md`.
 - **Doc drift** — the previous ARCHITECTURE.md claims something the code no longer does.
 
-**Deletion test** for anything you suspect is shallow: if you deleted it, would the complexity it
-holds *concentrate* somewhere (it earns its keep) or just *move* one level up (it's a
-pass-through)? Only "concentrates" defends a module.
+Apply the **deletion test** (defined once, in `module-design`) to anything you suspect is shallow.
 
 Classify each finding **Strong** · **Worth exploring** · **Speculative** and report them to the
 user with the map. Keep the doc to one page — at most, the Strong ones inform "Where the risk

@@ -1,6 +1,7 @@
 ---
 name: module-design
-description: Vocabulary + principles for deep modules — depth, seam, leverage, locality, the deletion test. Use when shaping a module's interface, placing a seam, or judging whether an abstraction earns its keep — "is this abstraction worth it", "where does the seam go". A reference; it decides nothing.
+description: The deep-module vocabulary — depth, seam, leverage, locality, the deletion test. The shared language design-twice, the planner, the executor, the evaluator and mapme all judge in.
+disable-model-invocation: true
 ---
 
 # Module design
@@ -8,6 +9,12 @@ description: Vocabulary + principles for deep modules — depth, seam, leverage,
 Shared language for designing **deep modules**: a lot of behavior behind a small interface, placed
 at a clean seam, tested through that interface. This is a **reference, not a workflow** — it runs
 no process, writes no artifact, and never ticks a phase. Use the words; apply the principles.
+
+> **User-invoked on purpose (0 B always-loaded).** Every consumer — `design-twice`, `mapme`, the
+> planner, the executor, the evaluator — reaches this file by explicit path, so none of them needs
+> it to auto-fire. Paying for a description in the context window on every turn, forever, would buy
+> nothing. Invoke it by name when you want the vocabulary directly.
+> (v2.10.0 shipped it model-invoked; the independent review that v2.11.0 owed overturned that.)
 
 **Project vocabulary wins.** If `docs/GLOSSARY.md` names a thing, use the project's word — never
 let imported terminology override it.
@@ -41,7 +48,10 @@ language is the whole point.
   composed of small, swappable parts — they just aren't part of the interface. Internal seams
   (private, used by its own tests) are fine; don't expose them through the interface.
 - **The deletion test.** Imagine deleting the module. If complexity vanishes, it was a pass-through.
-  If complexity reappears across N callers, it was earning its keep.
+  If complexity reappears across N callers, it was earning its keep. *(This is the canonical
+  definition. `mapme` points here rather than restating it. The `evaluator` is the one documented
+  exception: it restates the test inline because a grading contract must stand on its own — it is
+  byte-checked as a gate-control file and cannot depend on reading a skill it might not open.)*
 - **The interface is the test surface.** Callers and tests cross the same seam. If you need to test
   *past* the interface, the module is the wrong shape.
 - **One adapter is a hypothetical seam; two is a real one.** Don't introduce a seam unless something

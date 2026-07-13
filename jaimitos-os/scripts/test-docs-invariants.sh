@@ -115,6 +115,18 @@ assert_has "../skills/glossary/SKILL.md" "docs/GLOSSARY.md" \
            "glossary remains the sole docs/GLOSSARY.md authority"
 assert_has "../skills/module-design/SKILL.md" "never ticks a phase" \
            "module-design explicitly disclaims completion authority"
+assert_has "../skills/module-design/SKILL.md" "disable-model-invocation: true" \
+           "module-design is user-invoked (every consumer reaches it by path; 0 B always-loaded)"
+
+# The milestone boundary is the only place anyone sees the whole system at once (v2.11.0).
+assert_has "scripts/close-milestone.sh" 'NOTE — $ARCH was not refreshed during this milestone' \
+           "close-milestone surfaces an architecture map left stale across a whole milestone"
+assert_has "scripts/close-milestone.sh" 'NOTE — no $ARCH, but' \
+           "close-milestone surfaces a missing architecture map when code shipped"
+assert_has "../skills/milestone/SKILL.md" "Dispatch \`mapme\` into a subagent" \
+           "milestone Mode B runs the architecture pass in its own context before archiving"
+assert_has "../skills/milestone/SKILL.md" "carry any **Strong** finding into the next roadmap" \
+           "milestone Mode B schedules Strong architecture findings instead of rediscovering them"
 
 echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All docs-invariant checks passed."; exit 0

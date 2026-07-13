@@ -10,7 +10,7 @@ docs link to it rather than restate a number that would go stale. (The three own
 a deeper writeup in the [Ownership](#ownership) section below; skills marked ◆ are adapted from
 mattpocock/skills and ◇ from obra/superpowers — see [Adapted skills](#adapted-skills).)
 
-Two skills are **user-invoked** (`prototype`, `review-feedback`): they set
+Three skills are **user-invoked** (`module-design`, `prototype`, `review-feedback`): they set
 `disable-model-invocation: true`, so they never auto-fire and cost **zero** always-loaded context —
 you invoke them by name. Everything else is model-invoked and pays for its `description:` in the
 context window on every turn.
@@ -39,7 +39,7 @@ scaffold-aware, not fully stack-neutral.
 | **tdd** ◆ | engineering | build test-first | The red→green loop plus what makes tests worth keeping: pre-agreed seams (from SPEC/plan), anti-patterns (the same list the evaluator grades against), mocking rules. The executor's TDD manual |
 | **diagnose** ◆ | engineering | hit a hard bug / regression | Diagnosis discipline: build a tight red-capable feedback loop BEFORE hypothesizing (10 ordered ways), minimise, ranked falsifiable hypotheses, instrument, fix + regression test (3+ circular attempts instead? → `unstick`) |
 | **merge-conflicts** ◆ | engineering | a merge/rebase stops on conflicts | Resolves from both sides' intent (never inventing behavior), runs the project checks, finishes the merge; covers the worktree phase-branch integration case |
-| **module-design** ◆ | engineering | shape an interface / place a seam | The deep-module vocabulary — depth, seam, leverage, locality, the deletion test — that `design-twice`, the planner, the executor and the evaluator all judge in. A reference: it decides nothing and owns no artifact |
+| **module-design** ◆ | engineering | shape an interface / place a seam | *User-invoked.* The deep-module vocabulary — depth, seam, leverage, locality, the deletion test — that `design-twice`, `mapme`, the planner, the executor and the evaluator all judge in. A reference: it decides nothing and owns no artifact. Every consumer reaches it by path, so it costs **0 B** always-loaded |
 | **prototype** ◆ | engineering | need to answer one design question | *User-invoked.* Throwaway code that answers ONE stated question, isolated from production paths. May inform a scoped research phase, but **never** satisfies production or release criteria; can't tick |
 | **review-feedback** ◇ | review | got review comments / a NEEDS_WORK | *User-invoked.* Classifies each comment (actionable · out of scope · misunderstanding · already addressed · conflicting · unsafe · harmful), verifies it against the code, implements what's right and pushes back with reasons on what isn't |
 | **teach-back** | ownership | finish a non-trivial phase | Claude explains what it built and quizzes you; gaps go to docs/STATE.md "Ownership gaps" |

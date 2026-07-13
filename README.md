@@ -217,7 +217,7 @@ libraries, not hooks.
 
 **Engineering**
 - **design-twice** ◆ — two genuinely different designs before non-trivial code, ADR records the loser
-- **module-design** ◆ — the deep-module vocabulary (depth, seam, leverage, locality, the deletion test) that design-twice, the planner, the executor and the evaluator all judge in
+- **module-design** ◆ — *user-invoked.* The deep-module vocabulary (depth, seam, leverage, locality, the deletion test) that design-twice, mapme, the planner, the executor and the evaluator all judge in — every one of them by explicit path, so it costs zero always-loaded context
 - **tdd** ◆ — the red→green loop, with an observed *meaningful* red and an explicit exception when code must precede the test
 - **diagnose** ◆ — hard-bug discipline: a tight red-capable feedback loop before any hypothesis; no speculative fix loops
 - **prototype** ◆ — *user-invoked.* Throwaway code answering ONE stated question; never counts as production evidence
