@@ -8,6 +8,63 @@ uses [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [2.11.0] — 2026-07-13
+
+Closes the architectural-drift gap at the milestone boundary — and corrects a mistake v2.10.0
+shipped, caught by the independent review v2.10.0 owed but never performed.
+
+**Always-loaded context DROPPED 296 B, back to the v2.9.0 baseline (5035 B).** All three skills
+added in v2.10.0 now cost **zero**.
+
+### Added — the architecture pass at the milestone boundary
+Per-phase review is diff-bound. The evaluator grades one phase's changes, so ten individually-clean
+phases can compose into a pass-through layer and **nothing is looking at the whole**. The milestone
+boundary is the only place that view exists, and `close-milestone.sh` checked open items, findings
+and roadmap shape — but never architecture.
+
+- **`close-milestone.sh` now prints a non-fatal `NOTE`** when a whole milestone was built without
+  refreshing `docs/ARCHITECTURE.md` (or when there is no map at all and code shipped). It names the
+  `mapme` skill. It **never blocks the close** — same contract as the existing Ownership-gaps notice.
+  "This milestone" is scoped to commits since the previous close, so the notice fires when it means
+  something rather than on every close, which would be noise nobody reads.
+- **`milestone` Mode B gains the pass itself** (step 1b): dispatch `mapme` **into a subagent** — it
+  reads the whole codebase, and that belongs in its own context, not the one you are about to write
+  the next roadmap in — then carry any **Strong** friction finding into the next roadmap as a real
+  phase. A Strong finding nobody schedules is one that gets rediscovered, identically, next milestone.
+
+This is deliberately *not* an agent. `agent-creator` audited exactly that proposal in v2.10.0 and
+refused it: a 5th agent must join `GATE_CONTROL_FILES` and is then byte-compared on **every autopilot
+tick in every downstream project, forever** — a permanent tax on the hot path to serve a
+once-per-milestone human path. A skill dispatched into a subagent buys the separate context for free.
+
+### Changed — `module-design` is now user-invoked (a v2.10.0 correction)
+v2.10.0 shipped it **model-invoked**, reasoning that "five components must reach it". The independent
+review found that all five — `design-twice`, `mapme`, planner, executor, evaluator — name it by
+**explicit path**, and **none** relies on autonomous invocation. The 295 B/turn bought nothing,
+forever. The defence offered ("a user might ask a bare question about seams") was circular: a user who
+can phrase the question in the skill's own vocabulary has already read it.
+
+The file is unchanged and still shipped; only its invocation mode moved. `prototype` was the
+precedent that should have been followed — also adapted, also engineering, correctly user-invoked.
+
+### Changed — `skill-creator` now prevents that mistake
+Three gaps let it through, all closed:
+- **A mandatory consumer enumeration.** Before choosing model-invocation you must `grep` the
+  consumers and show that at least one relies on *autonomous* reach. The argument felt right; the grep
+  would have settled it in ten seconds.
+- **A stated default:** user-invoked. Model-invocation now carries the burden of proof.
+- **An `Independent review:` field that may not name you.** A component's author cannot clear it —
+  not "reviewed my own work carefully", not a subagent you briefed and then graded. If nobody
+  independent looked, the honest value is `NONE — not cleared for release`.
+- The context-cost check now demands the **new always-loaded total**, not the marginal cost. Every
+  skill looks affordable alone; that is how a budget dies.
+
+### Fixed
+- **The deletion test had three homes** (`module-design`, `mapme`, `evaluator`) — a violation of
+  `checks.md`'s own "one meaning, one home" rule, found by the same review. `mapme` now points at the
+  canonical definition. The `evaluator` keeps its inline copy as a **documented** exception: a
+  gate-checked grading contract must stand on its own and cannot depend on reading a skill file.
+
 ## [2.10.0] — 2026-07-13
 
 Engineering-disciplines release. It strengthens how Jaimitos designs, tests, debugs, verifies and
