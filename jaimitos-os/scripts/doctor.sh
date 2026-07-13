@@ -64,10 +64,18 @@ done
 # run-guard-tests.sh has its own drift guard for those.
 REQUIRED_SCRIPTS="autopilot.sh tick.sh test-evidence.sh record-grade.sh models.sh sync.sh doctor.sh close-milestone.sh next-adr.sh lint-roadmap.sh run-guard-tests.sh"
 REQUIRED_LIBS="_secret-scan _high-stakes _test-cmd _eval-isolation"
-# Shipped project skills (install.sh copies each into .claude/skills/<name>/). setup-jaimitos-os is the
-# installer/meta skill — it is --global-skills only, never per-project, so it is NOT listed here. Keep in
-# sync with .github/scripts/install-smoke.sh (the authoritative post-install manifest gate).
-REQUIRED_SKILLS="roadmap milestone adr scope-guard unstick teach-back mapme quizme grill to-spec glossary design-twice tdd diagnose merge-conflicts"
+
+# Shipped project skills are DERIVED from the install manifest, never hardcoded here. install.sh records
+# every file it wrote (`<sha256>  <rel-path>`), so the manifest already knows the exact skill set THIS
+# project was installed with — which is strictly better than a hand-maintained list: it detects a skill
+# dropped or renamed relative to what actually shipped, and it can't go stale when a skill is added.
+# (Maintainer-only skills live in the toolkit's repo-root .claude/skills/, which no install path reads,
+# so they can never appear here.)
+manifest_skills() {
+  [ -f .claude/.jaimitos-manifest ] || return 1
+  grep -oE '\.claude/skills/[^/]+/SKILL\.md$' .claude/.jaimitos-manifest 2>/dev/null \
+    | sed -e 's#^\.claude/skills/##' -e 's#/SKILL\.md$##' | sort -u
+}
 
 echo "jaimitos-os doctor"
 [ -f .claude/.jaimitos-os-version ] && echo "jaimitos-os version: $(cat .claude/.jaimitos-os-version)"
@@ -145,13 +153,20 @@ echo ""
 
 echo "Skills (.claude/skills/ — a dropped/renamed skill silently loses that workflow):"
 # Checked only when .claude/skills/ exists: an installed project always has it (install.sh populates
-# it), so an incomplete set here means a real drop/rename regression → hard fail. A bare scaffold with
-# no skills dir at all (e.g. the toolkit's own tree) isn't an install, so we don't false-flag it — the
-# authoritative full-manifest gate is install-smoke.sh, which runs against a real install.
+# it), so a skill the manifest says shipped but that is now gone is a real drop/rename regression →
+# hard fail. A bare scaffold with no skills dir at all (e.g. the toolkit's own tree) isn't an install,
+# so we don't false-flag it — the authoritative full-manifest gate is install-smoke.sh.
 if [ -d .claude/skills ]; then
-  for sk in $REQUIRED_SKILLS; do
-    [ -f ".claude/skills/$sk/SKILL.md" ] && ok ".claude/skills/$sk/SKILL.md" || bad "missing .claude/skills/$sk/SKILL.md"
-  done
+  EXPECTED_SKILLS="$(manifest_skills || true)"
+  if [ -n "$EXPECTED_SKILLS" ]; then
+    for sk in $EXPECTED_SKILLS; do
+      [ -f ".claude/skills/$sk/SKILL.md" ] && ok ".claude/skills/$sk/SKILL.md" || bad "missing .claude/skills/$sk/SKILL.md"
+    done
+  else
+    # No manifest (a pre-v2.5.0 install, or one that never ran --adopt-manifest): we have nothing
+    # trustworthy to compare against, so say so rather than pretend the set is complete.
+    warn "no skill entries in .claude/.jaimitos-manifest — can't verify the shipped skill set was not dropped/renamed (re-run install.sh, or sync.sh --adopt-manifest, to record a baseline)"
+  fi
 else
   warn "no .claude/skills/ directory — skills not installed here (install.sh populates it; install-smoke owns the full check)"
 fi

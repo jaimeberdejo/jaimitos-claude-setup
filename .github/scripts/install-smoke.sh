@@ -66,13 +66,25 @@ for f in CLAUDE.md .claude/settings.json \
 done
 # Skills installed per-project — assert the FULL shipped manifest (every project skill lands with its
 # SKILL.md). A bare roadmap-only check let a dropped/renamed skill ship silently (v2.3.1 fix); this loop
-# is the authoritative shipped-skill gate. The installer/meta skill setup-jaimitos-os is NOT copied
-# per-project (it installs only via --global-skills). Keep this list in sync with doctor.sh REQUIRED_SKILLS.
-for sk in roadmap milestone adr scope-guard unstick teach-back mapme quizme \
-          grill to-spec glossary design-twice tdd diagnose merge-conflicts; do
+# is the authoritative shipped-skill gate. The expected set is DERIVED from the source root, never
+# restated: a hand-copied list is one more place to forget when a skill is added. setup-jaimitos-os is
+# the installer/meta skill (--global-skills only), so it is the one documented exclusion.
+for skdir in "$REPO"/skills/*/; do
+  sk="$(basename "$skdir")"
+  [ "$sk" = "setup-jaimitos-os" ] && continue
   [ -f ".claude/skills/$sk/SKILL.md" ] && ok "skill installed: $sk/SKILL.md" || bad "skill missing or lacks SKILL.md: .claude/skills/$sk"
 done
+
+# NEGATIVE assertions — these cannot be derived, so they stay explicit. A maintainer-only component
+# leaking into a user project is the failure this release exists to make impossible.
+#   * setup-jaimitos-os lives in skills/ but is excluded at install.sh:170 (--global-skills only).
+#   * skill-creator / agent-creator live in the toolkit's repo-root .claude/skills/, which is not one
+#     of install.sh's two source roots (jaimitos-os/ and skills/) — so no install, sync, or
+#     --global-skills path can reach them. This asserts that structural property, not a list.
 [ -e .claude/skills/setup-jaimitos-os ] && bad "setup-jaimitos-os copied per-project (should be --global-skills only)" || ok "setup-jaimitos-os not copied per-project"
+for mk in skill-creator agent-creator; do
+  [ -e ".claude/skills/$mk" ] && bad "MAINTAINER-ONLY skill leaked into the target: .claude/skills/$mk" || ok "maintainer-only skill not shipped: $mk"
+done
 # Installed version is stamped for doctor.sh.
 [ -f .claude/.jaimitos-os-version ] && ok "version stamp written (.claude/.jaimitos-os-version)" || bad "version stamp missing"
 # Sync manifest: written on install, sha256sum -c-verifiable, and toolkit-owned only (no

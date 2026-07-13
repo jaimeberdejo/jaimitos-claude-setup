@@ -41,6 +41,8 @@ TESTS=(
   test-start-phase.sh
   test-docs.sh
   test-docs-invariants.sh
+  test-skills.sh
+  test-agents.sh
   test-close-milestone.sh
   test-doctor.sh
   test-lint.sh
