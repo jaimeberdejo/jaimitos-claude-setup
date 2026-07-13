@@ -8,6 +8,99 @@ uses [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [2.10.0] — 2026-07-13
+
+Engineering-disciplines release. It strengthens how Jaimitos designs, tests, debugs, verifies and
+reviews, and adds maintainer-only tooling for creating and linting components — while adding **no**
+second orchestrator, planner, executor, evaluator, completion gate, roadmap, or agent swarm.
+Adapted (not copied) from `obra/superpowers` @ `d884ae0` and `mattpocock/skills` @ `391a270`, both
+MIT, both pinned in `integrations/upstreams.lock.json`. `VERSION` → `2.10.0`. Not tagged.
+
+**Always-loaded context grew by 387 bytes (~96 tokens, +4.8%)** — one new model-invoked description
+plus one CLAUDE.md clause. Everything else is on demand or maintainer-only.
+
+### What this release does NOT claim
+
+`docs/dev/AUTHORING.md` opens with a `Guarantee | Enforcement` table, and it is the point of the
+release. The linters check **shape** — frontmatter, naming, catalog registration, install exclusion,
+tool boundaries, context budget, provenance, and that a discipline is *stated*. They do **not** check
+**judgement**: whether a test failed for the intended reason, whether a speculative-fix loop was
+avoided, whether a component was justified, whether an architecture is proportionate. Those are
+model-dependent and, for control-plane changes, human-reviewed. No check here proves otherwise.
+
+### Added
+- **`module-design`** (model-invoked, 295 B description) — the deep-module vocabulary: depth, seam,
+  leverage, locality, the deletion test. A reference: it decides nothing, owns no artifact, never
+  ticks. It pays for a description because the planner, executor, evaluator, `design-twice` and
+  `mapme` all reach it. Long material behind `deepening.md`.
+- **`prototype`** (user-invoked, **0 B** always-loaded) — throwaway code answering ONE stated
+  question, isolated from production/runtime paths. Its output **may** serve an explicitly scoped
+  prototype/research phase but **may never** satisfy production implementation or release criteria,
+  and it can never tick. `disable-model-invocation: true` is deliberate: auto-firing "write
+  throwaway code" inside a TDD-mandatory scaffold is actively harmful.
+- **`review-feedback`** (user-invoked, **0 B** always-loaded) — nothing covered *receiving* review
+  feedback. Classifies each comment (correct and actionable · out of scope · misunderstanding ·
+  already addressed · conflicting · unsafe · architecturally harmful), verifies it against the code,
+  implements what's right and pushes back with reasons on what isn't. Never complies on authority.
+- **`skill-creator`** and **`agent-creator`** — maintainer-only, in the repo-root `.claude/skills/`.
+  `install.sh` reads only `jaimitos-os/` and `skills/`, so they are **structurally** unshippable, not
+  list-excluded. Both default to refusal; `NO NEW AGENT JUSTIFIED` is a success.
+- **`docs/dev/AUTHORING.md`** — the authoritative maintainer guide. Maintainer-only.
+- **`integrations/upstreams.lock.json`** — pinned upstream provenance, the files consulted, the files
+  influenced, and every deliberate deviation, including what was **rejected** and why. No auto-updater.
+- **`test-skills.sh` / `test-agents.sh`** — two new guard suites (21 total).
+
+### Changed
+- **`tdd`** — the red must fail *for the intended reason*; green must also be quiet; the wider suite
+  runs after the targeted green; regression coverage precedes a behavior change; an explicit,
+  **recorded** exception when production code must precede the test. Never claim TDD with no observed
+  meaningful red.
+- **`diagnose`** — an evidence taxonomy (symptom · root cause · contributing condition · unverified
+  hypothesis · confirmed evidence · unresolved uncertainty), a ban on speculative fix loops, revert
+  before retry, **three failed fixes = stop and question the architecture**, and bisect-first for
+  regressions.
+- **`evaluator`** — now grades two named axes, **Specification compliance** and **Engineering
+  quality**, reported separately and never re-ranked. **A failure in either axis is `NEEDS_WORK`.**
+  The verdict token is unchanged (`PASS` / `NEEDS_WORK:`) *on purpose*: `record-grade.sh` records a
+  grade only when the last non-empty line is exactly `PASS`, so the `PASS|FAIL` the brief asked for
+  would have silently broken the tick gate.
+- **`/phase`, `/wrap`, `executor`** — verification must be **fresh, after the final edit**. The
+  builder's report is a claim, not evidence. Exact commands, warnings disclosed, skipped checks
+  disclosed; a unit suite never substitutes for a required integration check.
+- **`glossary`** — the active domain-modeling discipline (challenge, sharpen, cross-reference against
+  the code) plus a 3-condition ADR test. Still the sole `docs/GLOSSARY.md` authority.
+- **`mapme`** — flags architectural friction in `module-design` vocabulary (shallow modules,
+  pass-through layers, leaky seams, poor locality) and classifies findings Strong / Worth exploring /
+  Speculative. Reports; never refactors. **This is why no `architecture-audit` skill was added.**
+- **`doctor.sh` no longer hardcodes `REQUIRED_SKILLS`** — it derives the expected skill set from
+  `.claude/.jaimitos-manifest`, which `install.sh` already writes. Strictly stronger: it detects a
+  skill dropped or renamed relative to what *actually shipped*, and it cannot go stale. No manifest →
+  it warns rather than claiming the set is complete.
+- **`install-smoke.sh`** derives its expected set from `skills/`; the **negative** assertions stay
+  explicit and now cover `skill-creator` / `agent-creator`.
+- **Skill counts live in `skills/README.md` and nowhere else.** The unchecked counts in
+  `CONTRIBUTING.md` / `GUIDE.md` / `SCAFFOLD.md` are gone. `test-docs.sh` now scans those files too,
+  including English word forms — "Sixteen skills" sat in `README.md` for three releases because a
+  digits-only regex never looked at it.
+
+### Fixed
+- **The shipped `CLAUDE.md` pointed every installed project at `toolkit-docs/GUIDE.md`** — a path
+  `install.sh` deliberately excludes. Every user project carried a pointer to a document it could not
+  open. Found by dogfooding the new `diagnose` skill; regression test in `test-docs-invariants.sh`.
+
+### Rejected (documented, not silently dropped)
+- **`architecture-audit`** — `mapme` + `design-twice` + `module-design` + the evaluator's Axis B
+  already own that responsibility. Its upstream form is a Tailwind/Mermaid HTML report app.
+- **Superpowers' `brainstorming`, `writing-plans`, `subagent-driven-development`, `executing-plans`,
+  `finishing-a-development-branch`, `dispatching-parallel-agents`, and the SessionStart bootstrap** —
+  each is a competing spine (router / planner / executor / completion gate / swarm), and importing one
+  drags the cross-referenced chain with it.
+- **`requesting-code-review` / Matt's `code-review` as skills** — v2.7.0 already delegated review to
+  the native `/code-review` and `/security-review` plus `scope-guard` and the evaluator. Matt's
+  two-axis *idea* was adopted: it is the two-axis evaluator.
+- **No new production agent.** `agent-creator`'s own dogfood audited the architecture-review-agent
+  proposal and refused it.
+
 ## [2.9.0] — 2026-07-11
 
 Trust-hardening release acting on the 2026-07-11 re-audit (`docs/dev/audits/`). It closes the
