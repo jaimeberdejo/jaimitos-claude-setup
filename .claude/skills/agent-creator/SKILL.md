@@ -23,8 +23,24 @@ separate token bill, a new orchestration edge, a new gate-control file.
 
 Exhaust each before the next: **improve an existing agent** (researcher · planner · executor ·
 evaluator) → **a skill** → **a command** → **a deterministic script** (if the output is checkable it
-does not need a model) → **strengthen planner/executor/evaluator instructions** → *only then* an
-agent, and only when a **genuinely separate context** or **genuine independence** is required.
+does not need a model) → **strengthen planner/executor/evaluator instructions** → **dispatch an
+existing skill into a subagent** → *only then* a new agent definition.
+
+> **The rung everyone skips.** "This needs its own context window" is the most common *legitimate*
+> reason to want an agent — and it is **not** a reason to define one. A separate context is bought
+> for free by dispatching an existing skill into a subagent (Task tool). A persistent agent
+> definition buys something different and much more expensive: a permanent, gate-registered role.
+> Ask which one you actually need. If the work is advisory, human-invoked, and runs occasionally,
+> you want the dispatch, not the definition.
+
+**Price the definition before you argue for it.** A new `.claude/agents/*.md` must be added to
+`GATE_CONTROL_FILES`, and every entry there is byte-compared against the launch commit **on every
+autopilot tick, in every downstream project, forever**. A once-per-milestone advisory role that adds
+a permanent check to the hot path is a bad trade. Say the number out loud before you continue.
+
+**Token yardstick.** A whole-repo read is the most expensive dispatch in the system; a phase-diff
+read is roughly an order of magnitude cheaper. "Is the token cost justified?" is only answerable
+against something — use that.
 
 ## Required pre-creation analysis
 
@@ -101,7 +117,11 @@ boundary · protected paths · deterministic output contract · artifact path if
 orchestration owner · stop conditions · failure behaviour · retry policy · **empty/no-op detection**
 (what the orchestrator does when the agent returns nothing, or returns text without having used a
 single tool) · prompt-injection resistance · context/token estimate · installation scope · catalog
-entry · deterministic tests. Mechanical checklist: [checks.md](checks.md).
+entry · deterministic tests.
+
+**Only now** read [checks.md](checks.md) and run every check in it. It is a *post-decision* shape
+checklist: on a refusal — the common outcome — you never need it, and loading it earlier costs
+context while teaching you nothing about the decision.
 
 ## Prohibited
 
@@ -119,8 +139,25 @@ control-plane change.
 
 ## Agent creation report
 
-Emit verbatim — **including on a refusal**, where `Role:` reads `NO NEW AGENT JUSTIFIED` and the
-report explains which existing component owns the responsibility.
+**On a refusal — the common case — emit the short form.** The long form is an approval artifact:
+most of its fields are structurally `N/A` when no agent is created, and eleven lines of "N/A" bury
+the four that carry the decision.
+
+```md
+### Agent creation report — NO NEW AGENT JUSTIFIED
+- Problem solved:
+- Why an agent is NOT necessary:
+- Existing overlap reviewed:          <!-- which component already owns this -->
+- Rejected alternatives:              <!-- including the one you recommend instead -->
+- Gate-integrity impact:              <!-- the cost the definition would have added -->
+- Context/token impact:
+- Remaining risks:                    <!-- the gap, if it is real and still open -->
+```
+
+Do not skip `Gate-integrity impact` on a refusal. It is usually where the decision is actually
+made, and it is the field a free-form answer always drops.
+
+**When an agent IS justified**, emit the long form verbatim.
 
 ```md
 ### Agent creation report
