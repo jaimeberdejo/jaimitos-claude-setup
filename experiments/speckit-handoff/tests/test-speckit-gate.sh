@@ -216,7 +216,7 @@ echo "fixture F — scope contradiction is SURFACED, never judged:"
 # false-positive and false-negative, and a green test named detects_scope_contradiction would be
 # exactly the overstated guarantee this repo punishes. The gate surfaces the inputs; a human judges.
 mkproject f
-rc=$(run bash "$PROPOSE" --pack "$FIX/F-scope-contradiction" --feature 004-social-login --project "$PROJ" --out "$PROJ/.speckit-handoff")
+rc=$(run bash "$PROPOSE" --pack "$FIX/F-scope-contradiction" --feature 004-widget-comments --project "$PROJ" --out "$PROJ/.speckit-handoff")
 [ "$rc" = 0 ] && pass "fixture F: the gate does NOT pretend to detect a scope contradiction (exit 0)" \
               || fail "fixture F was refused (rc=$rc) — the gate is claiming judgement it does not have"
 grep -q 'docs/SPEC.md' "$PROJ/.speckit-handoff/HANDOFF.md" 2>/dev/null \
@@ -261,12 +261,15 @@ rc=$(run bash "$PROPOSE" --help);     [ "$rc" = 0 ] && pass "propose --help → 
 # ---------------------------------------------------------------- bash 3.2
 echo ""
 echo "portability (CI asserts bash 3.2 on the macOS leg):"
+# The bash-4 constructs, spelled so this pattern does not match ITSELF or a comment that merely
+# names them. (The first draft did both — a linter that fires on its own source, and on the very
+# doc-comment promising the constructs are absent. Comments are stripped before the match.)
+B4='declare[[:space:]]+-A|map[f]ile|read[a]rray|\$\{[A-Za-z_]+\^\^\}'
 BAD=""
-for f in "$EXP"/bin/*.sh "$EXP"/tests/*.sh; do
+for f in "$EXP"/bin/*.sh "$EXP"/tests/*.sh "$EXP"/tests/live/*.sh; do
   [ -f "$f" ] || continue
   bash -n "$f" 2>/dev/null || BAD="$BAD $(basename "$f"):syntax"
-  grep -qE '(declare -A|mapfile|readarray|\$\{[A-Za-z_]+\^\^\})' "$f" 2>/dev/null \
-    && BAD="$BAD $(basename "$f"):bash4"
+  sed 's/#.*//' "$f" | grep -qE "$B4" 2>/dev/null && BAD="$BAD $(basename "$f"):bash4"
 done
 [ -z "$BAD" ] && pass "every experiment script is bash-3.2 safe" || fail "bash-4 constructs / syntax:$BAD"
 

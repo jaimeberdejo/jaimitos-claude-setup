@@ -1,2 +1,2 @@
-src/auth/
-migrations/
+# high-stakes path allowlist — "path: reason" per line. A bare path never suppresses.
+# Empty by default: nothing is exempted from the high-stakes gate in this fixture project.
