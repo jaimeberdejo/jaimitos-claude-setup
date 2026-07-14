@@ -629,6 +629,38 @@ rc=$(runtick "$REPO"); rm -f "$REPO/docs/ROADMAP.md.tick-bak" 2>/dev/null || tru
 { [ "$rc" != 0 ] && grep -qi 'leftover completion-transaction' "$WORK/out"; } \
   && pass "F4: leftover *.tick-* artifact → refuse clearly (interrupted prior run)" || fail "F4 leftover (rc=$rc)"
 
+
+# --- A roadmap is allowed to talk about its own notation ---------------------------------------
+# tick.sh matched an open task UNANCHORED (`/- \[ \]/`) in its gate, its counts AND its gsub. So a
+# phase whose PROSE merely mentioned "- [ ]" — a quoted example, a "Done when:" about checkboxes —
+# was seen as having an open item, had that prose silently rewritten to "- [x]", and ticked. Two
+# separate failures: a phase completing with no real work, and documentation corrupted in place.
+POISON='Done when: every `- [ ]` under this phase is checked'
+
+# P1 — prose-only phase (no real open task) → must REFUSE, and must not touch the file.
+mkrepo p1
+printf '## Phase 1 — Work\n\n- [x] do the work\n%s\nMode: loopable\n' "$POISON" > "$REPO/docs/ROADMAP.md"
+( cd "$REPO" && git add -A && git commit -q -m roadmap )
+HEAD=$(git -C "$REPO" rev-parse HEAD)
+good_grade p1; good_evidence p1
+before=$(md5of "$REPO/docs/ROADMAP.md"); rc=$(runtick "$REPO")
+{ [ "$rc" = 1 ] && [ "$before" = "$(md5of "$REPO/docs/ROADMAP.md")" ]; } \
+  && pass "prose mentioning '- [ ]' is not an open task → refuses, roadmap byte-identical" \
+  || fail "prose was treated as an open task (rc=$rc) — tick completed a phase with no real work"
+
+# P2 — real open task ALONGSIDE such prose → ticks the task, leaves the prose byte-for-byte.
+mkrepo p2
+printf '## Phase 1 — Work\n\n- [ ] do the work\n%s\nMode: loopable\n' "$POISON" > "$REPO/docs/ROADMAP.md"
+( cd "$REPO" && git add -A && git commit -q -m roadmap )
+HEAD=$(git -C "$REPO" rev-parse HEAD)
+good_grade p2; good_evidence p2
+rc=$(runtick "$REPO")
+{ [ "$rc" = 0 ] && ticked "$REPO"; } \
+  && pass "the real task still ticks when prose sits beside it" || fail "real task did not tick (rc=$rc)"
+grep -qxF -- "$POISON" "$REPO/docs/ROADMAP.md" \
+  && pass "the prose line survives the tick byte-for-byte (no gsub corruption)" \
+  || fail "tick REWROTE the prose line — roadmap corruption"
+
 echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All tick gate + evidence tests passed."; exit 0
 else echo "$FAILS tick test(s) FAILED."; echo "--- last tick output ---"; tail -n 20 "$WORK/out" 2>/dev/null; exit 1; fi

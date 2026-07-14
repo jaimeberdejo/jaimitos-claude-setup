@@ -346,6 +346,7 @@ mkautorepo() {
   R="$WORK/$1"; rm -rf "$R"; mkdir -p "$R/.claude/lib" "$R/scripts" "$R/docs"
   cp "$AUTOPILOT" "$R/scripts/autopilot.sh"
   cp "$SCAFFOLD/.claude/lib/_eval-isolation.sh" "$R/.claude/lib/"     # required (fail-closed) lib
+  cp "$SCAFFOLD/.claude/lib/_roadmap.sh"        "$R/.claude/lib/"     # required (fail-closed) lib
   printf '{"hooks":{}}\n' > "$R/.claude/settings.json"
   printf '# Roadmap\n## Phase 1 — x\n- [ ] a\nDone when: x\nMode: loopable\n' > "$R/docs/ROADMAP.md"
   printf '# State\n' > "$R/docs/STATE.md"

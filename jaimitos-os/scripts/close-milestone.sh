@@ -32,31 +32,28 @@ done
 
 refuse() { echo "close-milestone: REFUSED — $1" >&2; exit 1; }
 
-# Shared roadmap parser — the SAME first-open-heading + Mode classification tick.sh uses, via one
-# library instead of a hand-copied awk block. Sourced best-effort: close-milestone refuses on ANY
-# open item regardless of Mode, so if the lib were somehow absent the classification just degrades to
-# a generic message (never a wrong "safe to close").
+# Shared roadmap parser — the SAME task definition, first-open-heading and Mode classification that
+# tick.sh uses, via ONE library instead of a hand-copied awk block. Fail-closed, like tick.sh and
+# autopilot.sh: without it we cannot tell an open phase from a closed one, and "I couldn't read the
+# roadmap" must never degrade into "safe to close".
 [ -f .claude/lib/_roadmap.sh ] && . .claude/lib/_roadmap.sh 2>/dev/null || true
+command -v roadmap_open_total >/dev/null 2>&1 && command -v roadmap_first_open_heading >/dev/null 2>&1 \
+  || refuse ".claude/lib/_roadmap.sh missing/unloadable — cannot read the roadmap (fail-closed)."
 
 [ -f "$ROADMAP" ] || refuse "no $ROADMAP to close."
-# Anchored to actual list-item lines (start of line, optional leading whitespace) — a plain
-# substring grep also matches the roadmap skill's own instructional legend line
+# $ROADMAP_TASK_RE / $ROADMAP_OPEN_RE are anchored to real list items (start of line, optional
+# leading whitespace). A plain substring match also hits the roadmap skill's own legend line
 # ("> `- [ ]` = todo, `- [x]` = done. ..."), which is permanently present at the top of every
 # roadmap it generates and would otherwise ALWAYS false-positive as "open items remain."
-grep -qE '^[[:space:]]*- \[[ xX]\] ' "$ROADMAP" 2>/dev/null || refuse "no phases in $ROADMAP — nothing to close."
+grep -qE "$ROADMAP_TASK_RE" "$ROADMAP" 2>/dev/null || refuse "no phases in $ROADMAP — nothing to close."
 # Open items remain → classify the FIRST open phase so the refusal is actionable, not a flat "open
 # items remain". Three cases: (a) a supervised phase awaiting explicit human approval (name it +
 # point at tick.sh --supervised-approved — the new v2.4.0 path so a supervised phase is no longer a
 # dead end), (b) an unresolved evaluator finding (NEXT_FINDINGS.md) gating it, (c) plain unfinished
 # work. The heading + Mode classification come from the shared _roadmap.sh parser.
-if grep -qE '^[[:space:]]*- \[ \] ' "$ROADMAP" 2>/dev/null; then
-  if command -v roadmap_first_open_heading >/dev/null 2>&1; then
-    first_open=$(roadmap_first_open_heading "$ROADMAP" 2>/dev/null || true)
-    first_mode=$(roadmap_phase_mode "$ROADMAP" "$first_open" 2>/dev/null || true)
-  else
-    first_open=$(awk '/^## /{h=$0} /^[[:space:]]*- \[ \] /{if(h!=""){print h; exit}}' "$ROADMAP")
-    first_mode=""
-  fi
+if [ "$(roadmap_open_total "$ROADMAP")" -gt 0 ]; then
+  first_open=$(roadmap_first_open_heading "$ROADMAP" 2>/dev/null || true)
+  first_mode=$(roadmap_phase_mode "$ROADMAP" "$first_open" 2>/dev/null || true)
   case "$first_mode" in
     supervised)
       echo "close-milestone: the first open phase is SUPERVISED and awaiting human approval:" >&2

@@ -247,7 +247,13 @@ fi
 if [ "$OPEN_PR" -eq 1 ] && ! command -v gh >/dev/null 2>&1; then
   fail "--pr requested but 'gh' (GitHub CLI) is not installed."
 fi
-if ! grep -qE "^[[:space:]]*- \[ \] " docs/ROADMAP.md 2>/dev/null; then
+# Shared roadmap parser, loaded HERE because this pre-flight check runs before any worktree exists.
+# It is sourced AGAIN from inside the worktree further down — that copy is the one byte-compared
+# against the launch commit (GATE_CONTROL_FILES), so both loads are deliberate, not a duplicate.
+[ -f .claude/lib/_roadmap.sh ] && . .claude/lib/_roadmap.sh 2>/dev/null || true
+command -v roadmap_open_total >/dev/null 2>&1 \
+  || fail ".claude/lib/_roadmap.sh missing/unloadable — cannot read the roadmap (fail-closed)."
+if [ "$(roadmap_open_total docs/ROADMAP.md)" -eq 0 ]; then
   echo "autopilot: roadmap has no open items. Nothing to do."; exit 0
 fi
 
@@ -476,7 +482,7 @@ for i in $(seq 1 "$MAX_ITER"); do
   if [ -f AGENT_STOP ] || [ -f "$ORIG_ROOT/AGENT_STOP" ]; then
     echo "autopilot: AGENT_STOP present — stopping at iteration $i."; break
   fi
-  grep -qE "^[[:space:]]*- \[ \] " docs/ROADMAP.md 2>/dev/null || { echo "autopilot: roadmap complete. Done."; RUN_RESULT="success"; break; }
+  [ "$(roadmap_open_total docs/ROADMAP.md)" -gt 0 ] || { echo "autopilot: roadmap complete. Done."; RUN_RESULT="success"; break; }
 
   # STEER mirror: operators write STEER.md in their ORIGINAL checkout, but the loop
   # runs in the worktree. Move it in so the builder (which reads ./STEER.md) sees it.
@@ -484,7 +490,7 @@ for i in $(seq 1 "$MAX_ITER"); do
     mv "$ORIG_ROOT/STEER.md" ./STEER.md 2>/dev/null || true
   fi
 
-  OPEN_SIGNATURE=$(grep -nE "^[[:space:]]*- \[ \] " docs/ROADMAP.md 2>/dev/null | { md5 2>/dev/null || md5sum 2>/dev/null; })
+  OPEN_SIGNATURE=$(grep -nE "$ROADMAP_OPEN_RE" docs/ROADMAP.md 2>/dev/null | { md5 2>/dev/null || md5sum 2>/dev/null; })
 
   # Capture the TRUSTED phase base when a NEW phase starts; preserve it across NEEDS_WORK retries.
   # "New phase" ⇔ the set of open roadmap checkboxes changed since we last set the base (a prior phase

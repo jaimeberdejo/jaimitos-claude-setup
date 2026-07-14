@@ -50,9 +50,10 @@ render_state() {
   local stamp next_h next_t blockfile rc=0
   [ -r "$state" ] || return 1   # can't read the current STATE → fail cleanly (never silently drop prose)
   stamp=$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "unknown")
-  # First "## " heading that still has an open "- [ ]" item in the NEW (ticked) roadmap, and its text.
-  next_h=$(awk '/^## /{h=$0} /- \[ \]/ && h!=""{print h; exit}' "$rmap")
-  next_t=$(awk '/^## /{h=$0} /- \[ \]/ && h!=""{sub(/^[[:space:]]*- \[ \] /,""); print; exit}' "$rmap")
+  # First "## " heading that still has an open task in the NEW (ticked) roadmap, and its text.
+  # Both come from the shared parser: they must agree with the gate below on what a task even is.
+  next_h=$(roadmap_next_open_heading "$rmap" 2>/dev/null || true)
+  next_t=$(roadmap_first_open_task   "$rmap" 2>/dev/null || true)
   blockfile=$(mktemp 2>/dev/null || echo "$out.block.$$")
   {
     echo "$STATE_BEGIN"
@@ -398,12 +399,10 @@ case "$PHASE_MODE" in
 esac
 
 # --- 6. target phase still has an open item ---
-open_in_phase=$(PH="$heading" awk '
-  $0==ENVIRON["PH"] {inphase=1; next}
-  /^## / && inphase {inphase=0}
-  inphase && /- \[ \]/ {c++}
-  END {print c+0}
-' "$ROADMAP")
+# Via the SHARED parser (_roadmap.sh), not a local copy: this gate, the counts below and the tick
+# itself must all agree on what a task is. They did not, and prose that merely mentioned "- [ ]"
+# read as an open item here — letting a phase with no real work pass this gate.
+open_in_phase=$(roadmap_open_count "$ROADMAP" "$heading")
 [ "${open_in_phase:-0}" -gt 0 ] || refuse "no open '- [ ]' items under '$heading' (already ticked?)"
 
 # --- 7. rollback-safe two-file completion transition (F4) ---
@@ -418,13 +417,11 @@ S_TMP="$STATE.tick-tmp";   S_BAK="$STATE.tick-bak"
 tx_temps() { rm -f "$R_TMP" "$S_TMP" 2>/dev/null || true; }
 
 # (1) generate the ticked ROADMAP into a temp (pure — the real file is untouched).
-before=$(grep -c '\- \[ \]' "$ROADMAP" 2>/dev/null)
-if ! PH="$heading" awk '
-  $0==ENVIRON["PH"] {inphase=1; print; next}
-  /^## / && inphase {inphase=0}
-  inphase {gsub(/- \[ \]/, "- [x]")}
-  {print}
-' "$ROADMAP" > "$R_TMP" 2>/dev/null; then
+# roadmap_tick_phase flips only ANCHORED open-task lines inside the block. The gsub this replaces
+# rewrote EVERY occurrence of the substring "- [ ]" in the block — including inside prose, which it
+# corrupted in place while the counts below still reported a clean tick.
+before=$(roadmap_open_total "$ROADMAP")
+if ! roadmap_tick_phase "$ROADMAP" "$heading" > "$R_TMP" 2>/dev/null; then
   tx_temps; refuse "could not generate the updated ROADMAP (write failed) — nothing changed."
 fi
 
@@ -440,7 +437,7 @@ fi
 # (2b) validate both temps BEFORE touching anything: ROADMAP open-count strictly dropped; STATE has a
 # well-formed auto-block; and the real targets are actually WRITABLE (a read-only docs/STATE.md must
 # fail here, cleanly, NOT half-apply — finding N-2, now caught before any mutation).
-after=$(grep -c '\- \[ \]' "$R_TMP" 2>/dev/null)
+after=$(roadmap_open_total "$R_TMP")
 if [ "${after:-0}" -ge "${before:-0}" ]; then
   tx_temps; refuse "tick changed no items under '$heading' (roadmap left unchanged)."
 fi
@@ -486,7 +483,7 @@ if [ "$apply_ok" != 1 ]; then
 fi
 
 # (6) verify the resulting cross-file state before reporting success.
-new_after=$(grep -c '\- \[ \]' "$ROADMAP" 2>/dev/null)
+new_after=$(roadmap_open_total "$ROADMAP")
 verify_ok=1
 [ "${new_after:-0}" -lt "${before:-0}" ] || verify_ok=0
 if [ "$STATE_MODE" = update ]; then
