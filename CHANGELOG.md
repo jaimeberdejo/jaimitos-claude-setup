@@ -8,6 +8,53 @@ uses [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [2.11.2] — 2026-07-14
+
+A roadmap is allowed to talk about its own notation. It wasn't.
+
+### Fixed — one definition of an open task
+
+`docs/ROADMAP.md` is prose as well as state. It can quote an example, carry a legend, or hold a
+`Done when:` that says *"every `- [ ]` under this phase is checked"*. Core disagreed with itself
+about whether such a line is a **task**:
+
+- `lint-roadmap.sh` matched tasks **anchored** (`^[[:space:]]*- \[ \] `) — correct.
+- `_roadmap.sh`'s open count, and `tick.sh`'s completion gate, its before/after counts **and its
+  gsub**, matched them **unanchored** (`/- \[ \]/`) — any line merely *containing* the substring.
+
+Eight sites, five files, drifted apart over time. `close-milestone.sh` had already hit this and
+anchored itself, with a comment naming the exact hazard — and the fix never travelled.
+
+Two real failures, both silent:
+
+1. **A phase could tick with no work in it.** Prose mentioning `- [ ]` satisfied `tick.sh`'s "target
+   phase still has an open item" gate. The before/after counts then dropped, so the transaction
+   validated, and the phase was marked complete.
+2. **`tick.sh` corrupted documentation in place.** The `gsub` rewrote *every* occurrence of `- [ ]`
+   in the phase block — including inside prose — to `- [x]`.
+
+There is now exactly one definition — `ROADMAP_OPEN_RE` / `ROADMAP_TASK_RE` in
+`.claude/lib/_roadmap.sh` — with `roadmap_open_total`, `roadmap_first_open_task`,
+`roadmap_next_open_heading` and `roadmap_tick_phase` (the mutation itself) built on it. `tick.sh`,
+`autopilot.sh` and `close-milestone.sh` all go through the library; no core file hand-writes a task
+regex any more. `lint-roadmap.sh` (dependency-free by design) and `session-start.sh` (a display-only
+hook) remain the two documented exceptions.
+
+Regexes reach awk via `ENVIRON`, never `-v` — awk processes escape sequences in a `-v` assignment
+and mangles the `\[`. Verified on BSD awk (macOS) and mawk 1.3.4 (Linux CI).
+
+### Changed
+- `autopilot.sh` and `close-milestone.sh` now **fail closed** when `.claude/lib/_roadmap.sh` is
+  unloadable, rather than degrading to a hand-copied regex. Both already required the library; they
+  now say so before doing any work, not after. ("I couldn't read the roadmap" must never become
+  "safe to close".)
+
+### Added — the guard, which is the point
+`test-roadmap-lib.sh` now asserts, at source level, that **no core file matches a task line
+unanchored**, and that **no core file outside the three documented homes hand-writes a task regex at
+all**. The bug was never one regex; it was eight copies free to drift. Anchoring them all again
+without that guard would just restart the clock.
+
 ## [2.11.1] — 2026-07-14
 
 Fixes a flaky guard test. Test-only: no shipped behaviour changes.
