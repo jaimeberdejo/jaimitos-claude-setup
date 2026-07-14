@@ -82,6 +82,34 @@ jobs:
           git config --global user.name ci
           bash .github/scripts/install-smoke.sh
 
+  # EXPERIMENTAL — the Spec Kit handoff adapter (experiments/speckit-handoff/).
+  #
+  # Its OWN job, not a step in scaffold-checks, for three reasons:
+  #   - a red experiment must read as "the experiment is red", never as "the toolkit is broken";
+  #   - a REJECT verdict deletes this job and the directory together, in one commit;
+  #   - it must never enter jaimitos-os/scripts/run-guard-tests.sh, whose drift guard would force it
+  #     into TESTS[] — and everything in that directory SHIPS into user projects.
+  #
+  # Same shellcheck floor as the toolkit. OFFLINE: no network, no Spec Kit install. The live tier
+  # (which installs the pinned CLI) is opt-in via SPECKIT_LIVE=1 and is not run here — core CI stays
+  # offline by design, and the run-experiment-tests.sh runner says LOUDLY when that tier was skipped.
+  experiment-speckit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install jq + shellcheck
+        run: sudo apt-get update && sudo apt-get install -y jq shellcheck
+      - name: shellcheck — experiment scripts (blocking, same floor as the toolkit)
+        run: |
+          shellcheck -S warning -e SC1090,SC1091 \
+            experiments/speckit-handoff/bin/*.sh \
+            experiments/speckit-handoff/tests/*.sh
+      - name: Experiment suite (offline tier — NOT part of the shipped guard suite)
+        run: |
+          git config --global user.email ci@example.com
+          git config --global user.name ci
+          bash experiments/speckit-handoff/tests/run-experiment-tests.sh
+
   # Regression insurance for the bash 3.2 / BSD-userland target (macOS ships bash 3.2). The scaffold
   # has deliberate BSD/GNU-portability history; this leg catches future drift. jq is preinstalled on
   # the GitHub macOS runner; a claude-less PATH is fine (the guards stub or `command -v` it).

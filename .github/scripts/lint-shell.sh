@@ -14,12 +14,17 @@
 set -uo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)" || exit 1
 
-# The exact set CI lints: the installer + repo-dev scripts, and the shipped scaffold scripts/hooks/libs.
+# The exact set CI lints: the installer + repo-dev scripts, the shipped scaffold scripts/hooks/libs,
+# and the experiment (which CI shellchecks at the same floor, in its own experiment-speckit job).
+# This file's header promises it "mirrors what CI checks, in one place you can run locally" — leave
+# the experiment out and that promise quietly becomes false.
 FILES=(install.sh)
 while IFS= read -r f; do FILES+=("$f"); done < <(
   { ls .github/scripts/*.sh jaimitos-os/scripts/*.sh \
        jaimitos-os/.claude/hooks/*.sh jaimitos-os/.claude/lib/*.sh \
-       jaimitos-os/sandbox/*.sh 2>/dev/null; } | sort -u
+       jaimitos-os/sandbox/*.sh \
+       experiments/speckit-handoff/bin/*.sh experiments/speckit-handoff/tests/*.sh \
+       experiments/speckit-handoff/tests/live/*.sh 2>/dev/null; } | sort -u
 )
 
 RC=0

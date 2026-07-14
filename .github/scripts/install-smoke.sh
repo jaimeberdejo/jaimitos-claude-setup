@@ -40,6 +40,14 @@ done
 # M-Ship1: the toolkit's own dev/audit PLANs (PLAN-*.md) must never ship into a target project.
 PLANS_SHIPPED="$(find . -name 'PLAN-*.md' -not -path './.git/*')"
 [ -z "$PLANS_SHIPPED" ] && ok "no toolkit PLAN-*.md dev docs shipped into target" || bad "toolkit PLAN-*.md shipped into target: $(printf '%s' "$PLANS_SHIPPED" | tr '\n' ' ')"
+# EXPERIMENTS: experiments/ is a repo-root directory, and install.sh reads exactly two source roots
+# (jaimitos-os/ and skills/), so it CANNOT ship. That is an argument. This is the proof — the whole
+# point of an experiment nobody has approved is that it never reaches a user project by accident.
+[ -e experiments ] && bad "experiments/ was copied into the target (it must be structurally unshippable)" \
+                   || ok "experiments/ not copied"
+SPECKIT_LEAK="$(find . -name 'speckit-*' -not -path './.git/*')"
+[ -z "$SPECKIT_LEAK" ] && ok "no experimental speckit-* artifact shipped into target" \
+                       || bad "experimental speckit-* artifact shipped: $(printf '%s' "$SPECKIT_LEAK" | tr '\n' ' ')"
 # SCAFFOLD.md present.
 [ -f SCAFFOLD.md ] && ok "SCAFFOLD.md copied" || bad "SCAFFOLD.md missing"
 # Pre-existing README untouched, and no scaffold content leaked into it.
