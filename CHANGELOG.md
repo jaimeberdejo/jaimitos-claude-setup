@@ -8,6 +8,37 @@ uses [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [2.11.1] — 2026-07-14
+
+Fixes a flaky guard test. Test-only: no shipped behaviour changes.
+
+### Fixed
+- **`test-autopilot-gates.sh` #23 (`spawn_hang`) was intermittently failing** — roughly 3 runs in 4
+  inside a container, while passing on macOS and in CI. It was a **lying assertion, not a real bug**:
+  the watchdog's tree-kill has been working correctly all along.
+
+  `pid_dead()` decided liveness with `kill -0`, which **succeeds on a zombie**. When the watchdog
+  reaps the subtree, the grandchild is orphaned to PID 1; a real init reaps it instantly (the pid
+  vanishes, `kill -0` fails, the check passes), but a container's PID 1 is often a plain shell that
+  never reaps — so the zombie lingers and `kill -0` kept reporting a process that had already been
+  killed as *alive*. The intermittency was a race between the parent reaping its child and the parent
+  itself being killed.
+
+  `pid_dead()` now treats a **zombie as dead**, which is what it is: it holds no resources and
+  executes nothing. This does not weaken the assertion — a subtree that genuinely survived the kill
+  would be state `S`/`R`, never `Z`.
+
+  Diagnosed by instrumenting the real failure rather than guessing (`state=[Z] cmd=[sleep<defunct>]`).
+  Two earlier hypotheses — a missing `pgrep`, and a minimal isolated repro — were both **refuted** by
+  evidence before the real cause was found.
+
+- **Added a regression self-test (`#22b`)** that builds a zombie deterministically and asserts
+  `pid_dead` reads it as dead. If anyone reverts the helper to a bare `kill -0`, that test fails
+  loudly instead of #23 flaking silently. It fires (does not skip) on both macOS and Linux.
+
+  A flaky guard test is worse than a missing one: this suite is the evidence the whole completion
+  gate rests on, and a test that cries wolf teaches people to ignore it.
+
 ## [2.11.0] — 2026-07-13
 
 Closes the architectural-drift gap at the milestone boundary — and corrects a mistake v2.10.0

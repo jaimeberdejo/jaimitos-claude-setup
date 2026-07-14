@@ -194,8 +194,28 @@ run_red() { local r="$1"; shift; ( cd "$r" && PATH="$BIN:$PATH" LEAN_TEST_CMD=fa
 # the git push attempt, so it's observable even without a reachable remote) OR the fake gh ran.
 published() { grep -qE "pushing .* and opening a PR|STUB-GH-INVOKED" "$WORK/out"; }
 ticked()   { ! grep -q '\- \[ \] do the work' "$1/docs/ROADMAP.md"; }   # 0 if ticked
-# 0 if the pid recorded in <file> is gone (killed/reaped). Fail-closed: an empty file reads as alive.
-pid_dead() { local p; p=$(cat "$1" 2>/dev/null || echo ""); [ -n "$p" ] && ! kill -0 "$p" 2>/dev/null; }
+# 0 if the pid recorded in <file> is dead — GONE, or a ZOMBIE (terminated, awaiting reap).
+# Fail-closed: an empty/missing pidfile reads as alive.
+#
+# `kill -0` alone is NOT enough, and believing it was cost us a flaky test. It succeeds on a zombie,
+# so a grandchild the watchdog had already killed still read as "alive". When the watchdog reaps the
+# subtree, the grandchild is orphaned to PID 1; a real init reaps it instantly (the pid vanishes and
+# `kill -0` fails), but a container's PID 1 is often a plain shell that never reaps — so the zombie
+# lingers and this check flipped. Intermittently, too: it is a race between the parent reaping its
+# child and the parent itself being killed, which is why it passed on macOS and in CI and failed
+# roughly 3 runs in 4 inside a container.
+#
+# A zombie has been killed. It holds no resources, executes nothing, and is exactly what "the tree
+# was reaped" means. Count it as dead. This does NOT weaken the assertion: a subtree that genuinely
+# survived the kill would be state S/R (sleeping/running), never Z.
+pid_dead() {
+  local p st
+  p=$(cat "$1" 2>/dev/null || echo "")
+  [ -n "$p" ] || return 1                             # no pid recorded → fail closed (reads as alive)
+  kill -0 "$p" 2>/dev/null || return 0                # gone entirely
+  st=$(ps -o state= -p "$p" 2>/dev/null | tr -d ' ')  # BSD gives 'Z+'/'S+', GNU 'Z'/'S' — both Z-prefixed
+  case "$st" in Z*) return 0 ;; *) return 1 ;; esac   # zombie == dead; anything else is genuinely alive
+}
 # Pipe-free substring test. NEVER use `cmd | grep -q` under `set -o pipefail`: grep -q
 # closes the pipe on first match, cmd dies with SIGPIPE, and pipefail reports failure
 # even though the match succeeded — a real intermittent flake.
@@ -419,6 +439,27 @@ unset WD_CHILD_PIDFILE AUTOPILOT_CHILD_TIMEOUT
 grep -q "watchdog aborted the run" "$WORK/out" && pass "hang builder → watchdog aborts (timeout)" || fail "hang builder not aborted"
 pid_dead "$WORK/pid22" && pass "hang builder process reaped (killed)" || fail "hang builder still alive after timeout"
 ticked "$REPO" && fail "hang builder → phase ticked (must not)" || pass "hang builder → phase not ticked"
+
+# 22b — SELF-TEST of the pid_dead helper: a ZOMBIE must read as dead.
+#       This guards the flake that #23 hid for three releases. A zombie is built deterministically:
+#       the subshell forks a short sleep, records its pid, then `exec`s into a long sleep — so the
+#       short sleep's parent is now a process that never calls wait(). When it exits it becomes a
+#       zombie and STAYS one, because nothing reaps it. `kill -0` happily reports it alive.
+#       If this ever fails, pid_dead has regressed to a bare `kill -0` and #23 is lying again.
+rm -f "$WORK/zpid"
+( sleep 0.2 & echo "$!" > "$WORK/zpid"; exec sleep 5 ) &
+ZROOT=$!
+n=0; while [ ! -s "$WORK/zpid" ] && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n+1)); done
+sleep 1                                    # let the short sleep exit and go defunct (unreaped)
+ZP=$(cat "$WORK/zpid" 2>/dev/null || echo "")
+ZSTATE=$(ps -o state= -p "$ZP" 2>/dev/null | tr -d ' ')
+case "$ZSTATE" in
+  Z*) pid_dead "$WORK/zpid" \
+        && pass "pid_dead: a zombie reads as DEAD (kill -0 alone would say alive)" \
+        || fail "pid_dead: zombie read as ALIVE — the spawn_hang flake is back" ;;
+  *)  pass "pid_dead: SKIP zombie self-test (init reaped it immediately; state=[${ZSTATE:-gone}])" ;;
+esac
+kill "$ZROOT" 2>/dev/null || true; wait "$ZROOT" 2>/dev/null || true
 
 # 23 — builder that SPAWNS a child then blocks: the WHOLE subtree is reaped (depth-first pgrep kill +
 #      process-group kill), not just the parent — the runaway left ~9–13 orphaned claude children.
