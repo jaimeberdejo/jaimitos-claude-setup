@@ -94,6 +94,27 @@ assert_absent ".claude/agents/evaluator.md" "End your response with exactly one 
 - \`PASS\` — every acceptance criterion is demonstrably met AND" \
            "evaluator's old single-axis verdict text is gone"
 
+# Requirement traceability (v2.12.0) — a CONDITIONAL Axis-A criterion that fires only when a phase
+# declares a Requirements: line, written for ANY external requirements source (a PRD, a ticket, an
+# imported spec). It must NOT name a specific external tool: the moment it does, it stops being a
+# core capability and becomes a bridge to one product. The roadmap skill documents the producing
+# side (the optional Requirements:/Sources: block); the evaluator is the consuming side. Both are
+# pinned so the convention can't drift apart across the two homes.
+assert_has ".claude/agents/evaluator.md" "only when the active phase declares" \
+           "evaluator's requirement-traceability section is CONDITIONAL, not an unconditional new axis"
+assert_has ".claude/agents/evaluator.md" "Requirement traceability" \
+           "evaluator names the requirement-traceability criterion"
+assert_absent ".claude/agents/evaluator.md" "speckit" \
+           "the evaluator names no external tool (tool-agnostic, or it does not belong in core)"
+assert_absent ".claude/agents/evaluator.md" "spec kit" \
+           "the evaluator names no external tool (spelled-out form)"
+assert_has "../skills/roadmap/SKILL.md" "Requirements:" \
+           "roadmap skill documents the optional Requirements: block (the producing side)"
+assert_has "../skills/roadmap/SKILL.md" "Sources:" \
+           "roadmap skill documents the optional Sources: line that pairs with Requirements:"
+assert_absent "../skills/roadmap/SKILL.md" "speckit" \
+           "roadmap skill's requirement-id guidance names no external tool"
+
 # Prototype — sanctioned, but never a route to a tick.
 assert_has "../skills/prototype/SKILL.md" "**MAY NEVER** satisfy production implementation or release criteria" \
            "prototype output can never satisfy production/release criteria"

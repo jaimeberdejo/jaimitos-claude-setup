@@ -8,6 +8,44 @@ uses [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [2.12.0] — 2026-07-16
+
+Requirement traceability, as a core capability — grade a phase against the external requirement ids
+it declares, from any source.
+
+### Added — the evaluator traces declared requirement ids
+
+When a project is planned from an external requirements source — a PRD, a ticket, an imported feature
+specification — a roadmap phase MAY now carry two optional lines under its tasks:
+
+```md
+Sources:
+- specs/account-recovery/spec.md
+Requirements:
+- REQ-AR-001 — the reset token expires after 15 minutes
+```
+
+The `evaluator` treats each declared id as an **additional Axis-A acceptance criterion**: it locates
+the id in the named source and states, per id, whether the diff satisfies / partially satisfies /
+does not touch it. An id it cannot trace to code or a test is an unmet criterion — it fails the phase
+exactly as a missing "Done when:" would. It grades only the ids the phase claims, and treats an id
+silently dropped since planning as the same integrity violation as an edited "Done when:".
+
+The `roadmap` skill documents the producing side (the optional `Requirements:`/`Sources:` block and
+how to attribute ids honestly). The `lint-roadmap` schema ignores both lines, so they are always safe
+to add and never required.
+
+**This names no tool and adopts no id format** — use `FR-001`, `REQ-AR-001`, `JIRA-1234`, whatever the
+source already uses. It works for a PRD, a ticket, or any external spec. (It originated in the Release
+2 Spec Kit experiment, which was rejected as a promoted integration precisely because this — the one
+capability worth keeping — is separable from any single tool. Here it lands on its own merits.)
+
+### Guarantees
+- **Inert in a default project.** No shipped roadmap template carries a `Requirements:` line, so the
+  branch never fires unless a project opts in. A clean install produces a byte-identical evaluator;
+  `test-docs-invariants.sh` asserts both the conditional wording and that the shipped agent names no
+  external tool. Always-loaded context is unchanged (5035 B).
+
 ## [2.11.2] — 2026-07-14
 
 A roadmap is allowed to talk about its own notation. It wasn't.

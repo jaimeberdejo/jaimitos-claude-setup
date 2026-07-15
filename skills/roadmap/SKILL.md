@@ -78,6 +78,32 @@ Then produce that many phases, ordered so each one builds on the last. Every pha
 Order heuristic: pure logic / data model first → evaluation harness early (it's the
 truth source) → interfaces → hardening last.
 
+## Optional: carry external requirement ids into a phase
+
+Only when the project is planned from an **external requirements source** with stable ids — a PRD, a
+ticket, an imported feature specification — a phase MAY carry two extra lines under its tasks:
+
+```md
+Sources:
+- specs/account-recovery/spec.md
+Requirements:
+- REQ-AR-001 — the reset token expires after 15 minutes
+- REQ-AR-003 — a used token cannot be redeemed twice
+```
+
+- **`Sources:`** names where the ids are defined; **`Requirements:`** lists the ids this phase is
+  accountable for (with a short label). Use whatever id scheme the source already uses — `FR-001`,
+  `REQ-AR-001`, `JIRA-1234` — this convention names no tool and adopts no format of its own.
+- The `roadmap`/`lint-roadmap` schema **ignores** these lines, so they are always safe to add and
+  never required. The payoff is at grading time: when a phase declares `Requirements:`, the
+  `evaluator` treats each id as an additional acceptance criterion and traces it to code or a test,
+  failing the phase for any id it cannot account for.
+- **Attribute honestly.** A phase's `Requirements:` must list exactly the ids it truly owns — not the
+  source's every id. Give the evaluator an id the phase was never meant to satisfy and you manufacture
+  a failure nobody introduced.
+- Do **not** add this to a phase with no external id source. A hand-written roadmap's `Done when:`
+  line is already its acceptance criterion; inventing ids for it is ceremony, not traceability.
+
 ## Mark each phase loopable or supervised
 
 After each phase, add one line: **`Mode:`** `loopable` or `supervised`.
