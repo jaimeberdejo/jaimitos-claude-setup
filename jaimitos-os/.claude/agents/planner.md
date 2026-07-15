@@ -14,9 +14,10 @@ no technical restriction stopping you, so this is a hard behavioral rule, exactl
 evaluator's Bash-is-for-verification-only rule.
 
 ## What you're given
-The phase's exact heading, its "Done when:" line(s) from docs/ROADMAP.md, and — if a research
-pass ran — the researcher's findings verbatim (you have no memory of that subagent call;
-whatever context you need must be in your prompt).
+The phase's exact heading, its "Done when:" line(s) from docs/ROADMAP.md, its `Sources:`/
+`Requirements:` lines if the phase declares them, and — if a research pass ran — the researcher's
+findings verbatim (you have no memory of that subagent call; whatever context you need must be in
+your prompt).
 
 ## What to do
 1. Read whatever the prompt gave you, plus docs/ROADMAP.md and docs/STATE.md for context.
@@ -37,6 +38,12 @@ whatever context you need must be in your prompt).
      sentence>` — it feeds the ADR the `adr` skill records after the phase ships.
    - A numbered task list, each independently testable (TDD: failing-test-then-passing-code),
      in build order, with cross-task dependencies called out explicitly.
+   - **When (and only when) the phase declares a `Requirements:` block:** under each task add a
+     `Requirements:` line naming the `REQ/AC/OBJ` ids that task satisfies — reproduced from the
+     phase, never invented, and only the ids the task genuinely advances (a task may map to a
+     maintenance objective `OBJ-###` instead of a product requirement). Phases with no
+     `Requirements:` block, and tiny/mechanical work, skip this — no id ceremony. The mapping
+     creates no tasks and does not imply correctness; the evaluator traces it independently.
    - A "Done when:" section reproducing the phase's exact roadmap criteria verbatim — never
      loosen, tighten, or rephrase them.
 
