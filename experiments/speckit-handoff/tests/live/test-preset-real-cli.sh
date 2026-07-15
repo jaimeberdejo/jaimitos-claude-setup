@@ -62,7 +62,10 @@ done
 echo "R7 — the install footprint:"
 bash "$FP" --project "$PROJ" --manifest "$MANIFEST" --snapshot "$WORK/baseline" >/dev/null 2>&1
 
-if ! uvx --from "${SPECKIT_REPO}@${SPECKIT_REF}" specify init --here --force --integration claude \
+# `specify init --here` initialises the CURRENT directory — so we MUST run it from inside $PROJ.
+# (The first version ran it from the test's cwd, initialised the wrong tree, and then "found" the
+# project's manifest missing and its skills absent. Both live failures were this one bug.)
+if ! ( cd "$PROJ" && uvx --from "${SPECKIT_REPO}@${SPECKIT_REF}" specify init --here --force --integration claude ) \
         >"$WORK/init.log" 2>&1; then
   echo "  ⛔ \`specify init\` failed. This is NOT a pass — the integration is unverified."
   tail -n 20 "$WORK/init.log" | sed 's/^/     /'
@@ -90,34 +93,25 @@ if [ ! -f "$IMPL_BEFORE" ]; then
 fi
 pass "spec-kit installed speckit-implement as a SKILL (skills-mode confirmed for $SPECKIT_REF)"
 
-mkdir -p "$PROJ/.specify/presets"
-cp -R "$PRESET" "$PROJ/.specify/presets/jaimitos-handoff"
-
-APPLIED=0
-if uvx --from "${SPECKIT_REPO}@${SPECKIT_REF}" specify preset add jaimitos-handoff \
-      --from "$PROJ/.specify/presets/jaimitos-handoff" >"$WORK/preset.log" 2>&1; then
-  APPLIED=1
-elif uvx --from "${SPECKIT_REPO}@${SPECKIT_REF}" specify preset install jaimitos-handoff \
+# Local install is `specify preset add <id> --dev <dir>` (NOT --from, which is for a URL ZIP; NOT
+# `preset install`, which does not exist). The first version guessed all three wrong — the live tier
+# caught it, and the schema itself was wrong too (missing schema_version, flat shape). R2 in the
+# flesh: the preset is the only sanctioned override and its schema is not a contract.
+if ( cd "$PROJ" && uvx --from "${SPECKIT_REPO}@${SPECKIT_REF}" specify preset add jaimitos-handoff --dev "$PRESET" ) \
       >"$WORK/preset.log" 2>&1; then
-  APPLIED=1
-fi
+  pass "the preset installed against the pinned CLI (\`preset add --dev\`)"
 
-if [ "$APPLIED" = 0 ]; then
-  # This is a FINDING, not a test error. Record it as such: if the preset cannot even be installed
-  # against the pinned CLI, R2 has fired and the report must say so.
-  fail "the preset could not be applied to the pinned CLI — REJECT criterion R2 (the preset treadmill)"
-  echo "     the CLI's preset subcommands did not accept it. Actual output:"
-  tail -n 12 "$WORK/preset.log" | sed 's/^/       /'
-  echo "     → Jaimitos cannot own a moving target it does not control. Record this in REPORT.md."
-else
-  pass "the preset was accepted by the pinned CLI"
-
-  # Did it actually REPLACE the command body?
+  # Did it actually REPLACE the command body? This is the whole R2 question.
   if grep -qi 'Implementation is not yours\|owned by Jaimitos' "$IMPL_BEFORE" 2>/dev/null; then
     pass "speckit-implement's body was REPLACED by the redirect (it now points at /phase)"
   else
     fail "speckit-implement still carries its upstream body — the preset did NOT take effect"
   fi
+
+  # Spec Kit re-emits the frontmatter; a preset-sourced skill should say so.
+  grep -q 'source: preset:jaimitos-handoff' "$IMPL_BEFORE" 2>/dev/null \
+    && pass "the CLI attributes the skill to our preset (source: preset:jaimitos-handoff)" \
+    || fail "the skill is not attributed to the preset — it may not have taken"
 
   # A half-rendered template is worse than none: it would read as an instruction with holes in it.
   if grep -q '__SPECKIT_COMMAND_' "$IMPL_BEFORE" 2>/dev/null; then
@@ -125,6 +119,12 @@ else
   else
     pass "no unresolved placeholders in the generated skill"
   fi
+else
+  # A FINDING, not a test error: if the preset cannot be installed against the pinned CLI, R2 fired.
+  fail "the preset could not be applied to the pinned CLI — REJECT criterion R2 (the preset treadmill)"
+  echo "     actual CLI output:"
+  tail -n 12 "$WORK/preset.log" | sed 's/^/       /'
+  echo "     → Jaimitos cannot own a moving target it does not control. Record this in REPORT.md."
 fi
 
 # --- what the preset can NEVER do ---------------------------------------------------------------

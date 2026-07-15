@@ -53,3 +53,9 @@ CHANGES-LAST-*.md
 
 # Spec Kit handoff experiment — the proposer's default --out dir (reports, never state)
 .speckit-handoff/
+
+# Spec Kit CLI artifacts — a stray `specify init/preset` run (uvx resets cwd to the repo root)
+# must never pollute the repo. The experiment's real runs use throwaway mktemp dirs; this is a net.
+/.specify/
+/specs/
+/.claude/skills/speckit-*/

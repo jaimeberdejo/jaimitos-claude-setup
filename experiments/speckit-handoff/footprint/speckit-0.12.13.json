@@ -18,7 +18,16 @@
   "integration": "claude",
   "inspected": "2026-07-14",
 
-  "spec_kit_manifest": ".specify/integrations/speckit.manifest.json",
+  "_manifest_note": [
+    "Verified against the real pinned CLI (v0.12.13). Spec Kit writes TWO manifests, and the paths",
+    "are the KEYS of a `.files` object, not string values:",
+    "  speckit.manifest.json  → the .specify/ scripts + templates",
+    "  claude.manifest.json   → the .claude/skills/speckit-*/SKILL.md files (integration-specific)",
+    "The ownership check reads .files|keys[] from EVERY .specify/integrations/*.manifest.json, so a",
+    "speckit-* skill is claimed by whichever manifest recorded it. (An earlier version read only",
+    "speckit.manifest.json with `.. | strings` and extracted nothing — the live tier caught it.)"
+  ],
+  "spec_kit_manifest_glob": ".specify/integrations/*.manifest.json",
   "jaimitos_manifest": ".claude/.jaimitos-manifest",
 
   "_owned_note": [

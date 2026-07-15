@@ -45,22 +45,26 @@ mkinstalled() {
   done
 }
 
-# speckit_init <project> — SIMULATE `specify init --integration claude`: write the speckit-* skills,
-# the .specify tree, and — crucially — Spec Kit's OWN manifest recording what it wrote.
+# speckit_init <project> — SIMULATE `specify init --integration claude`. Shapes VERIFIED against the
+# real pinned CLI: TWO manifests, and .files is an OBJECT { "<path>": "<sha>" }, not a string array.
+#   claude.manifest.json   → the .claude/skills/speckit-*/SKILL.md files
+#   speckit.manifest.json  → the .specify/ scripts + templates
 speckit_init() {
   local p="$1"
-  mkdir -p "$p/.specify/memory" "$p/.specify/integrations" "$p/specs"
+  mkdir -p "$p/.specify/memory" "$p/.specify/integrations" "$p/.specify/templates" "$p/specs"
   printf '# Constitution\n' > "$p/.specify/memory/constitution.md"
-  local owned=""
+  printf '# spec template\n' > "$p/.specify/templates/spec-template.md"
+  local claude_files="" specify_files='".specify/templates/spec-template.md":"sha"'
   for c in specify clarify plan tasks implement analyze converge checklist constitution taskstoissues; do
     mkdir -p "$p/.claude/skills/speckit-$c"
     # Real spec-kit SKILL.md carries YAML frontmatter between --- fences, and
     # `disable-model-invocation: false` — so every description is ALWAYS-LOADED context.
     printf -- '---\nname: speckit-%s\ndescription: Run the %s step of the spec-driven workflow on the current feature, reading and updating the feature pack under specs/.\ndisable-model-invocation: false\n---\n' "$c" "$c" > "$p/.claude/skills/speckit-$c/SKILL.md"
-    owned="$owned\".claude/skills/speckit-$c/SKILL.md\","
+    claude_files="$claude_files\".claude/skills/speckit-$c/SKILL.md\":\"sha\","
   done
-  owned="$owned\".specify/memory/constitution.md\""
-  printf '{"version":"0.12.13","integration":"claude","files":[%s]}\n' "$owned" \
+  printf '{"integration":"claude","files":{%s".specify/memory/constitution.md":"sha"}}\n' "$claude_files" \
+    > "$p/.specify/integrations/claude.manifest.json"
+  printf '{"integration":"speckit","files":{%s}}\n' "$specify_files" \
     > "$p/.specify/integrations/speckit.manifest.json"
 }
 
@@ -145,10 +149,19 @@ outof | grep -q 'CLAUDE.md' \
 echo ""
 echo "fail-closed:"
 mkinstalled nomanifest; snapshot "$P"; speckit_init "$P"
-rm -f "$P/.specify/integrations/speckit.manifest.json"
+rm -f "$P"/.specify/integrations/*.manifest.json   # remove ALL — the glob would match a survivor
 rc=$(check "$P")
 [ "$rc" = 1 ] && pass "no Spec Kit manifest → refuses (ownership is unverifiable, not 'fine')" \
               || fail "missing spec-kit manifest treated as clean (rc=$rc)"
+
+# An UNPARSEABLE manifest must be its own error, not silently 'claims nothing' (which would report
+# every real file as a collision — the exact bug the live tier caught in the extractor).
+mkinstalled badjson; snapshot "$P"; speckit_init "$P"
+printf 'not json {{{' > "$P/.specify/integrations/claude.manifest.json"
+rc=$(check "$P")
+{ [ "$rc" = 1 ] && outof | grep -qi 'not valid JSON'; } \
+  && pass "an unparseable spec-kit manifest → refuses, calling it invalid JSON" \
+  || fail "bad-JSON manifest not caught (rc=$rc)"
 
 mkinstalled nojm; snapshot "$P"; speckit_init "$P"
 rm -f "$P/.claude/.jaimitos-manifest"

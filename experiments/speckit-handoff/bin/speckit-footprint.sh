@@ -81,20 +81,23 @@ VIOLATIONS=0
 violate() { echo "  ⛔ $1"; VIOLATIONS=$((VIOLATIONS+1)); }
 note()    { echo "  · $1"; }
 
-SK_MANIFEST_REL=$(jq -r '.spec_kit_manifest' "$MANIFEST")
+SK_MANIFEST_GLOB=$(jq -r '.spec_kit_manifest_glob' "$MANIFEST")
 JM_MANIFEST_REL=$(jq -r '.jaimitos_manifest' "$MANIFEST")
-SK_MANIFEST="$PROJECT/$SK_MANIFEST_REL"
 JM_MANIFEST="$PROJECT/$JM_MANIFEST_REL"
 
 echo "speckit-footprint: $(jq -r '"spec-kit " + .spec_kit_version + " (" + .spec_kit_sha[0:12] + ") · integration=" + .integration' "$MANIFEST")"
 echo ""
 
-# ---- both manifests must exist. Fail CLOSED. --------------------------------------------------
+# ---- manifests must exist. Fail CLOSED. -------------------------------------------------------
+# Spec Kit writes MORE THAN ONE manifest under .specify/integrations/ (verified against the pinned
+# CLI: speckit.manifest.json holds the .specify/ files, claude.manifest.json holds the skills). We
+# read them ALL — a speckit-* path is claimed by whichever manifest recorded it.
 echo "manifests:"
-if [ -f "$SK_MANIFEST" ]; then
-  note "spec-kit  → $SK_MANIFEST_REL"
+SK_MANIFESTS=$(cd "$PROJECT" 2>/dev/null && ls $SK_MANIFEST_GLOB 2>/dev/null | sort)
+if [ -n "$SK_MANIFESTS" ]; then
+  for m in $SK_MANIFESTS; do note "spec-kit  → $m"; done
 else
-  violate "spec-kit manifest MISSING ($SK_MANIFEST_REL) — ownership of every speckit-* path is unverifiable. Refusing to call that clean."
+  violate "no spec-kit manifest matched $SK_MANIFEST_GLOB — ownership of every speckit-* path is unverifiable. Refusing to call that clean."
 fi
 if [ -f "$JM_MANIFEST" ]; then
   note "jaimitos  → $JM_MANIFEST_REL"
@@ -103,18 +106,23 @@ else
 fi
 [ "$VIOLATIONS" -gt 0 ] && { echo ""; echo "speckit-footprint: REFUSED — $VIOLATIONS violation(s)."; exit 1; }
 
-# What Spec Kit CLAIMS it wrote. Its schema is not contractual (upstream ships several releases a
-# day), so we pull every path-like string out of the JSON rather than assuming a shape — and say so
-# rather than pretending we know it.
-#
-# An UNPARSEABLE manifest must be its own error. Otherwise jq returns nothing, Spec Kit appears to
-# claim nothing, and every one of its own files is reported as a collision — a confident, precise,
-# entirely wrong answer.
-if ! jq -e . "$SK_MANIFEST" >/dev/null 2>&1; then
-  violate "spec-kit manifest is not valid JSON ($SK_MANIFEST_REL) — ownership is unverifiable. Refusing (this is NOT 'spec-kit claims nothing')."
-  echo ""; echo "speckit-footprint: REFUSED — $VIOLATIONS violation(s)."; exit 1
-fi
-SK_OWNED=$(jq -r '.. | strings' "$SK_MANIFEST" 2>/dev/null | grep '/' | sort -u)
+# What Spec Kit CLAIMS it wrote, across every manifest. The paths are the KEYS of a `.files` object
+# (a { "<path>": "<sha>" } map), NOT string values — an earlier version read `.. | strings` and got
+# nothing but sha hashes, so Spec Kit appeared to claim nothing and every one of its files looked
+# like a collision. The live tier caught it. An UNPARSEABLE manifest is its own error, never
+# silently "claims nothing".
+SK_OWNED=""
+for m in $SK_MANIFESTS; do
+  if ! jq -e . "$PROJECT/$m" >/dev/null 2>&1; then
+    violate "spec-kit manifest is not valid JSON ($m) — ownership is unverifiable. Refusing (this is NOT 'spec-kit claims nothing')."
+    echo ""; echo "speckit-footprint: REFUSED — $VIOLATIONS violation(s)."; exit 1
+  fi
+  # .files may be an object (keys are paths) or, defensively, an array of path strings.
+  keys=$(jq -r 'if (.files|type)=="object" then (.files|keys[]) elif (.files|type)=="array" then .files[] else empty end' "$PROJECT/$m" 2>/dev/null)
+  SK_OWNED="$SK_OWNED
+$keys"
+done
+SK_OWNED=$(printf '%s\n' "$SK_OWNED" | grep '/' | sort -u)
 
 # ---- glob helpers (bash 3.2: `case` globbing, no extglob) -------------------------------------
 matches_any() {   # matches_any <path> <newline-separated globs>

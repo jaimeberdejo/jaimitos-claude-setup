@@ -1,5 +1,5 @@
 ---
-description: Report-only convergence. Assess the codebase against the feature pack — and change nothing.
+description: "Report-only convergence. Assess the codebase against the feature pack, and change nothing."
 ---
 
 # Convergence is a REPORT here, not a repair

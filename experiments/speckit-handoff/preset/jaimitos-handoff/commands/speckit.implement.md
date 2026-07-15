@@ -1,5 +1,5 @@
 ---
-description: STOP — implementation in this project is owned by Jaimitos, not Spec Kit.
+description: "STOP. Implementation in this project is owned by Jaimitos (/phase), not Spec Kit."
 ---
 
 # Implementation is not yours

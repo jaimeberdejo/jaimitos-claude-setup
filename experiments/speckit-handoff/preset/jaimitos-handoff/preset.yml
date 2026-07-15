@@ -1,40 +1,50 @@
 # jaimitos-handoff — a Spec Kit PRESET that redirects the two commands which would otherwise make
 # Spec Kit a second executor and a second queue.
 #
-# A preset is the ONLY sanctioned way to override a Spec Kit core command: there is no supported
-# mechanism to EXCLUDE or RENAME one. `specify init --here --force` and `specify integration upgrade`
-# both re-create the core commands, so deleting `.claude/skills/speckit-implement/` by hand does not
-# survive an upgrade.
+# SCHEMA VERIFIED against the real pinned CLI (v0.12.13). The first draft was rejected by
+# `specify preset add` for a missing `schema_version` and the wrong shape entirely — the live tier
+# caught it. This matches presets/lean/preset.yml, a real upstream preset that replaces
+# speckit.implement. Install (local dev): `specify preset add jaimitos-handoff --dev <this-dir>`.
+# The command files live in commands/ (not templates/), named for the command they replace.
 #
-# BE HONEST ABOUT WHAT THIS BUYS. A preset replaces a command's PROMPT. It cannot structurally stop
-# a model from writing code. The real protection is elsewhere and it is stronger:
+# A preset replaces a command's PROMPT. It CANNOT structurally stop a model from writing code. The
+# real protection is stronger and lives elsewhere: nothing Spec Kit writes can tick a Jaimitos phase
+# (scripts/tick.sh is the sole writer of "- [x]" and demands an evaluator PASS plus green evidence
+# bound to HEAD), and specs/<NNN>/tasks.md is not the roadmap. This preset is a signpost, not a wall
+# — it belongs in the README's Guarantee|Enforcement table under "Documented (prompt-level)".
 #
-#   - nothing Spec Kit writes can tick a Jaimitos phase. `scripts/tick.sh` is the sole writer of
-#     "- [x]", and it demands an evaluator PASS plus green test evidence bound to HEAD. Neither is
-#     forgeable by a command that only edits files.
-#   - `specs/<NNN>/tasks.md` is not the roadmap. Even if `/speckit-converge` appended a hundred
-#     tasks, `docs/ROADMAP.md` does not move until a human applies a gated fragment.
-#
-# So this preset is a signpost, not a wall. It is in the README's Guarantee|Enforcement table under
-# "Documented (prompt-level)", and it must stay there.
-#
-# UNVERIFIED UNTIL THE LIVE TIER RUNS. The key names below are read from spec-kit v0.12.13's preset
-# schema, and upstream ships several releases a day — this is the most fragile artifact in the whole
-# experiment (REJECT criterion R2). tests/live/test-preset-real-cli.sh installs the PINNED CLI and
-# checks that Spec Kit actually honours it. Source inspection of this file is NOT evidence.
+# R2 (the preset treadmill) is REAL: the schema is not a contract and upstream ships several releases
+# a day. This is verified against the PINNED CLI in the live tier; source inspection is not evidence.
 
-name: jaimitos-handoff
-description: Redirect Spec Kit's executor and convergence commands at Jaimitos, which owns implementation and the queue.
-priority: 100
+schema_version: "1.0"
+
+preset:
+  id: "jaimitos-handoff"
+  name: "Jaimitos handoff"
+  version: "0.1.0"
+  description: "Redirect Spec Kit's executor and convergence commands at Jaimitos, which owns implementation and the queue."
+  author: "jaimitos-os (experimental)"
+  repository: "https://github.com/jaimeberdejo/jaimitos-claude-setup"
+  license: "MIT"
+
+requires:
+  speckit_version: ">=0.1.0"
 
 provides:
   templates:
-    - type: command
-      replaces: speckit.implement
-      strategy: replace
-      path: templates/speckit.implement.md
+    - type: "command"
+      name: "speckit.implement"
+      file: "commands/speckit.implement.md"
+      description: "Implementation is owned by Jaimitos (/phase), not Spec Kit."
+      replaces: "speckit.implement"
 
-    - type: command
-      replaces: speckit.converge
-      strategy: replace
-      path: templates/speckit.converge.md
+    - type: "command"
+      name: "speckit.converge"
+      file: "commands/speckit.converge.md"
+      description: "Convergence is report-only here; it changes no state."
+      replaces: "speckit.converge"
+
+tags:
+  - "jaimitos"
+  - "orchestration"
+  - "experimental"
