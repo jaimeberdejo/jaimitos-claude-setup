@@ -6,7 +6,7 @@ description: Closes a spec that grill has been building — resolves the open qu
 # To spec
 
 `grill` builds `docs/SPEC.md` live during the interview, so there are no raw notes to distill.
-`to-spec` does the four things only the close can do. Work from the document itself — a fresh
+`to-spec` does the five things only the close can do. Work from the document itself — a fresh
 session with no interview in context must be able to close a spec by reading only the file.
 
 ## Steps
@@ -14,15 +14,26 @@ session with no interview in context must be able to close a spec by reading onl
    either **answered** (moved into the section it belongs to — In scope / Constraints / Success
    criterion) or **degraded to a Non-goal with its reason.** A spec is not ready while this
    section has unresolved entries.
-2. **Distill the settled ADRs.** The architectural decisions `grill` noted under Constraints are
+2. **Assign and preserve requirement ids — you are the sole id owner.** *Only if the spec's
+   `## Requirements` section is in use — tiny/local specs skip this and keep just the measurable
+   Success criterion.* Give each settled requirement a stable `REQ-###` and each acceptance
+   criterion an `AC-###` (globally unique across the whole spec); use `OBJ-###` for a maintenance
+   objective. **Preserve every already-approved id** — never renumber on reorder, never silently
+   recycle a removed id (mark it `Superseded`/`Rejected` and reference its replacement). An external
+   id (`FR-001`, `JIRA-1234`) is accepted only when this spec defines it. A requirement whose text
+   still carries `[NEEDS CLARIFICATION: …]` stays `Proposed`/`Clarifying`, never `Approved`. `grill`
+   only surfaces candidates; minting and preserving the canonical ids is this skill's job. Roadmap
+   phases then reference these ids via a `Requirements:` line — the definition stays here, never
+   copied into the roadmap.
+3. **Distill the settled ADRs.** The architectural decisions `grill` noted under Constraints are
    now settled — record each with the **`adr`** skill (its 4-line format already requires the
    rejected alternative). Then in `Constraints`, replace the inline note with a citation of the
    ADR path (`see docs/decisions/NNNN-*.md`) — never repeat its content. Vocabulary and the ADR
    format are not yours to write; the `glossary` and `adr` skills own them.
-3. **Propose and write the test seams.** The public interfaces behavior will be verified through —
+4. **Propose and write the test seams.** The public interfaces behavior will be verified through —
    the fewer the better, ideal 1; prefer seams that already exist. Confirm them with the user,
    then write them into `## Test seams`. The `tdd` skill reads these instead of re-asking.
-4. **Detect a pivot.** Compare the current `Success criterion` against the last committed spec:
+5. **Detect a pivot.** Compare the current `Success criterion` against the last committed spec:
    `git show HEAD:docs/SPEC.md` (skip this check if there's no prior HEAD version). If the
    criterion *changed*, this is **not an amendment — it's a different product.** Do NOT edit in
    place: say so, and offer to archive the old spec (`git mv docs/SPEC.md docs/spec-v1.md`) and
