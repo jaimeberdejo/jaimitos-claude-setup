@@ -30,6 +30,7 @@ chmod +x bin/*.sh tests/*.sh tests/live/*.sh 2>/dev/null || true
 TESTS=(
   test-speckit-gate.sh
   test-speckit-footprint.sh
+  test-speckit-converge.sh
 )
 
 # Drift guard: every tests/test-*.sh MUST be listed above, or a newly-added test would silently
