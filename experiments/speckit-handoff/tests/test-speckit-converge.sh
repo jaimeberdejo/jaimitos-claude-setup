@@ -34,7 +34,7 @@ mkproject() {
 
 ## Phase 3 — Widget Search
 - [ ] T002 implement search_widgets(query, limit) in src/search/query.py
-Sources: specs/001-widget-search/spec.md specs/001-widget-search/plan.md
+Sources: specs/001-widget-search/spec.md@__SPECHASH__ specs/001-widget-search/plan.md
 Requirements:
 - FR-001 — System MUST return widgets whose name contains the query, case-insensitively.
 - FR-002 — System MUST order results by relevance, most relevant first.
@@ -46,6 +46,10 @@ Requirements:
 Done when: the search tests are green
 Mode: loopable
 EOF
+  # Stamp the pack's spec.md content hash into the Sources: line, exactly as speckit-propose.sh does
+  # at import time — it is what the frozen check needs as a baseline. (See the frozen test below.)
+  SPECHASH=$(git hash-object "$FIX/A-complete/specs/001-widget-search/spec.md" 2>/dev/null)
+  sed "s/__SPECHASH__/$SPECHASH/" "$PROJ/docs/ROADMAP.md" > "$PROJ/docs/ROADMAP.tmp" && mv "$PROJ/docs/ROADMAP.tmp" "$PROJ/docs/ROADMAP.md"
   ( cd "$PROJ" && git init -q && git config user.email t@t.t && git config user.name t && git add -A && git commit -qm init )
 }
 run() { "$@" >"$WORK/out" 2>&1; echo $?; }
@@ -90,6 +94,20 @@ rc=$(run bash "$CONV" --pack "$PACK" --feature 001-widget-search --project "$PRO
 { [ "$rc" = 3 ] && grep -qi 'frozen\|completed' "$PROJ/.speckit-handoff/CONVERGENCE.md"; } \
   && pass "spec text changed under a COMPLETED phase → exit 3 (frozen; a human must look)" \
   || { fail "frozen conflict not exit 3 (rc=$rc)"; outof | sed 's/^/      /'; }
+
+# ---------------------------------------------------------------- no baseline → UNCHECKED, not frozen
+echo ""
+echo "a paraphrased label on a completed phase is NOT frozen (the dogfood's false positive):"
+# The frozen check must key on the SPEC's content hash, not the roadmap's label text. A hand-authored
+# or abbreviated Requirements: label differs from spec.md by design — that must never read as frozen.
+mkproject nobaseline
+# Strip the @hash baseline (as a hand-authored split fragment would lack it) and complete the phase.
+sed -e 's/spec\.md@[0-9a-f]*/spec.md/' -e 's/- \[ \] T002/- [x] T002/' "$PROJ/docs/ROADMAP.md" > "$PROJ/docs/ROADMAP.tmp" && mv "$PROJ/docs/ROADMAP.tmp" "$PROJ/docs/ROADMAP.md"
+( cd "$PROJ" && git commit -aqm "complete, no baseline" )
+rc=$(run bash "$CONV" --pack "$FIX/A-complete" --feature 001-widget-search --project "$PROJ" --out "$PROJ/.speckit-handoff")
+{ [ "$rc" != 3 ] && grep -qi 'UNCHECKED' "$PROJ/.speckit-handoff/CONVERGENCE.md"; } \
+  && pass "no import baseline → UNCHECKED (not a false 'frozen'), exit is not 3" \
+  || fail "a paraphrased label without a baseline was wrongly flagged frozen (rc=$rc)"
 
 # ---------------------------------------------------------------- --informational forces 0
 echo ""

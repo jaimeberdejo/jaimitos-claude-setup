@@ -13,6 +13,14 @@
 
 sk_warn() { printf 'speckit: %s\n' "$1" >&2; }
 
+# sk_hash <file> — a content hash for a file, git-independent. Used to stamp the spec at import time
+# so convergence can tell "the spec changed" from "the label was always a paraphrase".
+sk_hash() {
+  { git hash-object "$1" 2>/dev/null; } || \
+  { shasum -a 256 "$1" 2>/dev/null | cut -d' ' -f1; } || \
+  { sha256sum "$1" 2>/dev/null | cut -d' ' -f1; }
+}
+
 # sk_feature_dir <pack> <feature> — the specs/<NNN-slug> directory. rc 1 if absent.
 sk_feature_dir() {
   local d="$1/specs/$2"

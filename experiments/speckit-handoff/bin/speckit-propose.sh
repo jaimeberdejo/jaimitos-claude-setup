@@ -80,8 +80,13 @@ FRAG="$TMPD/roadmap.append.md"
     [ -n "$t" ] || continue
     printf -- '- [ ] %s\n' "$t"
   done
-  printf 'Sources:'
-  for f in spec.md plan.md tasks.md; do printf ' specs/%s/%s' "$FEATURE" "$f"; done
+  # Stamp spec.md's content hash at import time. It is the ONLY persistent record of what the spec
+  # said WHEN we imported, and speckit-converge.sh needs it to tell "the spec changed under a
+  # completed phase" (a real frozen conflict) from "the roadmap label was always a short paraphrase"
+  # (not a conflict). Without this baseline, frozen detection cries wolf on every paraphrase.
+  SPEC_HASH=$(git hash-object "$FDIR/spec.md" 2>/dev/null || sk_hash "$FDIR/spec.md")
+  printf 'Sources: specs/%s/spec.md@%s' "$FEATURE" "$SPEC_HASH"
+  for f in plan.md tasks.md; do printf ' specs/%s/%s' "$FEATURE" "$f"; done
   [ -d "$FDIR/contracts" ] && printf ' specs/%s/contracts/' "$FEATURE"
   printf '\n'
   printf 'Requirements:\n'

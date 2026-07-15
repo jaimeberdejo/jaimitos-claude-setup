@@ -80,29 +80,29 @@ COVERED=$(comm -12 <(printf '%s\n' "$SPEC_IDS") <(printf '%s\n' "$ROADMAP_IDS"))
 MISSING=$(comm -23 <(printf '%s\n' "$SPEC_IDS") <(printf '%s\n' "$ROADMAP_IDS"))
 DRIFT=$(comm -13 <(printf '%s\n' "$SPEC_IDS") <(printf '%s\n' "$ROADMAP_IDS"))
 
-# --- FROZEN: a COMPLETED phase whose spec text changed since import --------------------------------
-# The roadmap records each requirement's text on its "- FR-### — <text>" line at import time. If that
-# text no longer matches the spec AND the phase carrying it is fully ticked, the spec moved under
-# finished work: report-only cannot fix a completed phase (there is no code path to), so it is a
-# human decision. rc 3.
-FROZEN=""
-# Walk each phase; if it has no open task (complete), compare its requirement texts to the spec's.
+# --- FROZEN: a COMPLETED phase whose SPEC changed since import ----------------------------------
+# Frozen means the spec MOVED under finished work. That is decided by the SPEC's content hash at
+# import time (stamped as `spec.md@<hash>` on the Sources: line), NOT by whether the roadmap's
+# requirement label still matches the spec text. The label is deliberately allowed to be a short
+# paraphrase — the id is the stable key. (The dogfood caught the earlier label-vs-text version
+# crying wolf on every paraphrase.) If no phase carries an import baseline, frozen is UNCHECKED,
+# and we say so rather than guessing.
+FROZEN=""; FROZEN_UNCHECKED=0
 while IFS= read -r h; do
   [ -n "$h" ] || continue
   open=$(roadmap_open_count "$ROADMAP" "$h")
   [ "$open" = 0 ] || continue                   # phase still open — not frozen, just in progress
-  # requirement ids named in THIS phase block
-  ids=$(PH="$h" awk '
-    $0==ENVIRON["PH"] {inp=1; next} /^## / && inp {inp=0}
-    inp' "$ROADMAP" | grep -oE '\b(FR|SC)-[0-9]{3}\b' | sort -u)
+  block=$(PH="$h" awk '$0==ENVIRON["PH"]{inp=1;next} /^## /&&inp{inp=0} inp' "$ROADMAP")
+  # The import baseline for this phase: `specs/.../spec.md@<hash>` on its Sources: line.
+  base_hash=$(printf '%s\n' "$block" | grep -m1 -oE 'spec\.md@[0-9a-f]+' | sed 's/.*@//')
+  if [ -z "$base_hash" ]; then FROZEN_UNCHECKED=1; continue; fi
+  now_hash=$(sk_hash "$FDIR/spec.md")
+  [ "$base_hash" = "$now_hash" ] && continue    # spec unchanged since import — nothing frozen
+  # The spec changed. Only the ids on THIS completed phase are affected.
+  ids=$(printf '%s\n' "$block" | grep -oE '\b(FR|SC)-[0-9]{3}\b' | sort -u)
   for id in $ids; do
-    roadmap_txt=$(PH="$h" awk '
-      $0==ENVIRON["PH"] {inp=1; next} /^## / && inp {inp=0}
-      inp' "$ROADMAP" | grep -m1 -E "^- $id " | sed -e "s/^- $id — //" -e 's/[[:space:]]*$//')
-    spec_txt=$(sk_req_text "$FDIR/spec.md" "$id")
-    [ -z "$spec_txt" ] && continue              # id gone from spec is DRIFT, handled above
-    [ -z "$roadmap_txt" ] && continue
-    [ "$(sk_norm "$roadmap_txt")" = "$(sk_norm "$spec_txt")" ] || FROZEN="$FROZEN $id"
+    # Report only ids whose CURRENT spec text still exists (a removed id is DRIFT, handled above).
+    [ -n "$(sk_req_text "$FDIR/spec.md" "$id")" ] && FROZEN="$FROZEN $id"
   done
 done < <(sk_phase_headings "$ROADMAP")
 
@@ -135,14 +135,19 @@ list()  { if [ -n "$1" ]; then printf '%s\n' "$1" | sed 's/^/- /'; else printf '
   printf '## Drift — an id the spec no longer has\n\n'
   printf 'Named on the roadmap, gone from `spec.md` (the spec moved after import):\n\n'; list "$DRIFT"; printf '\n'
 
-  printf '## Frozen — a completed phase whose spec text changed\n\n'
+  printf '## Frozen — a completed phase whose spec changed since import\n\n'
   if [ -n "$FROZEN" ]; then
-    printf 'These ids sit on a COMPLETED phase, but their `spec.md` text has changed since import:\n\n'
+    printf 'The `spec.md` content hash differs from the one stamped at import (`spec.md@<hash>` on the\n'
+    printf 'Sources: line), and these ids sit on a COMPLETED phase:\n\n'
     for id in $FROZEN; do printf -- '- `%s`\n' "$id"; done
     printf '\n> Report-only cannot rewrite a completed phase, and must not. A human decides whether the\n'
     printf '> spec change warrants a NEW phase or is already satisfied.\n\n'
+  elif [ "$FROZEN_UNCHECKED" = 1 ]; then
+    printf '_UNCHECKED — a completed phase carries no import baseline (`spec.md@<hash>` on its Sources:\n'
+    printf 'line), so a spec change under it cannot be detected. Re-import through `import-speckit` to\n'
+    printf 'stamp one._\n\n'
   else
-    printf '_none — no completed phase has drifted from its spec._\n\n'
+    printf '_none — every completed phase''s spec is unchanged since import._\n\n'
   fi
 
   printf '## New upstream tasks\n\n'
