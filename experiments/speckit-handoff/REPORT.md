@@ -1,9 +1,13 @@
 # Spec Kit handoff — findings and go/no-go
 
-**Status: DRAFT.** The deterministic suite and the empirical (live-CLI) checks are complete. The one
-thing still outstanding is the full end-to-end value comparison against `grill → to-spec` (R6) — the
-question that ultimately decides PROMOTE vs REJECT. Everything below is measured, not estimated;
-where a number came from the real pinned CLI it says so.
+**Status: COMPLETE.** Deterministic suite, live-CLI checks, and a full end-to-end dogfood on a real
+feature are all done. Everything below is measured, not estimated; live-CLI numbers say so.
+
+**Verdict: REJECT AS INSUFFICIENT VALUE** — as a promoted/installed profile. The one genuinely
+valuable thing the dogfood proved (independent requirement-id traceability) is **separable from Spec
+Kit** and cheaper to get natively; Spec Kit's costs are permanent and not opt-out-able. The adapter
+stays exactly where it is — experimental, unshipped — as an opt-in bridge for a team already invested
+in Spec Kit, not promoted. The separable win should be extracted to core on its own merits (below).
 
 ## Upstream
 
@@ -38,8 +42,54 @@ confirmed against the running CLI: `--ai claude` was **removed in 0.10.0** (it i
 | **R3** | Two roadmaps of record | **PASS** | A fresh agent handed BOTH `tasks.md` and `docs/ROADMAP.md` correctly named the roadmap as the execution authority, recognised `tasks.md` as an upstream input (it is cited under `Sources:`), and refused the decoy tasks `tasks.md` listed but the roadmap did not import. The ownership model holds behaviourally, not just on paper. |
 | **R4** | Evaluator section stays tool-agnostic | **PASS** | The shipped evaluator's requirement-traceability section fires only when a phase declares `Requirements:`, is written for any external requirements source, and names no tool. `test-docs-invariants.sh` asserts both the conditional wording and the absence of "speckit"/"spec kit". Verified inert in a default install (byte-identical evaluator, no shipped template carries `Requirements:`). |
 | **R5** | Measurability heuristic is a nuisance | **MITIGATED, cost visible** | It warns and flags for human review; it never refuses. Its known false positive ("the endpoint is idempotent" — measurable, no digit) is surfaced in the handoff report by design, so the cost is not hidden. Whether it is a *net* nuisance is a judgement the dogfood should record. |
-| **R6** | Beats `grill → to-spec`? | **NOT YET ASSESSED** | The deciding question. Needs a real feature run through both paths, compared on spec quality, phase quality, and total context cost. This is the remaining work. |
-| **R7** | `specify init` footprint | **PASS (live CLI)** | `specify init --here --integration claude` touched nothing Jaimitos owns — `docs/ROADMAP.md`, `.claude/skills/*`, and the manifests all intact. The `.claude/skills/` co-location is safe: `--force` merges, and the integration writes only `speckit-*` subdirs. |
+| **R6** | Beats `grill → to-spec`? | **NO — the value is separable** | Dogfooded end-to-end on a real feature (below). Spec Kit's one out-of-the-box advantage — stable FR/SC ids that an independent evaluator traced to code+tests — is delivered by the *tool-agnostic* evaluator section, which works with any `Requirements:` block. `grill/to-spec/roadmap` could emit stable ids and get the identical benefit at **zero** extra always-loaded cost. Spec Kit's costs (below) are permanent and buy nothing native can't. |
+| **R7** | `specify init` footprint | **PASS (live CLI)** | On the real dogfood project: 31 paths changed, all 31 claimed by Spec Kit's manifests; `docs/ROADMAP.md`, `.claude/skills/*` (the 18 Jaimitos skills), and the Jaimitos manifest all intact. The `.claude/skills/` co-location is safe: `--force` merges, the integration writes only `speckit-*` subdirs. |
+
+## The dogfood (R6, end to end on a real feature)
+
+Feature: **account data export & deletion** — chosen for a guaranteed high-stakes slice (deletion)
+and genuine FR/SC structure. Disposable project, Jaimitos installed, real pinned Spec Kit CLI + the
+preset. Full flow, every step run for real:
+
+1. **Authored** via the real Spec Kit workflow (`create-new-feature.sh` + the real templates): a
+   `spec.md` with `FR-001..006`, `SC-001..003`, clarifications resolved.
+2. **Handoff.** The mechanical proposer produced **one supervised phase** (exit 3 — `delete.py` makes
+   the whole pack high-stakes). The `import-speckit` skill then applied judgement the gate cannot:
+   **split** into an export phase (loopable, `FR-001/002/003` + `SC-001`) and a deletion phase
+   (supervised, `FR-004/005/006` + `SC-002/003`), attributing ids honestly. The split fragment passed
+   the real `lint-roadmap.sh --strict`.
+3. **Built** the export phase via TDD — real `src/accounts/export.py` + `tests/test_export.py`, red
+   then green, wider suite clean.
+4. **Graded independently.** A fresh evaluator subagent running the *shipped* `evaluator.md` traced
+   **all four** claimed ids to specific code lines and passing tests, graded only the ids the phase
+   claimed, even caught that `FR-003`'s `events` case was untested — and returned **PASS**. This is
+   the load-bearing result: a requirement id written in the spec survived the handoff and was
+   independently verified against the implementation.
+5. **Ticked** by the real `scripts/tick.sh`. Instructive friction: the `src/accounts/` path is
+   high-stakes (`accounts` is an auth-adjacent token), so even the read-only export phase required the
+   pre-phase allowlist + `start-phase.sh` anchor ceremony — the adapter's "loopable" judgement could
+   **not** weaken the gate. The ownership model held exactly as designed.
+6. **Deletion phase** stayed supervised and unbuilt.
+7. **Convergence** reported `covered=9 missing=0 drift=0 frozen=0`, exit 0, mutating nothing — after
+   the dogfood surfaced and fixed a real false-positive in the frozen check (it compared paraphrased
+   labels instead of the spec's import hash; now it stamps `spec.md@<hash>` and compares that).
+
+### The decision, with the measured numbers
+
+| | Spec Kit path | `grill → to-spec` (native) |
+|---|---|---|
+| Stable requirement ids, evaluator-traced | **yes** (proved end-to-end) | not out of the box — *but the tool-agnostic evaluator section gives it to any `Requirements:` source* |
+| Always-loaded context | **~268 tokens every turn**, 10 skills, **no opt-out** | **0 additional** (grill/to-spec/roadmap already in the 5035 B budget) |
+| On-disk footprint | **+140 KB `.specify/` tree, 22 files** | none |
+| Artifact homes for "the plan" | **4** (`spec.md` + `plan.md` + `tasks.md` + `ROADMAP.md`) | **2** (`docs/SPEC.md` + `docs/ROADMAP.md`) |
+| Override mechanism | a preset whose schema I got wrong **3 ways** (R2) | native, no override needed |
+| Ceremony to complete a phase | init → preset → author → import → gate → append → allowlist → anchor → build → grade → tick | grill → roadmap → /phase |
+
+**The separability point is the whole verdict.** The valuable capability — a stable id, written once,
+traced independently to code — is delivered by the ~10-line evaluator section, which names no tool
+and fires on any `Requirements:` block. Teaching `grill`/`to-spec`/`roadmap` to emit `FR-`/`SC-` ids
+into that block would reproduce the entire benefit at zero standing context cost, with two artifact
+homes instead of four, and no preset to chase across Spec Kit's daily releases.
 
 ## Architecture
 
@@ -70,18 +120,43 @@ observability, whether an SC is genuinely measurable, high-stakes *intent* with 
 contradiction vs `docs/SPEC.md` (deliberately surfaced, never auto-judged — there is no
 `detects_scope_contradiction` test because a green one would be a lie).
 
-## Preliminary lean (NOT the verdict)
-
-On the evidence so far the ownership boundaries hold and nothing is a hard REJECT — R3/R4/R7 pass,
-R1/R2/R5 are real costs that are measured and contained rather than fatal. The verdict turns entirely
-on **R6**: if Spec Kit's specification front-end produces materially better requirements than
-`grill → to-spec` for a real feature, the ~298-token standing tax and the preset fragility are a
-reasonable price, and this is **REVISE AND DOGFOOD AGAIN** heading toward PROMOTE. If it does not,
-the tax and fragility buy nothing and it is **REJECT AS INSUFFICIENT VALUE**. That comparison has not
-been run yet, so **no verdict is recorded here.**
+## Verdict
 
 ```
 [ ] PROMOTE TO OPTIONAL INTEGRATED PROFILE
 [ ] REVISE AND DOGFOOD AGAIN
-[ ] REJECT AS INSUFFICIENT VALUE
+[x] REJECT AS INSUFFICIENT VALUE   — as a promoted/installed profile
 ```
+
+The experiment succeeded: it held its ownership boundaries under real load (R3/R4/R7 pass, the tick
+monopoly never broke, completed history was never rewritten), and it produced a genuinely useful
+capability. But the useful capability is **not Spec Kit**. It is the tool-agnostic
+requirement-traceability in the evaluator, and it is separable, cheaper, and native-friendly.
+
+Promoting the adapter to an installed profile would make every user pay ~268 tokens every turn, a
+140 KB tree, four artifact homes, and a preset that must be chased across Spec Kit's multiple-daily
+releases — to obtain a benefit that grill/to-spec/roadmap could deliver for nothing by emitting
+stable ids. That trade is not worth it for the common case. **Do not promote.**
+
+### What to do with the pieces
+
+1. **Extract the win to core, on its own merits.** The evaluator's requirement-traceability section
+   is worth keeping as a *core* feature — but justified as core, with its own version bump, CHANGELOG
+   entry, and independent review, NOT smuggled in as experiment fallout. Pair it with a small change
+   to `grill`/`to-spec`/`roadmap` so they emit `FR-`/`SC-` ids into a `Requirements:` block. That
+   gives Jaimitos the traceability payoff with none of Spec Kit's cost. (This is the "alternative"
+   the plan named. Until then, the section stays on this branch and does not merge.)
+2. **Keep the adapter experimental and opt-in.** For a team already invested in Spec Kit, this is a
+   working bridge that lets them keep their specs and still get Jaimitos orchestration. It should stay
+   in `experiments/`, unshipped, available to those who explicitly want it — never installed by
+   default.
+3. **If Release 3 revisits this,** the two things to re-check first are R1 (has upstream added a way
+   to exclude a core command / opt a skill out of always-loaded context?) and R2 (has the preset
+   schema stabilised?). Both are upstream-dependent and both counted against promotion here.
+
+### Residual risks, unchanged by the dogfood
+- **R1** and **R2** are the reasons above; both are upstream's to fix, not Jaimitos's.
+- **R5** (the measurability heuristic) behaved acceptably — it surfaced `SC-003` as a false positive
+  exactly as designed, visibly, without blocking. Not a factor in the verdict.
+- The `accounts/`-path friction (step 5) is Jaimitos core behaving correctly, not an adapter defect —
+  but it does mean the adapter's per-phase mode judgement is advisory: `tick.sh` has the final say.
