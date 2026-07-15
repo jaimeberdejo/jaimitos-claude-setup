@@ -1,0 +1,40 @@
+# jaimitos-handoff — a Spec Kit PRESET that redirects the two commands which would otherwise make
+# Spec Kit a second executor and a second queue.
+#
+# A preset is the ONLY sanctioned way to override a Spec Kit core command: there is no supported
+# mechanism to EXCLUDE or RENAME one. `specify init --here --force` and `specify integration upgrade`
+# both re-create the core commands, so deleting `.claude/skills/speckit-implement/` by hand does not
+# survive an upgrade.
+#
+# BE HONEST ABOUT WHAT THIS BUYS. A preset replaces a command's PROMPT. It cannot structurally stop
+# a model from writing code. The real protection is elsewhere and it is stronger:
+#
+#   - nothing Spec Kit writes can tick a Jaimitos phase. `scripts/tick.sh` is the sole writer of
+#     "- [x]", and it demands an evaluator PASS plus green test evidence bound to HEAD. Neither is
+#     forgeable by a command that only edits files.
+#   - `specs/<NNN>/tasks.md` is not the roadmap. Even if `/speckit-converge` appended a hundred
+#     tasks, `docs/ROADMAP.md` does not move until a human applies a gated fragment.
+#
+# So this preset is a signpost, not a wall. It is in the README's Guarantee|Enforcement table under
+# "Documented (prompt-level)", and it must stay there.
+#
+# UNVERIFIED UNTIL THE LIVE TIER RUNS. The key names below are read from spec-kit v0.12.13's preset
+# schema, and upstream ships several releases a day — this is the most fragile artifact in the whole
+# experiment (REJECT criterion R2). tests/live/test-preset-real-cli.sh installs the PINNED CLI and
+# checks that Spec Kit actually honours it. Source inspection of this file is NOT evidence.
+
+name: jaimitos-handoff
+description: Redirect Spec Kit's executor and convergence commands at Jaimitos, which owns implementation and the queue.
+priority: 100
+
+provides:
+  templates:
+    - type: command
+      replaces: speckit.implement
+      strategy: replace
+      path: templates/speckit.implement.md
+
+    - type: command
+      replaces: speckit.converge
+      strategy: replace
+      path: templates/speckit.converge.md

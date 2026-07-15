@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "note": "Provenance for upstream work Jaimitos actually adopted or materially consulted. Pinned by SHA. There is no automatic updater by design — see integrations/README.md for the manual update process.",
+  "note": "Provenance for upstream work Jaimitos actually adopted or materially consulted. Pinned by SHA. There is no automatic updater by design \u2014 see integrations/README.md for the manual update process.",
   "upstreams": [
     {
       "repo": "https://github.com/obra/superpowers",
@@ -41,10 +41,10 @@
       "deviations": [
         "REJECTED the SessionStart bootstrap hook, `using-superpowers`, `brainstorming`, `writing-plans`, `subagent-driven-development`, `executing-plans`, `finishing-a-development-branch` and `dispatching-parallel-agents`: each is a competing spine (router / planner / executor / completion gate / swarm). Jaimitos already has exactly one of each, and importing one drags the cross-referenced chain in with it.",
         "REJECTED `requesting-code-review` as a skill: v2.7.0 deliberately retired Jaimitos' own review skills in favour of Claude Code's native /code-review and /security-review, plus scope-guard and the independent evaluator.",
-        "`verification-before-completion` was MERGED into existing surfaces (executor, evaluator, /phase, /wrap) rather than added as a skill — a verification skill would become a second, weaker completion gate alongside scripts/tick.sh.",
+        "`verification-before-completion` was MERGED into existing surfaces (executor, evaluator, /phase, /wrap) rather than added as a skill \u2014 a verification skill would become a second, weaker completion gate alongside scripts/tick.sh.",
         "`test-driven-development`'s absolute 'delete the code and start over' rule was softened to Jaimitos' explicit-exception model: production code that must precede the red test is allowed, but the exception has to be recorded. The no-meaningful-red-means-not-TDD rule is kept.",
         "`systematic-debugging`'s 4-phase structure was NOT imported (Jaimitos' `diagnose` already has a stronger 6-phase loop). Only the missing mechanisms were merged: the evidence taxonomy, the one-hypothesis rule, and the 3-fix architecture escalation.",
-        "`using-git-worktrees` is REFERENCE ONLY — Jaimitos already has worktree flows and this release adds no worktree framework.",
+        "`using-git-worktrees` is REFERENCE ONLY \u2014 Jaimitos already has worktree flows and this release adds no worktree framework.",
         "Voice: upstream's 'your human partner' is rewritten to Jaimitos' 'the user' throughout."
       ]
     },
@@ -87,8 +87,78 @@
         "`codebase-design` was adapted to `module-design`; its DESIGN-IT-TWICE.md was NOT ported because Jaimitos already merged that as the `design-twice` skill in v2.5.0.",
         "`domain-modeling` was MERGED into the existing `glossary` skill rather than added: docs/GLOSSARY.md must stay the single glossary authority and docs/decisions/ the single ADR location. Matt's CONTEXT.md / docs/adr/ layout is not used.",
         "`prototype`'s LOGIC.md and UI.md were collapsed inline to avoid extra context cost, and its evidence semantics were tightened for this scaffold: prototype output may serve an explicitly scoped prototype/research phase but may never satisfy production implementation or release criteria.",
-        "All Matt skills are tracker-centric upstream (GitHub Issues, CONTEXT.md, a work-queue subsystem). Every adaptation is docs-centric (docs/SPEC.md, docs/ROADMAP.md, docs/decisions/, docs/GLOSSARY.md) with zero tracker dependency — consistent with the v2.5.0 adaptations.",
-        "Upstream has since DEPRECATED `design-an-interface` and `ubiquitous-language`, folding them into `codebase-design` and `domain-modeling` respectively — independent confirmation of the merge decisions taken here."
+        "All Matt skills are tracker-centric upstream (GitHub Issues, CONTEXT.md, a work-queue subsystem). Every adaptation is docs-centric (docs/SPEC.md, docs/ROADMAP.md, docs/decisions/, docs/GLOSSARY.md) with zero tracker dependency \u2014 consistent with the v2.5.0 adaptations.",
+        "Upstream has since DEPRECATED `design-an-interface` and `ubiquitous-language`, folding them into `codebase-design` and `domain-modeling` respectively \u2014 independent confirmation of the merge decisions taken here."
+      ]
+    },
+    {
+      "repo": "https://github.com/github/spec-kit",
+      "sha": "a965413a24f127ba0bde027008b1ac6606237a41",
+      "ref": "v0.12.13",
+      "license": "MIT",
+      "copyright": "Copyright (c) 2025 GitHub, Inc.",
+      "inspected": "2026-07-14",
+      "adoption": "concept-only",
+      "status": "EXPERIMENTAL \u2014 experiments/speckit-handoff/. Does not ship (install.sh reads only jaimitos-os/ and skills/). No verdict yet; see experiments/speckit-handoff/README.md for the go/no-go bar.",
+      "provenance_classes": {
+        "_note": "Three classes, kept apart so a future upgrade can be audited. Conflating them is how you end up not knowing whether a file is yours, theirs, or a machine's.",
+        "consulted_upstream_source": [
+          "src/specify_cli/commands/init.py",
+          "src/specify_cli/integrations/base.py",
+          "src/specify_cli/integrations/claude/__init__.py",
+          "templates/spec-template.md",
+          "templates/plan-template.md",
+          "templates/tasks-template.md",
+          "templates/commands/clarify.md",
+          "templates/commands/converge.md",
+          "presets/scaffold/preset.yml",
+          "docs/reference/integrations.md",
+          "CHANGELOG.md"
+        ],
+        "generated_by_pinned_cli": [
+          "NOTHING is vendored. No Spec Kit output is committed to this repo. The live tier generates a throwaway project at test time and deletes it."
+        ],
+        "written_locally_by_the_experiment": [
+          "experiments/speckit-handoff/bin/*.sh",
+          "experiments/speckit-handoff/fixtures/**",
+          "experiments/speckit-handoff/preset/jaimitos-handoff/**",
+          "experiments/speckit-handoff/footprint/speckit-0.12.13.json",
+          ".claude/skills/import-speckit/SKILL.md"
+        ]
+      },
+      "paths_consulted": [
+        "src/specify_cli/commands/init.py",
+        "src/specify_cli/integrations/base.py",
+        "src/specify_cli/integrations/claude/__init__.py",
+        "templates/spec-template.md",
+        "templates/plan-template.md",
+        "templates/tasks-template.md",
+        "templates/commands/converge.md",
+        "presets/scaffold/preset.yml",
+        "docs/reference/integrations.md"
+      ],
+      "jaimitos_files_influenced": [
+        "experiments/speckit-handoff/README.md",
+        "experiments/speckit-handoff/bin/_speckit-lib.sh",
+        "experiments/speckit-handoff/bin/speckit-gate.sh",
+        "experiments/speckit-handoff/bin/speckit-propose.sh",
+        "experiments/speckit-handoff/bin/speckit-footprint.sh",
+        "experiments/speckit-handoff/footprint/speckit-0.12.13.json",
+        "experiments/speckit-handoff/preset/jaimitos-handoff/preset.yml",
+        ".claude/skills/import-speckit/SKILL.md",
+        ".claude/skills/import-speckit/mapping.md",
+        "docs/dev/EXPERIMENT-speckit-handoff.md"
+      ],
+      "deviations": [
+        "NO UPSTREAM TEXT WAS COPIED. Only the artifact FORMAT was adopted: the FR-###/SC-### id conventions, the '[NEEDS CLARIFICATION: ...]' marker, the T###/[P]/[US#] task markers, and the specs/<NNN-slug>/ layout. Every script and document here is ours.",
+        "REJECTED: /speckit-implement as an executor. It would be a second, unsupervised queue inside a system that has exactly one. The preset redirects it at /phase \u2014 but that is PROMPT-LEVEL and cannot stop a model writing code. The real protection is that nothing Spec Kit writes can tick a phase: scripts/tick.sh needs an evaluator PASS plus green evidence bound to HEAD.",
+        "REJECTED: upstream /speckit-converge's behaviour. Upstream it APPENDS new tasks to tasks.md so /speckit-implement can finish them. Ours is report-only with meaningful exit codes (0 clean / 1 gaps / 2 usage / 3 human review). Report-only means no state mutation \u2014 not that every run succeeds.",
+        "REJECTED: .specify/ as a home for any Jaimitos state. `specify init --here --force` overwrites .specify/{scripts,templates,memory} \u2014 anything we stored there would be destroyed on upgrade.",
+        "ADAPTED: the measurability check. Spec Kit's SC ids imply measurability; we do not enforce it. A numeric/comparator heuristic is wrong in both directions ('the operation is idempotent' is measurable with no digit; 'handles 100 users' has one and says nothing), so it WARNS and demands human review rather than refusing. A gate people route around is worse than no gate.",
+        "NOT ADOPTED: scope-contradiction detection. It is semantic. The gate surfaces docs/SPEC.md and the requirements and lets a human judge \u2014 a green 'no contradiction' would be a guarantee nobody can honour.",
+        "CORRECTION TO OUR OWN RESEARCH: `--ai claude` does NOT exist (removed in spec-kit 0.10.0); it is `--integration claude`. The Claude integration is SKILLS-mode \u2014 it writes .claude/skills/speckit-<cmd>/SKILL.md, not .claude/commands/. Spec Kit's own docs/upgrade.md still says .claude/commands/ and is stale; the code is authoritative.",
+        "OPEN RISK (R1): Spec Kit's 10 skills ship `disable-model-invocation: false`, so every description is always-loaded context in the user's project \u2014 invisible to test-skills.sh check 6 (it iterates only the toolkit's skills/), with no supported way to exclude a core command. Measured by speckit-footprint.sh, not estimated.",
+        "OPEN RISK (R2): a preset is the only sanctioned command override and its schema is not a contract. Upstream ships several releases a day. Verified against the PINNED CLI in the live tier; source inspection of preset.yml is not evidence."
       ]
     }
   ]
