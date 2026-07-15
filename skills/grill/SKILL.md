@@ -34,6 +34,11 @@ Grilling a phase only ever touches a **not-yet-started** phase — never a ticke
 Write only when a decision **closes**, never when a question is merely asked:
 - **Product / scope** → straight into the real spec section: `In scope`, `Non-goals` (with its
   reason in half a line), `Constraints`, or `Success criterion`.
+- **A discrete, separately-testable requirement** (only when the spec uses the optional
+  `## Requirements` REQ/AC section) → record it there as a candidate with its acceptance criteria,
+  but **do not mint canonical `REQ/AC` ids** — a requirement can be reversed or merged three
+  questions later. `to-spec` assigns and preserves the stable ids at close. Tiny specs with no
+  Requirements section skip this entirely.
 - **Domain vocabulary** ("we call this X, not Y") → invoke the `glossary` skill. It owns the
   format and updates `docs/GLOSSARY.md` in place (no churn — it overwrites a renamed term).
 - **Architectural** (structure, dependency, technical trade-off) → note it briefly under
