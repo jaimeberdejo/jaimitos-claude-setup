@@ -91,5 +91,72 @@ BEFORE=$(cat docs/plans/p.md); bash "$CHK" --strict docs/plans/p.md >/dev/null 2
 [ "$BEFORE" = "$AFTER" ] && pass "plan byte-identical after check" || fail "check mutated the plan"
 
 echo ""
+echo "Regression (v2.15.0) — cannot-verify is never reported as verified"
+
+# A LARGE changed-set. v2.14.0 tested membership with `printf "$CHANGED" | grep -qxF "$f"` under
+# `set -o pipefail`: grep -q exits at the first match, printf then takes SIGPIPE once CHANGED exceeds
+# the 64KB pipe buffer, and pipefail promotes 141 over grep's 0 — so the condition read FALSE and the
+# changed file was silently reported unchanged. The old one-file fixture could never see it: the race
+# needs the name list to OVERFLOW THE PIPE BUFFER *and* the match to sort early. Long padding names
+# reach the byte threshold with few enough files to stay fast.
+PAD='src/pad/a_deliberately_long_padding_file_name_to_overflow_the_pipe_buffer'
+fresh
+mkdir -p src/pad
+for i in $(seq 1 3000); do printf 'x\n' > "${PAD}_$i.txt"; done
+printf 'echo aaa\n' > src/aaa_first.txt                            # sorts FIRST in the changed list
+git add -A >/dev/null; git commit -qm pad
+BIGBASE=$(git rev-parse --short HEAD)
+printf '# Plan\n\nPlan created at: %s\n\nTask: modify `src/aaa_first.txt` to satisfy REQ-001 (AC-001).\n' "$BIGBASE" > docs/plans/big.md
+printf 'echo CHANGED\n' > src/aaa_first.txt
+for i in $(seq 1 3000); do printf 'y\n' > "${PAD}_$i.txt"; done
+git add -A >/dev/null; git commit -qm "move the world"
+CHANGED_N=$(git diff --name-only "$BIGBASE" HEAD | wc -l | tr -d ' ')
+CHANGED_B=$(git diff --name-only "$BIGBASE" HEAD | wc -c | tr -d ' ')
+# GUARD: below the pipe buffer this fixture cannot exercise the race, and the test would pass against
+# the BUGGY code — a green test that proves nothing. Fail loudly instead of silently going vacuous.
+if [ "$CHANGED_B" -lt 65536 ]; then
+  fail "fixture too small to exercise the SIGPIPE race (${CHANGED_B}B < 64KB) — this test would pass against the bug"
+else
+  BIG_OUT=$(bash "$CHK" docs/plans/big.md 2>&1)
+  if printf '%s\n' "$BIG_OUT" | grep -q "src/aaa_first.txt"; then
+    pass "a changed file is detected across a large changed-set (${CHANGED_N} paths / ${CHANGED_B}B > 64KB, no SIGPIPE)"
+  else
+    fail "large changed-set: a provably-changed cited file was silently reported fresh"
+  fi
+fi
+
+# The id-resolution check is one of the three HARD blockers, so an absent target must fail CLOSED.
+# v2.14.0 wrapped it in `if [ -f "$tgt" ]`, so DELETING docs/SPEC.md — the most complete form of
+# "the requirement was removed" — produced a maximally confident all-clear.
+fresh; plan
+rm -f docs/SPEC.md
+bash "$CHK" --strict docs/plans/p.md >/dev/null 2>&1 && \
+  fail "cited id + missing docs/SPEC.md exited 0 (unverifiable reported as verified)" || \
+  pass "cited id + missing docs/SPEC.md → --strict fails (unverifiable is not verified)"
+
+# $tgt was a CWD-relative literal, so the same plan passed from a subdir and failed from the root.
+fresh; plan
+mkdir -p sub
+( cd sub && bash "$CHK" --strict ../docs/plans/p.md >/dev/null 2>&1 )
+RC_SUB=$?
+( cd "$R" && bash "$CHK" --strict docs/plans/p.md >/dev/null 2>&1 )
+RC_ROOT=$?
+[ "$RC_SUB" = "$RC_ROOT" ] && pass "verdict is the same from a subdirectory as from the repo root (rc=$RC_ROOT)" \
+                           || fail "verdict is CWD-dependent (sub=$RC_SUB root=$RC_ROOT)"
+# and prove the subdir case is a REAL verdict, not a rc=2 "no such plan file" accident
+[ "$RC_SUB" -le 1 ] && pass "the subdirectory run actually resolved the plan (rc<=1, not a usage error)" \
+                    || fail "subdirectory run did not resolve the plan (rc=$RC_SUB)"
+
+# check-uat.sh and lint-enforcement.sh both document "Baseline commit: <sha>" as canonical, but the
+# old skip class [^0-9a-f]* could not cross the "c" of "commit" (c is a hex digit), so that label
+# never parsed and freshness fell back to "undetermined" — a soft signal, exit 0.
+fresh
+printf '# Plan\n\nBaseline commit: %s\n\nTask: modify `src/foo.sh` to satisfy REQ-001 (AC-001).\n' "$BASE" > docs/plans/bc.md
+BC_OUT=$(bash "$CHK" docs/plans/bc.md 2>&1)
+printf '%s\n' "$BC_OUT" | grep -q "no baseline recorded" && \
+  fail "'Baseline commit:' label did not parse (freshness silently undetermined)" || \
+  pass "'Baseline commit:' parses as a baseline label (as check-uat/lint-enforcement document it)"
+
+echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All check-plan-freshness.sh tests passed."; exit 0
 else echo "$FAILS check-plan-freshness.sh test(s) FAILED."; exit 1; fi
