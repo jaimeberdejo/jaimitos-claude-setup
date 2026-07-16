@@ -213,5 +213,33 @@ validate_agent "$WORK/mismatched.md" | grep -q "!= filename" \
   || fail "fixture: a name/filename mismatch slipped through"
 
 echo ""
+echo "Always-loaded description budget (v2.15.0)"
+# An agent's `description:` sits in the window EVERY TURN, exactly like a model-invoked skill's — but
+# only skills were capped (test-skills.sh: 500 B each / 6000 B total). So AUTHORING.md's row
+# "Always-loaded context stays inside budget | Deterministic" claimed a CATEGORY its mechanism only
+# half covered, and the evaluator's description grew 160 -> 434 B in v2.14.0 (the single largest
+# always-loaded increase in that release) with nothing to notice. Same discipline, both halves.
+A_DESC_CAP=500     # per agent description, bytes
+A_TOTAL_CAP=2000   # sum of all agent descriptions, bytes
+A_SUM=0
+for f in "$SCAFFOLD"/.claude/agents/*.md; do
+  [ -e "$f" ] || continue
+  base=$(basename "$f" .md)
+  d=$(awk '/^description:/{sub(/^description: */,""); print; exit}' "$f")
+  n=$(printf '%s' "$d" | wc -c | tr -d ' ')
+  A_SUM=$((A_SUM + n))
+  if [ "$n" -gt "$A_DESC_CAP" ]; then
+    fail "agent '$base' description is ${n}B > ${A_DESC_CAP}B — trim the trigger text, don't summarize the prompt"
+  else
+    pass "agent '$base' description within cap (${n}B / ${A_DESC_CAP}B)"
+  fi
+done
+if [ "$A_SUM" -gt "$A_TOTAL_CAP" ]; then
+  fail "agent description budget blown: ${A_SUM}B > ${A_TOTAL_CAP}B (loaded every turn) — report the NEW TOTAL, not the marginal cost"
+else
+  pass "agent description budget: ${A_SUM}B / ${A_TOTAL_CAP}B (~$((A_SUM / 4)) tokens, loaded every turn)"
+fi
+
+echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All agent-definition checks passed."; exit 0
 else echo "$FAILS agent-definition check(s) FAILED."; exit 1; fi

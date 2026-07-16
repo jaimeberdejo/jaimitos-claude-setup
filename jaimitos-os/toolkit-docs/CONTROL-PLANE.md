@@ -67,9 +67,9 @@ The same independent, edit-disabled evaluator gains a second mode (ADR-005). `IM
 existing two-axis grade (`PASS` / `NEEDS_WORK`, gated by `record-grade.sh`). `PLAN_CHECK` is a fresh,
 read-only plan review before execution, with a checklist **plus a pre-mortem** ("imagine it shipped as
 written and still failed — why?") over requirement coverage, integration seams, dependency graph, temporal
-risks, failure behavior, verification, and ownership/enforcement. Verdict `PASS | PASS_WITH_WARNINGS |
-FAIL` on a separate channel `record-grade.sh` never reads; `FAIL` returns the plan to the planner and
-blocks execution. `/phase` runs it after planning for STANDARD/DEEP/supervised phases; TINY skips it.
+risks, failure behavior, verification, and ownership. Verdict `PLAN_PASS | PLAN_PASS_WITH_WARNINGS |
+PLAN_FAIL` — a separate channel `record-grade.sh` mechanically rejects by token; `PLAN_FAIL` returns
+the plan to the planner and blocks execution. `/phase` runs it after planning for STANDARD/DEEP/supervised phases; TINY skips it.
 
 ## 6. Stale-plan revalidation
 A STANDARD/DEEP plan records its baseline and a `## Assumption revalidation` section (ADR-006).

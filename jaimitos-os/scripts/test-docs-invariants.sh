@@ -217,7 +217,7 @@ assert_has ".claude/agents/evaluator.md" "IMPLEMENTATION_REVIEW" \
            "evaluator names the implementation-review mode (the existing two-axis grade)"
 assert_has ".claude/agents/evaluator.md" "PLAN_CHECK" \
            "evaluator gains a fresh read-only PLAN_CHECK mode"
-assert_has ".claude/agents/evaluator.md" "PASS_WITH_WARNINGS" \
+assert_has ".claude/agents/evaluator.md" "PLAN_PASS_WITH_WARNINGS" \
            "PLAN_CHECK has its own three-value verdict (distinct from the tick-gate PASS/NEEDS_WORK)"
 assert_has ".claude/agents/evaluator.md" "implemented exactly as written and still failed" \
            "PLAN_CHECK runs the integrated pre-mortem"

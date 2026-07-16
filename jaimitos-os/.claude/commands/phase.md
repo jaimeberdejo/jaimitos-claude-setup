@@ -77,10 +77,12 @@ of roadmap order; bare `/phase` (no argument) is unchanged.
    TINY).** Before executing, dispatch the `evaluator` subagent in **PLAN_CHECK** mode (Task tool) with
    the plan file path from step 4, the phase's exact heading and "Done when:" line(s), and the referenced
    docs/SPEC.md requirements. It reads the *plan* only (no code exists yet) and runs the pre-mortem,
-   returning `PASS`, `PASS_WITH_WARNINGS`, or `FAIL`. On **FAIL**, STOP: return the plan to the planner
-   with the evaluator's reasons — do NOT execute a failed plan. On **PASS_WITH_WARNINGS**, record the
-   warnings in the plan or docs/STATE.md, then proceed. On **PASS**, proceed. This is a *separate channel*
-   from the step-6 implementation grade — its verdict never reaches `record-grade.sh`. TINY/mechanical
+   returning `PLAN_PASS`, `PLAN_PASS_WITH_WARNINGS`, or `PLAN_FAIL`. On **PLAN_FAIL**, STOP: return the plan
+   to the planner with the evaluator's reasons — do NOT execute a failed plan. On **PLAN_PASS_WITH_WARNINGS**,
+   record the warnings in the plan or docs/STATE.md, then proceed. On **PLAN_PASS**, proceed. The `PLAN_`
+   prefix is what keeps this a *separate channel* from the step-6 implementation grade: `record-grade.sh`
+   records only a bare `PASS` and rejects every `PLAN_*` token by name, so a plan review can never be
+   recorded as an implementation grade. TINY/mechanical
    work skips this step (judge by the spec's `tier:` and the change's risk); a supervised or high-stakes
    phase always runs it.
 5. **Execute — delegated to the `executor` subagent.** Invoke the `executor` subagent (Task

@@ -669,5 +669,34 @@ grep -qxF -- "$POISON" "$REPO/docs/ROADMAP.md" \
   || fail "tick REWROTE the prose line — roadmap corruption"
 
 echo ""
+echo "Regression (v2.15.0) — a PLAN_CHECK verdict is not an implementation grade"
+# v2.14.0 added a second evaluator mode whose verdict ALSO ended in `PASS`, while record-grade.sh
+# trusts "last non-empty line == PASS" as proof of an implementation review. So a plan review — one
+# explicitly stating no code had been written yet — recorded as a valid HEAD-bound grade, defeating
+# one of tick.sh's three gates. The docs claimed "a separate channel record-grade.sh never reads";
+# it was convention, not mechanism. PLAN_CHECK now emits PLAN_* tokens and record-grade names them.
+for v in PLAN_PASS PLAN_PASS_WITH_WARNINGS PLAN_FAIL; do
+  mkevrepo "pc_$v"
+  ( cd "$REPO" && bash scripts/record-grade.sh "PLAN_CHECK verdict for docs/plans/p.md
+Pre-mortem complete. This is a PLAN review only. NO CODE HAS BEEN WRITTEN YET.
+
+$v" ) >/dev/null 2>&1
+  rc=$?
+  if [ "$rc" = "0" ] || [ -f "$REPO/.claude/.phase-grade" ]; then
+    fail "$v was recorded as an implementation grade (rc=$rc) — a plan review can gate execution, never completion"
+  else
+    pass "$v refused by record-grade (rc=$rc, no grade file written)"
+  fi
+done
+# and the honest half: a bare PASS still records — the PLAN_ prefix is the discriminator, so the
+# evaluator emitting the right token for its mode stays MODEL-DEPENDENT. Do not overclaim this.
+mkevrepo pc_ok
+( cd "$REPO" && bash scripts/record-grade.sh "every criterion met
+
+PASS" ) >/dev/null 2>&1
+[ -f "$REPO/.claude/.phase-grade" ] && pass "a bare PASS still records (IMPLEMENTATION_REVIEW unaffected)" \
+                                     || fail "the discriminator broke the normal implementation grade"
+
+echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All tick gate + evidence tests passed."; exit 0
 else echo "$FAILS tick test(s) FAILED."; echo "--- last tick output ---"; tail -n 20 "$WORK/out" 2>/dev/null; exit 1; fi

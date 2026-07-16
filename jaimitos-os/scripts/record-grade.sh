@@ -4,8 +4,9 @@
 # paths; scripts/autopilot.sh (headless) calls it too, so the grade-file format has ONE writer.
 #
 # Stamps run_id = HEAD to bind the grade to the exact commit tick.sh will check. Refuses (writes
-# nothing, exit 1) unless the verdict's LAST non-empty line is exactly PASS — a NEEDS_WORK or
-# garbled verdict can never become a tick. If the verdict text contains NO_TESTS_OK, records it
+# nothing, exit 1) unless the verdict's LAST non-empty line is exactly PASS — a NEEDS_WORK, a
+# PLAN_CHECK verdict (PLAN_PASS/PLAN_PASS_WITH_WARNINGS/PLAN_FAIL), or a garbled verdict can never
+# become a tick. If the verdict text contains NO_TESTS_OK, records it
 # so tick.sh may accept a phase that legitimately has no test suite.
 #
 # Also refuses on a DIRTY tracked tree (audit G12): run_id=HEAD is only an honest description of
@@ -29,6 +30,20 @@ VERDICT="${1:-}"
 
 # Anchored: trust ONLY the last non-empty line, exactly like scripts/autopilot.sh.
 LAST=$(printf '%s\n' "$VERDICT" | grep -vE '^[[:space:]]*$' | tail -1)
+
+# A PLAN_CHECK verdict is NOT an implementation grade. Both modes used to end in `PASS`, so a plan
+# review — explicitly stating no code had been written yet — recorded as a valid HEAD-bound grade
+# (demonstrated; v2.14.0 introduced it by adding a second mode without a discriminator, while the docs
+# claimed "a separate channel record-grade.sh never reads"). PLAN_CHECK now emits PLAN_* tokens; naming
+# them here turns a silent mis-record into a loud refusal, and explains the mistake to whoever made it.
+case "$LAST" in
+  PLAN_PASS|PLAN_PASS_WITH_WARNINGS|PLAN_FAIL)
+    echo "record-grade: '$LAST' is a PLAN_CHECK verdict — it gates whether execution may START." >&2
+    echo "  It says nothing about implemented code, so it can never become an implementation grade." >&2
+    echo "  Dispatch the evaluator in IMPLEMENTATION_REVIEW mode against the finished phase instead." >&2
+    exit 1 ;;
+esac
+
 if [ "$LAST" != "PASS" ]; then
   echo "record-grade: evaluator verdict is not PASS (last line: '$LAST') — no grade recorded." >&2
   exit 1
