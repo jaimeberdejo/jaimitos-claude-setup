@@ -255,6 +255,16 @@ assert_has "scripts/trace-requirements.sh" "never a hand-maintained spreadsheet"
 assert_absent "scripts/trace-requirements.sh" "speckit" \
            "the traceability report names no external tool"
 
+# Evidence schema_version 2 (v2.14.0) — the producer keeps every v1 field (so tick.sh's reads are
+# unchanged) and ADDS richer fields; tick.sh gates on the version (absent=v1, unknown=fail-closed). A
+# bounded, secret-redacted summary can never override the exit-derived `passed`.
+assert_has "scripts/test-evidence.sh" "schema_version 2" \
+           "evidence producer emits schema_version 2 (v1 fields kept verbatim for tick.sh)"
+assert_has "scripts/tick.sh" "evidence schema gate" \
+           "tick.sh gates on the evidence schema_version (accept 1-2, reject unknown fail-closed)"
+assert_has "scripts/test-evidence.sh" "cannot override" \
+           "a redacted, bounded summary can never override the real exit status"
+
 # Prototype — sanctioned, but never a route to a tick.
 assert_has "../skills/prototype/SKILL.md" "**MAY NEVER** satisfy production implementation or release criteria" \
            "prototype output can never satisfy production/release criteria"

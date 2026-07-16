@@ -11,8 +11,13 @@
 # It writes a SEPARATE file from the advisory test-gate.sh (which owns test-results.json), so
 # the evaluator's own Stop-hook run of test-gate can't clobber the authoritative record.
 #
-# Output .claude/.tick-evidence.json: {passed, command, exit, run_id, note}
+# Output .claude/.tick-evidence.json — schema_version 2 (v1 fields kept verbatim for tick.sh):
+#   {schema_version, passed, command, exit, run_id, source, config_sha, evidence_id, cwd, started_at,
+#    finished_at, duration_seconds, classification, requirements, warnings, skipped, summary, redacted,
+#    content_hash, note?}
 #   passed: true (suite green) | false (suite red) | null (no test command resolved)
+#   summary is bounded + secret-redacted; passed is always exit-derived so a summary cannot override it.
+#   Optional env: EVIDENCE_ID/LEAN_EVIDENCE_ID, LEAN_EVIDENCE_REQUIREMENTS (id list), LEAN_EVIDENCE_CLASS.
 # Exit: 0 = tests passed, OR no-tests with --allow-no-tests.
 #       1 = tests failed, OR no test command resolved without --allow-no-tests (fail-closed:
 #           "no evidence" is NOT "success"; whether null is acceptable for a TICK is decided
@@ -56,9 +61,32 @@ if [ "$SRC" = "file:.claude/test-command" ] && [ -f .claude/test-command ]; then
   CFG_SHA=$( { shasum -a 256 .claude/test-command 2>/dev/null || sha256sum .claude/test-command 2>/dev/null; } | cut -d' ' -f1 )
 fi
 
-# emit <passed-json-literal> <command-or-empty> <exit-or-null> <note-or-empty>
+# --- evidence schema v2 helpers -----------------------------------------------
+iso_now() { date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo ""; }
+EV_START_EPOCH=$(date +%s 2>/dev/null || echo 0)
+EV_STARTED=$(iso_now)
+# redact(): mask secret-shaped runs (32+ char base64/hex/token) so a bounded summary can never leak a key.
+redact() { printf '%s' "$1" | sed -E 's/[A-Za-z0-9+/_=-]{32,}/***REDACTED***/g'; }
+
+# emit <passed-json-literal> <command-or-empty> <exit-or-null> <note-or-empty> [raw-output-for-summary]
+# Writes schema_version 2. The v1 fields (passed/command/exit/run_id/source/config_sha/note) are kept
+# verbatim so scripts/tick.sh's reads are unchanged; v2 ADDS evidence_id, cwd, timestamps, duration,
+# classification, requirement refs, warnings, skipped, a bounded+redacted summary, and an advisory
+# content_hash (sha256 of the object without the hash — recomputable, so an edited field is detectable).
+# `passed` is always exit-derived, so the summary can never override the real status.
 emit() {
-  jq -nc \
+  local raw="${5:-}" fin dur summ summ_r red reqs_json base h
+  fin=$(iso_now); dur=$(( $(date +%s 2>/dev/null || echo "$EV_START_EPOCH") - EV_START_EPOCH ))
+  summ=""
+  if [ -n "$raw" ]; then
+    summ=$(printf '%s\n' "$raw" | awk 'NF{last=$0} END{if(last!="")print last}')
+    summ=$(printf '%s' "$summ" | cut -c1-200)
+  fi
+  summ_r=$(redact "$summ")
+  if [ "$summ_r" = "$summ" ]; then red=false; else red=true; fi
+  reqs_json=$(printf '%s' "${LEAN_EVIDENCE_REQUIREMENTS:-}" | tr ', ' '\n\n' | awk 'NF' | jq -R . 2>/dev/null | jq -sc . 2>/dev/null)
+  [ -n "$reqs_json" ] || reqs_json="[]"
+  base=$(jq -nc \
      --argjson passed "$1" \
      --arg cmd "$2" \
      --argjson exit "${3:-null}" \
@@ -66,13 +94,38 @@ emit() {
      --arg note "$4" \
      --arg source "$SRC" \
      --arg config_sha "$CFG_SHA" \
-     '{passed: $passed,
+     --arg eid "${EVIDENCE_ID:-${LEAN_EVIDENCE_ID:-}}" \
+     --arg started "$EV_STARTED" \
+     --arg finished "$fin" \
+     --argjson duration "${dur:-0}" \
+     --arg classification "${LEAN_EVIDENCE_CLASS:-deterministic}" \
+     --argjson requirements "$reqs_json" \
+     --arg summary "$summ_r" \
+     --argjson redacted "$red" \
+     '{schema_version: 2,
+       passed: $passed,
        command: (if $cmd == "" then null else $cmd end),
        exit: $exit,
        run_id: $run_id,
        source: (if $source == "" then null else $source end),
-       config_sha: (if $config_sha == "" then null else $config_sha end)}
-      + (if $note == "" then {} else {note: $note} end)' \
+       config_sha: (if $config_sha == "" then null else $config_sha end),
+       evidence_id: (if $eid == "" then null else $eid end),
+       cwd: ".",
+       started_at: (if $started == "" then null else $started end),
+       finished_at: (if $finished == "" then null else $finished end),
+       duration_seconds: $duration,
+       classification: $classification,
+       requirements: $requirements,
+       warnings: [],
+       skipped: [],
+       summary: (if $summary == "" then null else $summary end),
+       redacted: $redacted}
+      + (if $note == "" then {} else {note: $note} end)')
+  [ -n "$base" ] || return 0
+  # content_hash: sha256 of the sorted-canonical object WITHOUT the hash field. Recomputable by a verifier
+  # with:  jq -cS 'del(.content_hash)' <file> | shasum -a 256   — an edited field then fails to re-hash.
+  h=$(printf '%s' "$base" | jq -cS 'del(.content_hash)' 2>/dev/null | { shasum -a 256 2>/dev/null || sha256sum 2>/dev/null; } | cut -d' ' -f1)
+  printf '%s' "$base" | jq -c --arg h "$h" '. + {content_hash: (if $h == "" then null else $h end)}' \
      > "$OUT_FILE" 2>/dev/null || true
 }
 
@@ -123,12 +176,12 @@ while [ "$attempt" -lt "$max_attempts" ]; do
 done
 
 if [ "$RC" -eq 0 ]; then
-  emit true "$CMD" 0 ""
+  emit true "$CMD" 0 "" "$OUT"
   echo "test-evidence: ✓ '$CMD' passed on attempt $attempt/$max_attempts (run_id ${HEAD:0:12})."
   exit 0
 fi
 
-emit false "$CMD" "$RC" ""
+emit false "$CMD" "$RC" "" "$OUT"
 echo "test-evidence: ✗ '$CMD' failed on all $max_attempts attempt(s) (exit $RC). Last lines:" >&2
 printf '%s\n' "$OUT" | tail -15 >&2
 exit 1

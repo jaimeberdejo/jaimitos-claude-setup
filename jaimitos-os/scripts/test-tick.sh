@@ -87,6 +87,13 @@ mkrepo t1; good_grade t1; good_evidence t1; rc=$(runtick "$REPO")
 { grep -q "lean:auto:begin" "$REPO/docs/STATE.md" && grep -q "Last ticked" "$REPO/docs/STATE.md"; } \
   && pass "successful tick writes the STATE machine block" || fail "STATE machine block not written on tick"
 
+# 1b — v2.14.0: explicit schema_version 2 evidence is accepted (v2 is a superset of v1).
+mkrepo t1b; good_grade t1b; set_evidence t1b "{\"schema_version\":2,\"passed\":true,\"run_id\":\"$HEAD\"}"; rc=$(runtick "$REPO")
+{ [ "$rc" = 0 ] && ticked "$REPO"; } && pass "schema_version 2 evidence → ticks" || fail "v2 evidence not accepted (rc=$rc)"
+# 1c — an unknown/future schema_version fails CLOSED (don't trust evidence from a producer we can't read).
+mkrepo t1c; good_grade t1c; set_evidence t1c "{\"schema_version\":99,\"passed\":true,\"run_id\":\"$HEAD\"}"; rc=$(runtick "$REPO")
+{ [ "$rc" = 1 ] && ! ticked "$REPO"; } && pass "unknown schema_version 99 → refuses (fail-closed)" || fail "unknown schema_version not rejected (rc=$rc)"
+
 # 2 — passed:false → refuses, roadmap unchanged, NEXT_FINDINGS written.
 mkrepo t2; good_grade t2; set_evidence t2 "{\"passed\":false,\"run_id\":\"$HEAD\"}"
 before=$(md5of "$REPO/docs/ROADMAP.md"); rc=$(runtick "$REPO")

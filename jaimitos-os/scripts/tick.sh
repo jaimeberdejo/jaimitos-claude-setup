@@ -200,6 +200,12 @@ g_notests=$(grep -E '^no_tests_ok=' "$GRADE" | head -1 | cut -d= -f2- || true)
 # `jq -e 'type'` instead — it emits the value's type and sets a non-zero exit on unparseable input
 # (`type` always yields a non-null/non-false string on valid JSON, so this never false-rejects).
 jq -e 'type' "$EVIDENCE" >/dev/null 2>&1 || refuse "test evidence is not valid JSON"
+# v2.14.0 evidence schema gate: an absent schema_version is legacy v1; this gate understands 1–2. An
+# unknown/future version fails CLOSED — do not trust evidence from a producer we cannot interpret. The
+# richer v2 fields (evidence_id, requirements, timestamps, classification, redacted summary, content_hash)
+# are additive; the passed/run_id/command reads below are unchanged, so a summary can never override exit.
+e_schema=$(jq -r '.schema_version // 1' "$EVIDENCE" 2>/dev/null || echo "bad")
+case "$e_schema" in 1|2) : ;; *) refuse "test evidence schema_version '$e_schema' unsupported (this gate understands 1–2)" ;; esac
 e_run=$(jq -r '.run_id // ""' "$EVIDENCE")
 e_passed=$(jq -r '.passed' "$EVIDENCE" 2>/dev/null || echo "missing")
 [ "$e_run" = "$HEAD" ] || refuse "test evidence is stale (evidence run_id '$e_run' != HEAD '$HEAD')"
