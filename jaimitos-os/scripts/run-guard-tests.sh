@@ -46,6 +46,7 @@ TESTS=(
   test-close-milestone.sh
   test-doctor.sh
   test-lint.sh
+  test-enforcement.sh
   test-models.sh
   test-classify-work.sh
   test-sandbox.sh

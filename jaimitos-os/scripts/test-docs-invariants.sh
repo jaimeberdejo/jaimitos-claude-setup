@@ -180,6 +180,16 @@ assert_has "../skills/mapme/SKILL.md" "operational (logical) ownership" \
 assert_has "../skills/mapme/SKILL.md" "OWNED | SHARED | UNOWNED" \
            "mapme ownership component classifications present"
 
+# Enforcement ledger (v2.14.0) — docs/ENFORCEMENT.md maps claims → enforcement or explicit advisory.
+# It is additive, never regenerated from the current code graph (that blesses drift), and it never ticks
+# or grants permission. lint-enforcement.sh validates its structure; these pin the governing rules.
+assert_has "scripts/lint-enforcement.sh" "never regenerated from the current code graph" \
+           "enforcement ledger is additive, never regenerated from the code graph (no blessing drift)"
+assert_has "scripts/lint-enforcement.sh" "does NOT tick" \
+           "enforcement ledger does not tick, and does not grant permission"
+assert_has "scripts/lint-enforcement.sh" "DETERMINISTIC, HOOK-ENFORCED, CI-ENFORCED" \
+           "enforcement ledger documents the strength vocabulary (deterministic distinct from advisory)"
+
 # Prototype — sanctioned, but never a route to a tick.
 assert_has "../skills/prototype/SKILL.md" "**MAY NEVER** satisfy production implementation or release criteria" \
            "prototype output can never satisfy production/release criteria"
