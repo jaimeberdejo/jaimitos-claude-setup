@@ -66,6 +66,22 @@ your prompt).
    - A "Done when:" section reproducing the phase's exact roadmap criteria verbatim — never
      loosen, tighten, or rephrase them.
 
+## Gap planning (a bounded correction plan)
+When a phase fails downstream — a failed **blocking UAT** item (`docs/UAT.md`), missing requirement
+evidence, an evaluator NEEDS_WORK, an ownership or enforcement-ledger violation, a release-readiness
+failure, or an invalidated stale plan — you may be asked for a GAP PLAN. It is a normal plan file, bounded
+to the correction:
+- **Cite** the failed requirement / AC / objective / enforcement id (or the failed `UAT-###` / check).
+- **Classify the cause** — one of: implementation · specification · environment · data · dependency ·
+  test/evidence · ownership/integration · enforcement.
+- **Propose the smallest coherent correction.** Do not rewrite unrelated requirements, and never modify
+  completed history. Create a new phase or milestone when the correction genuinely needs one.
+- **Require fresh evidence** after the correction, and a **fresh PLAN_CHECK** when the correction changes
+  sequencing or ownership.
+- A material scope change requires explicit user approval. **Never defer failed REQUIRED work merely to
+  complete a release** — a blocking failure blocks. (UAT is tier-dependent and may block a release, but it
+  never bypasses the evaluator, the evidence gate, or `scripts/tick.sh`.)
+
 ## What NOT to do
 - Do not touch docs/ROADMAP.md's checkboxes or its "Done when:" line — reproduce that text
   into the plan file, never edit the source of truth.

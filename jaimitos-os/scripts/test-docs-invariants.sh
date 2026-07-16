@@ -265,6 +265,20 @@ assert_has "scripts/tick.sh" "evidence schema gate" \
 assert_has "scripts/test-evidence.sh" "cannot override" \
            "a redacted, bounded summary can never override the real exit status"
 
+# Lightweight UAT + gap planning (v2.14.0) — ONE canonical docs/UAT.md, tier-dependent. A blocking failure
+# blocks a release but never bypasses the evaluator/evidence/tick. Corrections are bounded planner gap
+# plans that cite the failed item, classify the cause, and never defer failed required work to ship.
+assert_has "scripts/check-uat.sh" "bypasses the evaluator" \
+           "UAT may block a release but never bypasses the evaluator, evidence, or tick.sh"
+assert_has "scripts/check-uat.sh" "NOT_TESTED | PASSED | FAILED | BLOCKED | DEFERRED" \
+           "UAT status vocabulary is documented"
+assert_has ".claude/agents/planner.md" "Gap planning" \
+           "planner produces bounded gap/correction plans"
+assert_has ".claude/agents/planner.md" "smallest coherent correction" \
+           "a gap plan proposes the smallest correction (no rewriting unrelated requirements)"
+assert_has ".claude/agents/planner.md" "Never defer failed REQUIRED work" \
+           "a gap plan never defers failed required work merely to complete a release"
+
 # Prototype — sanctioned, but never a route to a tick.
 assert_has "../skills/prototype/SKILL.md" "**MAY NEVER** satisfy production implementation or release criteria" \
            "prototype output can never satisfy production/release criteria"

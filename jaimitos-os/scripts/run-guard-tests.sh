@@ -52,6 +52,7 @@ TESTS=(
   test-models.sh
   test-classify-work.sh
   test-stale-plan.sh
+  test-uat.sh
   test-sandbox.sh
   test-sync.sh
   test-test-cmd.sh
