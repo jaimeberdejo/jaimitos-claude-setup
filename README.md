@@ -162,6 +162,46 @@ You drive each arrow manually for stakes that warrant it, or hand the bracket to
 
 ---
 
+## Requirement traceability (optional)
+
+Native, tool-independent requirement ids that thread a spec requirement all the way to the grade —
+**opt-in, inert by default, and never required for tiny work.** When a project has discrete,
+separately-testable requirements, give them stable ids and Jaimitos traces each one from definition to
+evidence:
+
+```
+docs/SPEC.md   REQ-001 / AC-001         ← to-spec assigns & preserves the ids (sole owner)
+      ↓  a phase names the ids it owns
+docs/ROADMAP.md   Sources: / Requirements:
+      ↓  the plan maps each task to the ids it advances
+docs/plans/<phase>.md
+      ↓  code + tests
+evaluator  "Requirement traceability"   ← each id traced to code or a test; an untraceable one fails the phase
+      ↓
+scripts/tick.sh                         ← unchanged: still the sole completion gate
+```
+
+- **Ids.** `REQ-###` (a requirement), `AC-###` (an acceptance criterion, unique across the whole spec),
+  `OBJ-###` (a maintenance objective). An external id (`FR-001`, `JIRA-1234`, `REQ-AR-001`) is accepted when
+  the spec — or the source a phase names — defines it; Jaimitos hard-codes no external prefix.
+- **Who owns what.** `grill` surfaces requirement candidates during the interview; `to-spec` mints and
+  preserves the canonical ids at close (an approved id is never renumbered or recycled). A requirement
+  carrying `[NEEDS CLARIFICATION: …]` is not `Approved` and cannot complete a phase.
+- **What is checked, and how.** `scripts/lint-roadmap.sh` calls a small `_requirements.sh` helper that
+  **deterministically** validates id *structure* — well-formed and unique ids, a phase's `Requirements:`
+  refs resolving to `docs/SPEC.md`, and no blocking clarification left inside an `Approved` requirement
+  (advisory by default; `--strict` fails). Whether a requirement is *genuinely satisfied* is
+  **model-dependent** — the evaluator traces it, exactly like any other acceptance criterion. (Full
+  deterministic-vs-model-dependent table in `docs/dev/AUTHORING.md`.)
+- **Legacy & tiny work.** A spec with no ids, or a phase with no `Requirements:` block, behaves exactly as
+  before — the feature is inert until you opt in. Adopting ids on an existing spec is an explicit,
+  review-first `to-spec` step, never forced.
+
+This is the native replacement for the rejected Spec Kit integration (ADR-001): the same evaluator benefit,
+no external CLI, no second spec/task hierarchy, and no always-loaded context tax.
+
+---
+
 ## Commands
 
 | Command | What it does |

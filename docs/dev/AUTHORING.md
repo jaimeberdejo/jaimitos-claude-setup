@@ -28,9 +28,11 @@ trust-focused toolkit quietly stops being trustworthy.
 | Always-loaded context stays inside budget | **Deterministic** — `test-skills.sh` (per-description + total cap) |
 | Provenance schema is valid and its cited files exist | **Deterministic** — `test-skills.sh` |
 | The discipline is *stated* in the skill (red-for-the-right-reason, no speculative loops, …) | **Deterministic** — `test-docs-invariants.sh` (greps the prose; proves the rule is written, **not** that it was obeyed) |
+| Requirement ids are well-formed and unique (`AC` globally); a phase's `Requirements:` refs resolve to `docs/SPEC.md`; an `Approved` requirement carries no blocking `[NEEDS CLARIFICATION]` | **Deterministic** — `_requirements.sh` via `lint-roadmap.sh` (advisory; `--strict` fails). Structure only — never that a requirement is *satisfied* |
 | A grader cannot edit the tree it grades | **Hook/gate enforced** — `_eval-isolation.sh` snapshot + restore |
 | Completion evidence belongs to the current commit | **Hook/gate enforced** — `tick.sh` (`run_id == HEAD`) |
 | A test actually failed *for the intended reason* | **Model-dependent** — reviewed as evidence by the evaluator |
+| A declared requirement/`AC` is genuinely satisfied by the code and its tests | **Model-dependent** — traced by the evaluator only when a phase declares `Requirements:` |
 | Debugging avoided a speculative-fix loop | **Model-dependent** — reviewed as evidence |
 | A new skill or agent was genuinely *justified* | **Model-dependent + mandatory human review** (control-plane change) |
 | Module architecture is proportionate; the architecture fits | **Model-dependent** |
