@@ -74,5 +74,29 @@ mkrepo notests
   && pass "no-tests → exit 0, passed:null, schema 2" || fail "no-tests case wrong (rc=$erc)"
 
 echo ""
+echo "The summary is BOUNDED — the header says so, and nothing tested it"
+# Redaction was well covered (mutating its threshold is killed); the 200-char bound was not — every
+# fixture emitted short lines, so widening `cut -c1-200` to 100000 survived. A bound tested only with
+# inputs below it is not tested. The evidence file is committed-adjacent and read by tick.sh; an
+# unbounded summary lets a noisy suite paste its whole log into it.
+mkrepo bounded
+# The long line must NOT be secret-shaped. A 400-char run of one character is exactly what redact()
+# masks (32+ char token), so it comes back as ***REDACTED*** and the bound is never exercised — the
+# test then passes against an unbounded producer. Spaced words defeat the token matcher.
+LONGLINE=$(awk 'BEGIN{s="";for(i=0;i<50;i++)s=s "the suite is fine ";print s}')
+( cd "$REPO" && LEAN_TEST_CMD="sh -c \"echo '$LONGLINE'; exit 0\"" bash scripts/test-evidence.sh >/dev/null 2>&1 )
+SUM=$(jq -r '.summary // ""' "$ev")
+SUMLEN=$(printf '%s' "$SUM" | wc -c | tr -d ' ')
+case "$SUM" in
+  *REDACTED*) fail "the bound fixture was redacted away (${SUMLEN}B) — it never reached the cut, so this proves nothing" ;;
+  "")         fail "summary is empty — the fixture never reached the producer" ;;
+  *) if [ "$SUMLEN" -le 200 ]; then
+       pass "a $(printf '%s' "$LONGLINE" | wc -c | tr -d ' ')-char output line is bounded to ${SUMLEN}B (cap 200)"
+     else
+       fail "summary is unbounded: ${SUMLEN}B (the cut -c1-200 bound is not enforced)"
+     fi ;;
+esac
+
+echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All evidence-schema tests passed."; exit 0
 else echo "$FAILS evidence-schema test(s) FAILED."; exit 1; fi

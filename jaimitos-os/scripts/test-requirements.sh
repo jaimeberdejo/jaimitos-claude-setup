@@ -33,11 +33,40 @@ Status: Approved
 Status: Approved
 ### REQ-003 — a future thing
 Status: Deferred
+### REQ-004 — a thing we decided against
+Status: Rejected
+### REQ-005 — replaced by REQ-002
+Status: Superseded
 EOF
 }
 
 echo "trace-requirements.sh / requirements_orphans tests"; echo ""
 
+echo "Every never-orphan status is exercised, not sampled"
+# The header claims "a Deferred/Rejected requirement is never an orphan", but the fixture carried only
+# Deferred — so dropping Rejected|Superseded from the never-orphan regex survived a green suite. The
+# vocabulary a comment documents must be looped over, not sampled: an inactive requirement reported as
+# an orphan sends a planner after work that was deliberately dropped.
+write_spec
+cat > docs/ROADMAP.md <<'EOF'
+## Phase 1 — export
+- [ ] build it
+Done when: it works
+Mode: loopable
+Requirements:
+- REQ-001
+- REQ-002
+- OBJ-001
+EOF
+ORPH="$(bash "$TRACE" --roadmap docs/ROADMAP.md --spec docs/SPEC.md 2>&1)"
+for st in REQ-003:Deferred REQ-004:Rejected REQ-005:Superseded; do
+  id="${st%%:*}"; name="${st##*:}"
+  printf '%s\n' "$ORPH" | grep -q "$id .*orphan" \
+    && fail "$name requirement $id reported as an orphan (it is inactive — nobody should plan it)" \
+    || pass "$name requirement $id is never an orphan"
+done
+
+echo ""
 echo "An approved requirement no phase plans is surfaced as an orphan"
 write_spec
 cat > docs/ROADMAP.md <<'EOF'

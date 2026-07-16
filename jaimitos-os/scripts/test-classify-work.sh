@@ -30,19 +30,23 @@ rec TINY --subject "fix a typo"
 rec TINY --components 1 --files 2
 rec TINY --components 2 --files 9 --novelty low
 
-echo ""
-echo "Medium complexity lifts to STANDARD"
-rec STANDARD --components 3
-rec STANDARD --external-interface
-rec STANDARD --db-migration
-rec STANDARD --deps
-rec STANDARD --novelty medium
-rec STANDARD --phases 2
-rec STANDARD --ambiguous
+# The signal VOCABULARY, one list per decision group. Explicit, not derived from the script: a
+# derived list silently shrinks when a signal is dropped, which is exactly how deleting --deploy,
+# --compat or --observability survived v2.14.0's green suite. The drift guard below closes the other
+# direction — a NEW signal cannot ship untested.
+SIG_STANDARDISH="--ambiguous --external-interface --db-migration --deploy --deps --observability --compat"
+SIG_DEEP="--research --arch-unresolved --multi-service-deploy --brownfield"
+SIG_ESCALATION="--auth --authz --secrets --payments --privacy --public-api --high-stakes-data --major-deps --irreversible --high-stakes --destructive-migration"
+SIG_VALUED="--novelty --components --phases --files"   # boundary-tested separately, below
+SIG_CONTROL="--select --reason --subject"              # control flags, not classification signals
 
 echo ""
-echo "Escalation signals prevent TINY (STANDARD floor)"
-for f in --auth --authz --secrets --payments --privacy --public-api --high-stakes-data --major-deps --irreversible --high-stakes; do
+echo "Medium complexity lifts to STANDARD — every standardish signal, alone"
+for f in $SIG_STANDARDISH; do rec STANDARD "$f"; done
+
+echo ""
+echo "Escalation signals prevent TINY (STANDARD floor) — every one, alone"
+for f in $SIG_ESCALATION; do
   out="$(bash "$CW" "$f" 2>/dev/null | grep '^Recommended mode:')"
   case "$out" in
     "Recommended mode: STANDARD"|"Recommended mode: DEEP") pass "$f prevents TINY ($out)";;
@@ -51,15 +55,37 @@ for f in --auth --authz --secrets --payments --privacy --public-api --high-stake
 done
 
 echo ""
-echo "Deep signals reach DEEP"
-rec DEEP --research
-rec DEEP --arch-unresolved
-rec DEEP --novelty high
-rec DEEP --multi-service-deploy
-rec DEEP --components 5
-rec DEEP --phases 4
-rec DEEP --brownfield
+echo "Deep signals reach DEEP — every one, alone"
+for f in $SIG_DEEP; do rec DEEP "$f"; done
 rec DEEP --destructive-migration --research   # escalation + deep
+
+echo ""
+echo "Numeric thresholds are pinned ON the boundary, in both directions"
+# v2.14.0 tested --files at 9 (stays TINY) and never at 10, so raising the threshold to 100 survived.
+# A threshold tested only on the passing side is not tested.
+rec TINY     --files 9
+rec STANDARD --files 10
+rec TINY     --components 2
+rec STANDARD --components 3
+rec DEEP     --components 5
+rec TINY     --phases 1
+rec STANDARD --phases 2
+rec DEEP     --phases 4
+rec TINY     --novelty low
+rec STANDARD --novelty medium
+rec DEEP     --novelty high
+
+echo ""
+echo "Coverage drift guard — every signal classify-work accepts has an expectation above"
+# Mirrors run-guard-tests.sh's TESTS[] drift guard: the failure it prevents is a signal added to the
+# recommender that no test ever exercises, which is how 4 of 11 went unasserted.
+KNOWN=" $SIG_STANDARDISH $SIG_DEEP $SIG_ESCALATION $SIG_VALUED $SIG_CONTROL "
+UNCOVERED=""
+for f in $(grep -oE '^[[:space:]]+--[a-z-]+\)' "$CW" | tr -d ' )' | sort -u); do
+  case "$KNOWN" in *" $f "*) ;; *) UNCOVERED="$UNCOVERED $f" ;; esac
+done
+[ -z "$UNCOVERED" ] && pass "every signal flag classify-work accepts is covered by a tier expectation" \
+                    || fail "classify-work accepts signals no test covers:$UNCOVERED — add an expectation, or list it as a control flag"
 
 echo ""
 echo "Selection defaults to the recommendation; override is recorded"
@@ -81,6 +107,21 @@ echo "Overriding TINY past an escalation signal warns loudly (stderr) but does n
 ERR="$(bash "$CW" --auth --select TINY 2>&1 1>/dev/null)"
 printf '%s\n' "$ERR" | grep -q "TINY selected despite an escalation signal" && pass "escalation-override warning printed" || fail "no escalation-override warning"
 bash "$CW" --auth --select TINY >/dev/null 2>&1 && pass "override still exits 0 (human may override)" || fail "override blocked (should warn, not block)"
+
+echo ""
+echo "An override with NO reason still warns (the other half of 'an override is recorded')"
+# v2.14.0 tested override WITH a reason and the escalation-override warning, never the missing-reason
+# case — so replacing that guardrail with `if false` survived. "You may override, but not invisibly"
+# loses half its enforcement silently. Note what this does NOT prove: the warning goes to stderr and
+# exits 0, and nothing checks the reason ever reached docs/SPEC.md. That half is human-dependent, and
+# AUTHORING.md now says so rather than calling the whole row Deterministic.
+ERR="$(bash "$CW" --subject x --select DEEP 2>&1 1>/dev/null)"
+printf '%s\n' "$ERR" | grep -q "override with no --reason" \
+  && pass "a reasonless override warns on stderr" \
+  || fail "a reasonless override printed no warning (the guardrail is unenforced)"
+bash "$CW" --subject x --select DEEP >/dev/null 2>&1 \
+  && pass "a reasonless override still exits 0 (warns, never blocks)" \
+  || fail "a reasonless override blocked (should warn, not block)"
 
 echo ""
 echo "Recommendation is reproducible (same flags → identical output)"

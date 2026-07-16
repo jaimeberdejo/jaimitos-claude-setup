@@ -85,6 +85,28 @@ fresh; plan "deadbeefdeadbeef"
 bash "$CHK" --strict docs/plans/p.md >/dev/null 2>&1 && fail "invalid baseline not caught" || pass "invalid baseline sha → --strict fail"
 
 echo ""
+echo "--base overrides the plan's own recorded baseline (the documented precedence)"
+# The flag is documented ("--base wins; else the plan's own line") and was never exercised, so
+# ignoring it entirely — falling through to the plan's baseline — survived a green suite. Proven by
+# giving the plan a VALID fresh baseline and passing a non-ancestor via --base: if --base is honoured
+# the verdict flips to stale, so the assertion cannot pass unless the flag actually took effect.
+fresh
+git checkout -q -b divergent2
+printf 'divergent\n' > src/other2.sh; git add -A >/dev/null; git commit -qm divergent2
+OTHER2=$(git rev-parse --short HEAD)
+git checkout -q "$MAIN"
+plan                       # plan records the CURRENT (valid, ancestor) baseline
+bash "$CHK" --strict docs/plans/p.md >/dev/null 2>&1 \
+  && pass "control: the plan's own baseline is fresh (so the next assertion isolates --base)" \
+  || fail "control failed — the plan's recorded baseline should be fresh here"
+BOUT="$(bash "$CHK" --strict --base "$OTHER2" docs/plans/p.md 2>&1)"; brc=$?
+if [ "$brc" -eq 1 ] && printf '%s\n' "$BOUT" | grep -q "no longer an ancestor"; then
+  pass "--base wins over the plan's recorded baseline (non-ancestor → --strict fail)"
+else
+  fail "--base was ignored: the plan's own fresh baseline was used instead (rc=$brc)"
+fi
+
+echo ""
 echo "The check never mutates the plan it reads"
 fresh; plan
 BEFORE=$(cat docs/plans/p.md); bash "$CHK" --strict docs/plans/p.md >/dev/null 2>&1; AFTER=$(cat docs/plans/p.md)

@@ -65,6 +65,27 @@ rejected precisely because it looks like the fix: an inert validator against a f
 always exit 0 and mint a new deterministic-sounding row. Bounded gap planning survives on its own terms.
 Reinstating either needs a fresh ADR and a producer, not a revert — `test-docs-invariants.sh` pins it.
 
+### Added — tests that can actually fail
+An independent mutation audit scored v2.14.0's suites at **48% (21 of 40 mutations survived)** —
+real behavioral tests with genuine negative cases, but systematically happy-path-shaped on the
+vocabulary and boundary axes: fixtures exercised the values the implementation emits, not the values
+the format documents. That pattern concealed two of the fail-opens above. The same mutation set now
+scores **100% (13/13)**, and `AUTHORING.md` carries the discipline so it does not regress:
+- **Loop the vocabulary, never sample it** — every classify-work signal now has a tier expectation
+  (4 of 11 had none: `--deploy`, `--compat`, `--observability` could each be deleted from the
+  recommender with the suite still green), plus a **drift guard** so a new signal cannot ship
+  untested. Same for the `Rejected`/`Superseded` never-orphan statuses, which the test header claimed
+  and no fixture carried.
+- **Pin thresholds on the boundary, both directions** — `--files` was tested at 9 and never at 10,
+  so widening it to 100 survived.
+- **Prove the fixture can fail** — by breaking the code and watching. This caught three of *this*
+  release's own tests being vacuous: a SIGPIPE fixture under the pipe buffer, a checksum window with
+  nothing inside it, and a summary-bound fixture whose long line was redacted before reaching the
+  bound. Each was green and proved nothing.
+- Also closed: the `--base` flag and the evidence summary's 200-char bound, both documented and
+  neither exercised; and `test-diagnose.sh`'s bare `"removed"` grep, which any unrelated prose would
+  satisfy.
+
 ### Added
 - **`grill` stops on an evidence condition, not exhaustion.** It knew how to open a branch but never said
   when the interview was over. Depth now earns its branches from an *unresolved material decision* rather

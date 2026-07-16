@@ -39,7 +39,10 @@ have "ranked, falsifiable" "3–5 ranked, falsifiable hypotheses before testing 
 echo ""
 echo "Instrumentation — tagged and removed"
 have "[DEBUG-" "debug probes carry a unique searchable marker"
-grep -qF "removed" "$DIAG" && pass "cleanup requires temporary instrumentation removal" || fail "no instrumentation-removal requirement"
+# Match the distinctive phrase, as every sibling assertion does. A bare "removed" happens to hit
+# exactly once today, so it is not vacuous — but any unrelated prose containing the word would
+# satisfy it, which makes it a guard that can stop guarding without anyone noticing.
+have "throwaway harnesses deleted" "cleanup requires temporary instrumentation removal"
 
 echo ""
 echo "Differential + bisection methods"

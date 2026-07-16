@@ -204,4 +204,33 @@ not evidence that it was worth adding.
 and then graded. If nobody independent has looked at it, it is not cleared — say so rather than
 quietly counting your own approval. v2.10.0's review of `module-design` was performed by the same
 person who orchestrated its creation; it approved a decision a genuinely independent reviewer
-overturned one release later. **Self-reviews find nothing, reliably.**
+overturned one release later. **Self-reviews find nothing, reliably.** v2.14.0 shipped fully green,
+self-dogfooded, and carried a critical fail-open plus four highs — the first independent review found
+them in an afternoon.
+
+## Writing a test that can actually fail
+
+A green suite is not evidence. v2.14.0's suites were real behavioral tests with genuine negative
+cases — and **21 of 40 mutations survived them**, including a fail-open in shipped code that the
+suite exercised on every run. Three rules, each paid for:
+
+- **Loop the vocabulary; never sample it.** Where a comment documents a set — signal flags, statuses,
+  strength tokens, baseline labels — the test must cover *every* member, plus a **drift guard** that
+  fails when a new member appears untested (the idiom `run-guard-tests.sh` already uses for `TESTS[]`).
+  Sampling is how deleting `--deploy`, `--compat` and `--observability` from the recommender survived
+  a green run, and how `Rejected`/`Superseded` went unasserted while the header claimed them.
+- **Pin a threshold on the boundary, in both directions.** `--files` was tested at 9 (stays TINY) and
+  never at 10, so widening the threshold to 100 survived. A limit tested only on the passing side is
+  not tested.
+- **Prove the fixture can fail — by breaking the code and watching it.** This is the whole discipline
+  in one move, and it caught three of this release's own tests being vacuous: a SIGPIPE fixture whose
+  changed-set (42 KB) sat under the 64 KB pipe buffer, so it passed against the bug; a read-only
+  checksum window with no validator running inside it; and a summary-bound fixture whose 400-char line
+  was *redacted away* before it ever reached the bound. Each looked green and proved nothing. A
+  fixture that cannot fail is worse than no test: it reports the gap as covered. Where a fixture has a
+  precondition (a size, a shape), **assert the precondition** so it fails loudly instead of going
+  quietly vacuous.
+
+Prose-greps (`test-docs-invariants.sh`) are drift protection **on top of** a behavioral test, never a
+substitute for one. Grepping a comment proves the sentence exists — v2.14.0 had prose-greps passing
+while the code they described was mutated out from under them.
