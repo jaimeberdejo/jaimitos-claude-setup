@@ -83,20 +83,51 @@ Always-loaded context does not grow: every surface R5 touches loads on invocatio
 
 ---
 
-## Milestones
+## What actually shipped — the plan changed mid-flight, twice
 
-**5.1 — the genuine discovery gap.** `skills/grill/SKILL.md`: depth earns its branches from an
-unresolved material decision rather than the tier label; an explicit stopping condition ends the
-interview once every material decision is settled or recorded as an honest gap. Pinned by
-`test-docs-invariants.sh`, including an `assert_absent` proving no `--deep` flag exists.
+**The independent audit of the v2.14.0 base changed the release.** Five reviewers found 1 critical and
+4 high defects, all reproduced. The pattern — *five correct validators wired to nothing, graded
+DETERMINISTIC in the docs* — made the planned review layer the wrong next thing: a findings contract and
+a review-pack template that nothing invokes would have been the **same shape as the defect**, stacked on
+top of it. `RELEASE_AUDIT` was blocked regardless, since a third mode ending in `PASS` inherits the
+demonstrated `record-grade.sh` collision.
 
-**5.2 — the scoping rule.** Planner details one active phase, or a bounded batch only when the phases
-share one integration boundary and must land together to stay verifiable. ROADMAP keeps the complete
-high-level sequence and holds no speculative distant detail. Scheduled ≠ planned.
+Operator decision: **correction-first, defer the review layer to v2.16.0**, and **make the claims true in
+code** rather than relabelling them. Second decision, once the evidence was in: **delete** the enforcement
+and UAT ledgers rather than wire them.
 
-**5.3 — the review/completion layer.** Findings contract + manual review-pack template
-(`.claude/rules/review.md`); Evaluator `RELEASE_AUDIT` mode; `/wrap` gains `RUN RELEASE AUDIT` and
-`PLAN NEXT PHASE` **offers** under the file's existing offer-never-act grammar.
+**5.1 — shipped as scoped.** `skills/grill/SKILL.md`: depth earns its branches from an unresolved material
+decision rather than the tier label; an explicit stopping condition ends the interview. Zero always-loaded
+bytes. Pinned, including an `assert_absent` proving no `--deep` flag exists.
+
+**5.2 — ALREADY COMPLETE. Ships nothing.** My Phase 0 classification was wrong: it came from a keyword
+grep, not the concept. `roadmap/SKILL.md` already says *"One milestone's worth of phases. Don't roadmap the
+entire product; roadmap the next shippable increment"* and *"Be one vertical slice / bounded scope"*; the
+planner is dispatched per-phase by `/phase` ("a plan for the phase you're given"), so it **structurally
+cannot** plan ahead; and a plan written early goes stale via `check-plan-freshness` + ADR-006. The toolkit
+answers the brief's concern with a different, coherent boundary: ROADMAP = one milestone, plan = one phase,
+`milestone` = the next increment. **Bounded batch: REJECT** — it has no artifact home (the plan filename is
+derived per-phase), each phase must leave the app demoable, and `tick.sh` ticks one phase.
+
+**5.3 — DEFERRED to v2.16.0.** Preconditions now met by this release: the `record-grade.sh` discriminator
+exists, so a third mode is no longer blocked. Preconditions still open: `tier:` is unvalidated (do not
+tier-scale a release audit while an unjustified TINY buys less review); and a findings schema would be the
+**7th bespoke hand-parsed markdown format** — a pattern that produced two of the fail-opens fixed here.
+Test `RELEASE_AUDIT` against AUTHORING's ladder first: "did the validators pass, is evidence fresh, is the
+tag clean" is *mechanical*, and a deterministic script outranks an evaluator mode.
+
+## Correction work (the bulk of v2.15.0)
+
+Fail-opens: SIGPIPE in `check-plan-freshness` (10/10) · absent-target id skip · `Baseline commit:` parse ·
+5 `shift 2` hangs · typo'd-flag exit 0 · unreachable-validator exit 0 · `--`-prefixed ledger rows ·
+indented tables · omitted UAT `Blocking:`. Claims made true: PLAN_CHECK token discriminator · hoisted
+untrusted-input defense · agent-description cap · read-only proof over all validators. Honesty: +412 B
+published, guarantee rows split, "never a gate" corrected, dogfood "Not run" completed.
+
+Every fix has a regression fixture; **every fixture was verified non-vacuous** by reverting the fix and
+confirming it fails. That mattered — the first SIGPIPE fixture passed against the buggy code (42KB < the
+64KB pipe buffer), so it now asserts its own precondition and fails loudly rather than going quietly
+vacuous, which is the exact defect that hid this bug in v2.14.0's own suite.
 
 ---
 

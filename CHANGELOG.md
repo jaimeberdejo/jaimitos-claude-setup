@@ -8,6 +8,85 @@ uses [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [2.15.0] — 2026-07-16
+
+Correction release. An independent review of the **released** v2.14.0 — the first anyone had run on it;
+its only prior record was a dogfood report by its own author — found one critical and four high defects,
+all reproduced before fixing. The pattern behind them: v2.14.0 shipped five correct, well-tested,
+fail-closed validators and **wired none of them to anything**, while the docs graded them `DETERMINISTIC`.
+A test that exercises a gate against a fixture proves the validator works, not that the rule holds.
+
+Every fix carries a regression fixture, and every fixture was verified by reverting the fix and confirming
+it fails. Green on macOS bash 3.2 and Linux bash 5.2 / GNU / non-root.
+
+### Fixed — validators that reported success when they could not verify
+- **`check-plan-freshness.sh` took SIGPIPE and called it fresh** (critical). `printf "$CHANGED" | grep -qxF`
+  under `set -o pipefail`: `grep -q` exits at the first match, `printf` takes SIGPIPE once the name list
+  exceeds the 64KB pipe buffer, and `pipefail` promotes 141 over grep's 0 — so a provably-changed file was
+  reported unchanged and the gate printed *"plan assumptions still hold deterministically"*. **10/10
+  fail-open**, on exactly the large, long-lived repos the check exists for. An interactive probe cannot see
+  it (interactive bash ignores SIGPIPE for builtins). v2.14.0's dogfood recorded this bug class as "fixed
+  in every test" — it was fixed where it was noticed, and never reached the shipped validator introduced by
+  the same series.
+- **A removed cited id passed when its target was gone.** `if [ -f "$tgt" ]` skipped id-resolution
+  entirely, so deleting `docs/SPEC.md` — the most complete form of "the requirement was removed" — produced
+  a maximally confident all-clear. Now fails closed. `$tgt` was also CWD-relative, so the same plan passed
+  from a subdirectory and failed from the root; it now resolves from the repo root.
+- **`Baseline commit: <sha>` never parsed** — the skip class `[^0-9a-f]*` cannot cross the `c` of "commit".
+- **Five infinite loops.** `shift 2` with one argument left is a POSIX no-op returning 1; without `set -e`
+  the parse loop spun on a CPU forever. Sibling flags were only *accidentally* safe, so the guard is now
+  uniform.
+- **A mistyped flag turned a gate green.** `--stict` was read as the file path, and "inert when the artifact
+  is absent" turned the typo into exit 0. Unknown flags now exit 2, as the other validators already did.
+- **Cannot-verify reported as nothing-to-verify.** `trace-requirements.sh --strict` exited 0 when its
+  validator was unreachable.
+
+### Fixed — the channel separation was convention, not mechanism
+- **A PLAN_CHECK verdict could be recorded as an implementation grade.** Both modes ended in `PASS`, and
+  `record-grade.sh` trusts "last line == PASS" as proof of an implementation review — so a plan review
+  stating *"NO CODE HAS BEEN WRITTEN YET"* recorded as a valid HEAD-bound grade, defeating one of `tick.sh`'s
+  three gates, while three documents asserted "a separate channel `record-grade.sh` never reads". PLAN_CHECK
+  now emits `PLAN_PASS` / `PLAN_PASS_WITH_WARNINGS` / `PLAN_FAIL`, rejected by name. That the evaluator emits
+  the right token for its mode remains **model-dependent**; what is deterministic is that a `PLAN_*` token
+  cannot become a grade.
+- **The untrusted-input defense was scoped to one mode.** It sat below "everything from here is
+  IMPLEMENTATION_REVIEW", so PLAN_CHECK — which reads strictly *more* attacker-authorable surface — had none.
+  Hoisted above the mode split and extended to name every artifact the evaluator reads.
+- **The read-only proof covered 2 of 5 validators** while printing a blanket pass; a `touch` planted in
+  `check-plan-freshness` survived it. Every validator now runs inside the checksum window.
+
+### Removed — the enforcement and UAT ledgers (ADR-008 supersedes ADR-004)
+Both shipped a validator with **no producer, no template and no caller**: ~470 lines reachable only from
+their own fixtures, in artifacts that existed in neither the toolkit nor any of three real consumer repos.
+Meanwhile `AUTHORING.md` graded them Deterministic and the README said `check-uat.sh` "blocks a release" —
+a gate no release path invoked. ADR-007's own standard decides it ("revisited only when a real consumer
+demonstrates the need"); three of three demonstrated the opposite. Wiring them into `release-check.sh` was
+rejected precisely because it looks like the fix: an inert validator against a file nothing creates would
+always exit 0 and mint a new deterministic-sounding row. Bounded gap planning survives on its own terms.
+Reinstating either needs a fresh ADR and a producer, not a revert — `test-docs-invariants.sh` pins it.
+
+### Added
+- **`grill` stops on an evidence condition, not exhaustion.** It knew how to open a branch but never said
+  when the interview was over. Depth now earns its branches from an *unresolved material decision* rather
+  than the tier label, and the interview ends when every material decision is settled or recorded as an
+  honest gap. Zero always-loaded cost.
+- **An agent-description budget** (500 B each / 2000 B total, `test-agents.sh`), mirroring the skill cap —
+  the gap that let the evaluator's always-loaded description grow +274 B unnoticed.
+
+### Changed — honest accounting
+- **"Zero always-loaded cost" was false.** v2.14.0 added **+412 B** (skill descriptions +138, evaluator
+  description +274); `CONTROL-PLANE.md` said "nothing here adds always-loaded context" three rows above a
+  table printing "+138 B … every turn", and had no row for agent descriptions at all. Totals now published:
+  **9528 B** (3140 CLAUDE.md + 5173 skills + 1215 agents), from 9101 B at v2.13.0. `CLAUDE.md` is genuinely
+  byte-identical at 3140 B — that sub-claim was impeccable; the error was generalizing it.
+- **Guarantee rows split** where a deterministic half was bundled with a human one: tier recommendation
+  (deterministic) vs override-is-recorded (human-dependent); plan freshness HARD vs SOFT; "an invalidated
+  plan does not keep a prior PASS" → model + human, because no PLAN_CHECK verdict is stored anywhere for
+  anything to revoke.
+- **"The tier is never a gate"** was pinned by a test and false. It is not a gate on *readiness*; it *is*
+  what `/phase` consults to decide whether the independent PLAN_CHECK runs.
+- v2.14.0's dogfood "Not run (honest)" section omitted PLAN_CHECK, its own flagship — appended.
+
 ## [2.14.0] — 2026-07-16
 
 Progressive control plane — ceremony proportionate to risk, built on R3's traceability spine. All opt-in,
