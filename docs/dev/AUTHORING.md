@@ -29,6 +29,17 @@ trust-focused toolkit quietly stops being trustworthy.
 | Provenance schema is valid and its cited files exist | **Deterministic** — `test-skills.sh` |
 | The discipline is *stated* in the skill (red-for-the-right-reason, no speculative loops, …) | **Deterministic** — `test-docs-invariants.sh` (greps the prose; proves the rule is written, **not** that it was obeyed) |
 | Requirement ids are well-formed and unique (`AC` globally); a phase's `Requirements:` refs resolve to `docs/SPEC.md`; an `Approved` requirement carries no blocking `[NEEDS CLARIFICATION]` | **Deterministic** — `_requirements.sh` via `lint-roadmap.sh` (advisory; `--strict` fails). Structure only — never that a requirement is *satisfied* |
+| Work-tier recommendation is reproducible from its signals; an override is recorded | **Deterministic** — `classify-work.sh` (+ human selection) |
+| A REQ/OBJ defined and active in the spec that no phase plans is surfaced (orphan) | **Deterministic — advisory** — `requirements_orphans` via `trace-requirements.sh` |
+| Plan freshness: baseline is still an ancestor of HEAD; referenced files/ids resolve | **Deterministic** — `check-plan-freshness.sh` (`--strict` fails; an invalidated plan may not keep a prior PASS) |
+| Enforcement-ledger structure: each claim names a source + mechanism; a DEFERRED row has a real trigger; DETERMINISTIC strength is not sat on advisory prose | **Deterministic** — `lint-enforcement.sh` (never regenerated from the code graph) |
+| Evidence carries `schema_version 2` (v1 fields kept); an unknown version fails closed; a summary cannot override the exit-derived status | **Deterministic** — `test-evidence.sh` + `tick.sh` schema gate |
+| A Blocking UAT item that is FAILED/BLOCKED blocks a release; a DEFERRED item is justified | **Deterministic + human** — `check-uat.sh --strict` (never bypasses evaluator/evidence/tick) |
+| A validator never executes its input and never mutates it | **Deterministic** — `test-control-plane-security.sh` |
+| A ledger row's *strength* is honest (advisory prose is not called enforced) | **Model + human** — evaluator + review |
+| A map claim is VERIFIED vs INFERRED vs UNKNOWN; stated-vs-actual is honest; current structure is not blessed as intended | **Model-dependent** — `mapme` |
+| A plan is coherent, covered, ordered, and owned (pre-mortem: seams, temporal, failure behavior) | **Model-dependent** — evaluator `PLAN_CHECK` (independent; a planner cannot self-approve) |
+| Unexplained unrelated / high-stakes diff scope | **Model-dependent** — evaluator ownership-compliance, on the deterministic phase diff |
 | A grader cannot edit the tree it grades | **Hook/gate enforced** — `_eval-isolation.sh` snapshot + restore |
 | Completion evidence belongs to the current commit | **Hook/gate enforced** — `tick.sh` (`run_id == HEAD`) |
 | A test actually failed *for the intended reason* | **Model-dependent** — reviewed as evidence by the evaluator |

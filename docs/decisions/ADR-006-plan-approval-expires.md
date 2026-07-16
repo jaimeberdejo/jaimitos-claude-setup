@@ -1,0 +1,5 @@
+# ADR-006: Plan approval expires when assumptions materially change
+
+Date: 2026-07-16
+Decision: A STANDARD/DEEP plan records its baseline commit and a `## Assumption revalidation` section; `scripts/check-plan-freshness.sh` gives deterministic staleness signals (baseline still an ancestor of HEAD, referenced files present/changed, cited REQ/AC/OBJ/ENF ids still resolve), and — together with evaluator judgement of whether a change is material — an invalidated plan may not keep a prior PLAN_CHECK PASS.
+Why: A plan approved against a repository that has since moved is a false approval; executing it silently ships against stale assumptions (a moved seam, a removed requirement, a changed ADR). Revalidating against current HEAD before execution turns that from an invisible risk into a checked precondition. The rejected alternative — treating a PASS as permanent — is precisely the "executes against outdated state" failure this prevents; small path moves may still be corrected in-plan with a note, so the rule is proportionate, not rigid.

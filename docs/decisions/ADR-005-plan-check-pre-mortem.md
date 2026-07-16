@@ -1,0 +1,5 @@
+# ADR-005: PLAN_CHECK is an evaluator mode with an integrated pre-mortem
+
+Date: 2026-07-16
+Decision: The existing independent evaluator gains a fresh-context, read-only `PLAN_CHECK` mode that reviews a plan before execution and runs an integrated pre-mortem ("imagine this was implemented exactly as written and still failed — why?") over requirement coverage, integration seams, dependency graph, temporal risks, failure behavior, verification, and ownership/enforcement. Its verdict — `PASS | PASS_WITH_WARNINGS | FAIL` — is a separate channel that `record-grade.sh` never reads; the existing two-axis grade is named `IMPLEMENTATION_REVIEW`.
+Why: A field-by-field checklist catches missing sections but not the integration seam with no owner, the small final step that expands, or the two tasks assuming different failure semantics — a pre-mortem does. Making it a MODE of the same edit-disabled evaluator keeps independence (a planner can't approve its own plan) with no new permanent agent. The rejected alternative — a separate plan-checker agent — adds a standing agent for what is an evaluation, not a new authority.

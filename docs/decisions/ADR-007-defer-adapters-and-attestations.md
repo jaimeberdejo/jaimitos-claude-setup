@@ -1,0 +1,5 @@
+# ADR-007: Test-adapter registries and completion attestations remain deferred
+
+Date: 2026-07-16
+Decision: Release 4 does not build a test-adapter registry, a completion-attestation subsystem, telemetry, multi-model routing, an MCP orchestration registry, or live ticket synchronization. The generic evidence runner (`test-evidence.sh`, now schema_version 2) plus the existing completion gate (`tick.sh`) remain authoritative; these deferred systems are revisited only when a real consumer demonstrates the need.
+Why: Speculative infrastructure adds permanent surface — code, context, and maintenance — for unproven need, against the toolkit's lean, one-developer-understandable, offline-by-default constraints. Deferring keeps the generic command runner and project-native commands as the single evidence path. The rejected alternative — building these now — is speculative generality: an adapter catalog or attestation format justified by an imagined future rather than a repeated real parsing/verification need.

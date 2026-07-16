@@ -202,6 +202,29 @@ no external CLI, no second spec/task hierarchy, and no always-loaded context tax
 
 ---
 
+## Progressive control plane (v2.14.0, optional)
+
+Ceremony proportionate to risk — all opt-in, all offline, **zero always-loaded cost** (`CLAUDE.md`
+unchanged). Full reference: `jaimitos-os/toolkit-docs/CONTROL-PLANE.md`.
+
+- **Workflow tiers** — `jaimitos-os/scripts/classify-work.sh` recommends `TINY | STANDARD | DEEP` from
+  explicit risk/complexity signals; the tier is recorded (overridably) in `docs/SPEC.md` `tier:` and scales
+  spec depth, mapping, plan-check, and UAT. Escalation signals (auth, secrets, payments, migrations, …)
+  normally prevent TINY.
+- **Brownfield & ownership mapping** — bounded modes of the `mapme` skill (`--brownfield`, `--ownership`,
+  `--refresh`), tagging every claim VERIFIED/INFERRED/UNKNOWN and comparing stated vs actual architecture.
+- **Enforcement ledger** — `docs/ENFORCEMENT.md` maps architectural claims to their enforcement (or an
+  explicit advisory label); validated by `jaimitos-os/scripts/lint-enforcement.sh`.
+- **Evaluator PLAN_CHECK + pre-mortem** — a fresh, read-only plan review before execution; `check-plan-freshness.sh`
+  invalidates a stale plan's prior approval.
+- **Evidence schema 2, UAT & gap planning** — richer commit-bound evidence; `check-uat.sh` blocks a release
+  on a failed blocking acceptance item (never bypassing the evaluator, evidence, or `tick.sh`).
+
+`scripts/tick.sh` stays the sole completion authority; the four conditional agents stay four; no Spec Kit /
+Yojana / Sutra runtime.
+
+---
+
 ## Commands
 
 | Command | What it does |

@@ -32,6 +32,12 @@ Read the README's "Enforcement reality" section — the deterministic layer (hoo
 `autopilot.sh`) fails closed; the advisory layer (`CLAUDE.md`, `rules/`, the evaluator
 prompt) only *asks* a model to comply.
 
+The v2.14.0 progressive-control-plane guarantees are classified (deterministic vs hook/gate vs
+model-dependent vs human-dependent vs advisory) in `docs/dev/AUTHORING.md`. The new validators'
+adversarial posture — fail-closed on bad paths, strictly read-only, and never executing file content — is
+tested by `jaimitos-os/scripts/test-control-plane-security.sh`. Do not overstate the model-dependent
+guarantees (a pre-mortem, a map classification, and ownership judgement are reviewed, not proven).
+
 **What it explicitly does NOT guarantee — your responsibility:**
 
 - **The secret-scan is a best-effort, prefix-matching commit-time guard — NOT a scanner, and it
