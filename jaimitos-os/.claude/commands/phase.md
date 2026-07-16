@@ -73,6 +73,16 @@ of roadmap order; bare `/phase` (no argument) is unchanged.
    skipped; do not invent findings). The planner writes a plan file under docs/plans/ (research
    notes + tasks + "Done when") and reports back the exact path it wrote. Confirm that file
    exists before continuing.
+4b. **Plan check — the `evaluator` in PLAN_CHECK mode (STANDARD / DEEP / supervised phases; skip for
+   TINY).** Before executing, dispatch the `evaluator` subagent in **PLAN_CHECK** mode (Task tool) with
+   the plan file path from step 4, the phase's exact heading and "Done when:" line(s), and the referenced
+   docs/SPEC.md requirements. It reads the *plan* only (no code exists yet) and runs the pre-mortem,
+   returning `PASS`, `PASS_WITH_WARNINGS`, or `FAIL`. On **FAIL**, STOP: return the plan to the planner
+   with the evaluator's reasons — do NOT execute a failed plan. On **PASS_WITH_WARNINGS**, record the
+   warnings in the plan or docs/STATE.md, then proceed. On **PASS**, proceed. This is a *separate channel*
+   from the step-6 implementation grade — its verdict never reaches `record-grade.sh`. TINY/mechanical
+   work skips this step (judge by the spec's `tier:` and the change's risk); a supervised or high-stakes
+   phase always runs it.
 5. **Execute — delegated to the `executor` subagent.** Invoke the `executor` subagent (Task
    tool) with a prompt containing: the phase's exact heading and the plan file path from step 4.
    The executor runs the TDD loop per task (failing test, minimal code, run test, commit) and

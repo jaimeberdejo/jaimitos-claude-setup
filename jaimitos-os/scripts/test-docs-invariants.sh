@@ -190,6 +190,25 @@ assert_has "scripts/lint-enforcement.sh" "does NOT tick" \
 assert_has "scripts/lint-enforcement.sh" "DETERMINISTIC, HOOK-ENFORCED, CI-ENFORCED" \
            "enforcement ledger documents the strength vocabulary (deterministic distinct from advisory)"
 
+# Evaluator PLAN_CHECK + pre-mortem (v2.14.0) — the SAME independent evaluator gains a second mode. No new
+# agent, no second evaluator. IMPLEMENTATION_REVIEW keeps the two-axis PASS/NEEDS_WORK contract that
+# record-grade.sh gates on; PLAN_CHECK is a fresh, read-only plan review with its OWN verdict triple, on a
+# separate channel that record-grade.sh never reads. /phase runs PLAN_CHECK after planning, before execution.
+assert_has ".claude/agents/evaluator.md" "IMPLEMENTATION_REVIEW" \
+           "evaluator names the implementation-review mode (the existing two-axis grade)"
+assert_has ".claude/agents/evaluator.md" "PLAN_CHECK" \
+           "evaluator gains a fresh read-only PLAN_CHECK mode"
+assert_has ".claude/agents/evaluator.md" "PASS_WITH_WARNINGS" \
+           "PLAN_CHECK has its own three-value verdict (distinct from the tick-gate PASS/NEEDS_WORK)"
+assert_has ".claude/agents/evaluator.md" "implemented exactly as written and still failed" \
+           "PLAN_CHECK runs the integrated pre-mortem"
+assert_has ".claude/agents/evaluator.md" "never the input to \`record-grade.sh\`" \
+           "PLAN_CHECK is a separate channel — its verdict never reaches record-grade.sh"
+assert_has ".claude/agents/evaluator.md" "cannot approve a plan you authored" \
+           "evaluator PLAN_CHECK stays independent (it authors nothing; the planner cannot self-approve)"
+assert_has ".claude/commands/phase.md" "do NOT execute a failed plan" \
+           "/phase dispatches PLAN_CHECK after planning and blocks execution on FAIL (skipped for TINY)"
+
 # Prototype — sanctioned, but never a route to a tick.
 assert_has "../skills/prototype/SKILL.md" "**MAY NEVER** satisfy production implementation or release criteria" \
            "prototype output can never satisfy production/release criteria"
