@@ -115,6 +115,30 @@ assert_has "../skills/roadmap/SKILL.md" "Sources:" \
 assert_absent "../skills/roadmap/SKILL.md" "speckit" \
            "roadmap skill's requirement-id guidance names no external tool"
 
+# Native requirement ids (v2.13.0) — the spec + plan sides that pair with v2.12.0's roadmap +
+# evaluator half. All OPTIONAL and inert by default; to-spec is the SOLE id owner; grill only
+# discovers candidates; the planner maps tasks; and none of it names an external tool.
+assert_has "docs/SPEC.md" "Requirements (optional" \
+           "SPEC template carries an OPTIONAL Requirements (REQ/AC) section"
+assert_has "docs/SPEC.md" "tiny/local work" \
+           "SPEC template exempts tiny/local work from ids (they are not forced)"
+assert_absent "docs/SPEC.md" "speckit" \
+           "SPEC template names no external tool"
+assert_has "../skills/to-spec/SKILL.md" "sole id owner" \
+           "to-spec is the sole owner of native id assignment and preservation"
+assert_has "../skills/to-spec/SKILL.md" "never renumber" \
+           "to-spec preserves approved ids (no renumber on reorder)"
+assert_absent "../skills/to-spec/SKILL.md" "speckit" \
+           "to-spec's id guidance names no external tool"
+assert_has "../skills/grill/SKILL.md" "do not mint canonical" \
+           "grill discovers requirement candidates but does not mint canonical ids"
+assert_absent "../skills/grill/SKILL.md" "speckit" \
+           "grill's requirement guidance names no external tool"
+assert_has ".claude/agents/planner.md" "no id ceremony" \
+           "planner maps tasks to ids only when a phase declares them; tiny work skips it"
+assert_absent ".claude/agents/planner.md" "speckit" \
+           "planner's requirement mapping names no external tool"
+
 # Prototype — sanctioned, but never a route to a tick.
 assert_has "../skills/prototype/SKILL.md" "**MAY NEVER** satisfy production implementation or release criteria" \
            "prototype output can never satisfy production/release criteria"

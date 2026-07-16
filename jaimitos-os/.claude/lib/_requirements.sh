@@ -93,21 +93,25 @@ requirements_lint() {
       a = stripcom($0)
       if (a ~ /^[[:space:]]*$/) next
       # A requirement/objective definition heading: "### REQ-001 — title" / "### OBJ-002 — ..."
-      if (a ~ /^###[[:space:]]+[A-Za-z]/) {
+      if (a ~ /^###[[:space:]]+/) {
         flush_req()
         h=a; sub(/^###[[:space:]]+/,"",h); id=firsttok(h)
-        if (id ~ /^(REQ|OBJ)-/ || id ~ /^AC-/) {
+        # A def heading is one whose first token is a valid id (native OR external), or LOOKS like a
+        # native id attempt (so a malformed REQ-ABC is flagged, while prose like "### Edge cases" is
+        # left alone — its first word matches neither).
+        if (id ~ GEN || id ~ /^(REQ|AC|OBJ)-/) {
           spec_has_req=1
           if (id !~ GEN) prob("malformed id in docs/SPEC.md heading: " id)
           else {
             if (id ~ /^AC-/) { if (id in acall) prob("duplicate AC id " id " (AC ids must be unique across the whole spec)"); acall[id]=1 }
             else if (id in defall) prob("duplicate id " id " defined in docs/SPEC.md")
             defall[id]=1
+            if (id ~ /^(REQ|OBJ)-/) cur_req=id
           }
-          if (id ~ /^(REQ|OBJ)-/) cur_req=id
         }
         next
       }
+      if (a ~ /^##[[:space:]]/) { flush_req(); next }
       # Status line inside a requirement block
       if (cur_req != "" && a ~ /^[[:space:]]*Status:[[:space:]]*/) {
         s=a; sub(/^[[:space:]]*Status:[[:space:]]*/,"",s); s=firsttok(s); cur_status=s; next
