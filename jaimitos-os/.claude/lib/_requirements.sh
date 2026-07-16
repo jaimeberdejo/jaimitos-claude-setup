@@ -166,4 +166,68 @@ requirements_lint() {
   return $rc
 }
 
+# requirements_orphans <roadmap> [spec] — ADVISORY coverage check (v2.14.0): a REQ/OBJ defined and still
+# ACTIVE in docs/SPEC.md (Status not Rejected/Superseded/Deferred) that NO roadmap phase references is an
+# "orphan" — approved but with no planned work. A requirement is covered if its own id OR any of its child
+# AC ids appears in a phase's `Requirements:` block. Prints "  ~ <id> …" lines. Always rc 0: an orphan is a
+# planning gap to surface, never a build blocker (a spec may legitimately hold not-yet-scheduled work).
+# This complements requirements_lint (which checks refs→defs); orphans are the reverse, defs→refs.
+requirements_orphans() {
+  local road="$1" spec="${2:-}"
+  [ -f "$road" ] || return 0
+  if [ -z "$spec" ]; then spec="$(dirname "$road")/SPEC.md"; fi
+  [ -f "$spec" ] || return 0
+
+  local out
+  out=$(SPECF="$spec" GEN_RE="$REQ_GENERIC_RE" awk '
+    function stripcom(line,   out,p) {
+      out=""
+      while (1) {
+        if (incom) { p=index(line,"-->"); if (p==0) return out; line=substr(line,p+3); incom=0 }
+        else       { p=index(line,"<!--"); if (p==0) return out line; out=out substr(line,1,p-1); line=substr(line,p+4); incom=1 }
+      }
+    }
+    function firsttok(s,   a,n) { gsub(/^[[:space:]]+/,"",s); n=split(s,a,/[[:space:]]/); return a[1] }
+    BEGIN { SPEC=ENVIRON["SPECF"]; GEN=ENVIRON["GEN_RE"]; incom=0; ndef=0; cur="" }
+
+    # ---- SPEC pass (read first) ----
+    FILENAME==SPEC {
+      a=stripcom($0); if (a ~ /^[[:space:]]*$/) next
+      if (a ~ /^###[[:space:]]+/) {
+        h=a; sub(/^###[[:space:]]+/,"",h); id=firsttok(h)
+        if ((id ~ /^(REQ|OBJ)-/) && id ~ GEN) { cur=id; if (!(id in seendef)) { seendef[id]=1; deford[++ndef]=id; defstatus[id]="" } }
+        else cur=""
+        next
+      }
+      if (a ~ /^##[[:space:]]/) { cur=""; next }
+      if (cur!="" && a ~ /^[[:space:]]*Status:[[:space:]]*/) { s=a; sub(/^[[:space:]]*Status:[[:space:]]*/,"",s); defstatus[cur]=firsttok(s); next }
+      if (a ~ /^[[:space:]]*-[[:space:]]+AC-/) { b=a; sub(/^[[:space:]]*-[[:space:]]+/,"",b); id=firsttok(b); sub(/:.*/,"",id); if (cur!="") acparent[id]=cur }
+      next
+    }
+
+    # ---- ROADMAP pass ----
+    /^## /                                     { in_req=0; next }
+    /^[[:space:]]*Requirements:[[:space:]]*$/  { in_req=1; next }
+    /^[[:space:]]*Sources:[[:space:]]*$/       { in_req=0; next }
+    in_req && /^[[:space:]]*-[[:space:]]/ {
+      b=$0; sub(/^[[:space:]]*-[[:space:]]+/,"",b); id=firsttok(b)
+      if (id ~ /^\[/) { in_req=0; next }
+      ref[id]=1; next
+    }
+    { in_req=0 }
+
+    END {
+      for (i=1;i<=ndef;i++) {
+        id=deford[i]; st=defstatus[id]
+        if (st ~ /^(Rejected|Superseded|Deferred)$/) continue
+        covered = (id in ref)
+        if (!covered) for (ac in acparent) if (acparent[ac]==id && (ac in ref)) { covered=1; break }
+        if (!covered) print "  ~ " id " is defined and active in docs/SPEC.md but no roadmap phase plans it (orphan requirement)"
+      }
+    }
+  ' "$spec" "$road")
+  [ -n "$out" ] && printf '%s\n' "$out"
+  return 0
+}
+
 return 0 2>/dev/null || exit 0

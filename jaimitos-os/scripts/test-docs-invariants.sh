@@ -245,6 +245,16 @@ assert_has ".claude/agents/planner.md" "no id ceremony" \
 assert_absent ".claude/agents/planner.md" "speckit" \
            "planner's requirement mapping names no external tool"
 
+# Extended traceability (v2.14.0) — R3 wired _requirements.sh (refs→defs); R4 adds the reverse coverage
+# check (orphan detection: an approved requirement no phase plans) and a traceability REPORT generated from
+# the canonical artifacts, never a hand-maintained spreadsheet. Orphans are advisory; structure stays hard.
+assert_has ".claude/lib/_requirements.sh" "requirements_orphans" \
+           "requirements lib gains orphan/coverage detection (approved requirement with no planned work)"
+assert_has "scripts/trace-requirements.sh" "never a hand-maintained spreadsheet" \
+           "traceability is a report generated from SPEC + ROADMAP, not a manual spreadsheet"
+assert_absent "scripts/trace-requirements.sh" "speckit" \
+           "the traceability report names no external tool"
+
 # Prototype — sanctioned, but never a route to a tick.
 assert_has "../skills/prototype/SKILL.md" "**MAY NEVER** satisfy production implementation or release criteria" \
            "prototype output can never satisfy production/release criteria"
