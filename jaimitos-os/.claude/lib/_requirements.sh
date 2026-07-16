@@ -3,17 +3,17 @@
 #
 # This is the smallest helper that owns REQ/AC/OBJ id SEMANTICS, so lint-roadmap.sh stays the
 # roadmap-schema linter and does NOT become the parser/owner of docs/SPEC.md. lint-roadmap.sh
-# sources this file and calls `requirements_lint` only when a phase actually carries a
-# `Requirements:` line; the function itself is a no-op (rc 0, no output) when no phase declares one,
+# sources this file and calls `requirements_lint`, which validates whenever a roadmap phase declares
+# a `Requirements:` line OR the spec defines ids; it is a no-op (rc 0, no output) when neither holds,
 # so it is inert in a default project.
 #
 # It validates STRUCTURE only — never semantic satisfaction, completeness, measurability, or test
 # quality (those stay evaluator + human judgment). Concretely it checks:
 #   - malformed ids, and duplicate ids inside one roadmap phase's `Requirements:` block
-#   - each roadmap-referenced id resolves to a definition in docs/SPEC.md — but only for a phase
-#     whose source IS the spec (its `Sources:` names docs/SPEC.md, or it has no `Sources:` and the
-#     spec has a Requirements section). A phase sourced from an external file is left to the
-#     evaluator to resolve.
+#   - each roadmap-referenced id resolves to a definition in docs/SPEC.md — but only for a phase whose
+#     ONLY named source is the spec (its `Sources:` names docs/SPEC.md and no external file, or it has
+#     no `Sources:` and the spec has a Requirements section). A phase that also names an external file
+#     is left to the evaluator to resolve — this helper cannot parse an arbitrary external source.
 #   - in docs/SPEC.md: duplicate REQ/OBJ ids; AC ids duplicated ANYWHERE (globally unique); and a
 #     `Status: Approved` requirement whose text still carries `[NEEDS CLARIFICATION` (a strict
 #     validation failure — a Proposed/Clarifying one may keep the marker).
@@ -34,7 +34,8 @@ export REQ_NATIVE_RE REQ_GENERIC_RE
 
 # Task-line detection reuses the ONE shared task regex from _roadmap.sh — the project forbids
 # hand-writing a task-line regex outside that file (test-roadmap-lib.sh enforces it). Source it if a
-# caller has not already; if it is unavailable the task-detection rule simply stays inert.
+# caller has not already; if it is unavailable, a leading `[` checkbox token is still recognized so an
+# adjacent task line is never misread as a requirement ref.
 if [ -z "${ROADMAP_TASK_RE:-}" ]; then
   _req_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd)" || _req_dir=""
   if [ -n "$_req_dir" ] && [ -f "$_req_dir/_roadmap.sh" ]; then . "$_req_dir/_roadmap.sh" 2>/dev/null || true; fi
@@ -48,11 +49,15 @@ requirements_lint() {
   [ -f "$road" ] || return 0
   if [ -z "$spec" ]; then spec="$(dirname "$road")/SPEC.md"; fi
 
-  # Fast inert path: if no phase declares a Requirements: line, there is nothing native to validate.
-  grep -qE '^[[:space:]]*Requirements:[[:space:]]*$' "$road" 2>/dev/null || return 0
-
   local specarg=""
   [ -f "$spec" ] && specarg="$spec"
+
+  # Inert unless there is something native to validate: a roadmap phase that declares Requirements:,
+  # OR a spec that defines ids (so the spec-internal checks — dup / AC-uniqueness / Approved+
+  # clarification — fire as soon as ids exist, not only once a roadmap phase references them).
+  if ! grep -qE '^[[:space:]]*Requirements:[[:space:]]*$' "$road" 2>/dev/null; then
+    { [ -n "$specarg" ] && grep -qE '^###[[:space:]]+(REQ|AC|OBJ)-|^[[:space:]]*-[[:space:]]+AC-' "$specarg" 2>/dev/null; } || return 0
+  fi
 
   local out
   out=$(SPECF="$specarg" GEN_RE="$REQ_GENERIC_RE" NAT_RE="$REQ_NATIVE_RE" TASK_RE="${ROADMAP_TASK_RE:-}" awk '
@@ -78,12 +83,15 @@ requirements_lint() {
     # flush the current ROADMAP phase: cross-ref its refs against SPEC defs when spec-sourced
     function flush_phase(   i,id) {
       if (cur_phase == "" ) return
+      # Cross-ref only when docs/SPEC.md is the ONLY source a phase names (a phase that also names an
+      # external file is left to the evaluator — we cannot parse the external source), or when a phase
+      # names no source at all and the spec defines ids.
       spec_sourced = 0
-      if (phase_sources ~ /docs\/SPEC\.md/) spec_sourced = 1
+      if (phase_src_spec && !phase_src_other) spec_sourced = 1
       else if (!phase_has_sources && spec_has_req) spec_sourced = 1
       if (spec_sourced && SPEC != "")
         for (i=1;i<=nref;i++) { id=ref[i]; if (!(id in defall)) prob("phase references " id " not defined in docs/SPEC.md — " cur_phase) }
-      cur_phase=""; phase_sources=""; phase_has_sources=0; in_src=0; in_req=0; nref=0; delete refseen
+      cur_phase=""; phase_has_sources=0; phase_src_spec=0; phase_src_other=0; in_src=0; in_req=0; nref=0; delete refseen
     }
 
     BEGIN { SPEC=ENVIRON["SPECF"]; GEN=ENVIRON["GEN_RE"]; NAT=ENVIRON["NAT_RE"]; np=0; incom=0 }
@@ -132,13 +140,18 @@ requirements_lint() {
     cur_phase=="" { next }
     /^[[:space:]]*Sources:[[:space:]]*$/  { in_src=1; in_req=0; phase_has_sources=1; next }
     /^[[:space:]]*Requirements:[[:space:]]*$/ { in_req=1; in_src=0; next }
-    # collect Sources: bullets
-    in_src && /^[[:space:]]*-[[:space:]]/ { phase_sources = phase_sources " " $0; next }
+    # classify each Sources: bullet — is it docs/SPEC.md, or some external file?
+    in_src && /^[[:space:]]*-[[:space:]]/ {
+      sp=$0; sub(/^[[:space:]]*-[[:space:]]+/,"",sp); sp=firsttok(sp)
+      if (sp ~ /(^|\/)docs\/SPEC\.md$/) phase_src_spec=1; else phase_src_other=1
+      next
+    }
     # a task line ends any Sources/Requirements block; it is never a requirement ref (shared regex)
     ENVIRON["TASK_RE"] != "" && $0 ~ ENVIRON["TASK_RE"] { in_src=0; in_req=0; next }
     # collect Requirements: ref bullets
     in_req && /^[[:space:]]*-[[:space:]]/ {
       b=$0; sub(/^[[:space:]]*-[[:space:]]+/,"",b); id=firsttok(b)
+      if (id ~ /^\[/) { in_req=0; next }   # a task checkbox, not a ref (robust even if TASK_RE is empty)
       if (id !~ GEN) prob("malformed requirement id in phase: " id " — " cur_phase)
       else { if (id in refseen) prob("duplicate id " id " in one phase Requirements: block — " cur_phase); refseen[id]=1; ref[++nref]=id }
       next

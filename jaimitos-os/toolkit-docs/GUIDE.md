@@ -428,8 +428,9 @@ decides whether that PASS is allowed to become a tick.
 > restore paths), `_roadmap.sh` (the fail-closed phase-heading/`Mode:` parser shared by
 > `tick.sh`, `scripts/autopilot.sh`'s pre-build supervised gate, and `close-milestone.sh`), and
 > `_requirements.sh` (the optional REQ/AC/OBJ id-format and cross-reference validator `lint-roadmap.sh`
-> runs when a phase declares `Requirements:`). They're
-> sourced by the hooks, `tick.sh`, and `scripts/autopilot.sh`, so the same guards run everywhere — a
+> runs when a phase declares `Requirements:`). The first five are
+> sourced by the hooks, `tick.sh`, and `scripts/autopilot.sh` (`_requirements.sh` only by
+> `lint-roadmap.sh`, deliberately never on the completion path), so the same guards run everywhere — a
 > single source of truth for each.
 
 #### The secret scan is a prefix-matcher by default — swap in a real scanner if you need one

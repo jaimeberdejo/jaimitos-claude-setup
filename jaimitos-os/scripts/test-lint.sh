@@ -216,7 +216,36 @@ Mode: supervised
 '
 strict && pass "req-id: external-sourced phase not cross-referenced against docs/SPEC.md → exit 0" || fail "req-id wrongly cross-referenced an external-sourced phase"
 
-# legacy: a roadmap with no Requirements: block anywhere is fully inert
+# spec-internal checks fire on the spec's own ids even when no roadmap phase references them
+wr '## Requirements
+### REQ-001 — a
+Status: Approved
+- AC-001: x.
+### REQ-002 — b
+- AC-001: reused id.
+' '## Phase 1 — plain
+- [ ] do
+Done when: green.
+Mode: loopable
+'
+strict && fail "req-id missed a spec-internal duplicate AC with no roadmap refs" || pass "req-id: spec-internal dup AC flagged even with no roadmap Requirements: block → --strict exit 1"
+
+# a phase naming docs/SPEC.md AND an external file is not cross-referenced against the spec
+wr "$SPEC_OK" '## Phase 1 — Export
+Sources:
+- docs/SPEC.md
+- specs/prd.md
+Requirements:
+- REQ-001
+- FR-042
+
+- [ ] implement
+Done when: green.
+Mode: supervised
+'
+strict && pass "req-id: mixed docs/SPEC.md + external source → external id not flagged → exit 0" || fail "req-id false-positived an external id on a mixed-source phase"
+
+# legacy: a roadmap with no Requirements: block anywhere (and no spec ids) is fully inert
 mkrepo r2
 printf '## Phase 1 — A\n- [ ] t\nDone when: green\nMode: loopable\n' > "$REPO/docs/ROADMAP.md"
 ( cd "$REPO" && bash scripts/lint-roadmap.sh --strict ) >/dev/null 2>&1 && pass "req-id: no Requirements: block anywhere → inert, --strict exit 0" || fail "req-id was not inert on a legacy roadmap"
