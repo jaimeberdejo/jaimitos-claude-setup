@@ -15,10 +15,13 @@
 set -uo pipefail
 NL=$'\n'   # newline literal, for pipe-free membership tests (see the referenced-files loop)
 STRICT=0; BASE=""; PLAN=""
+# `shift 2` with one arg left is a POSIX no-op returning 1, and there is no `set -e` — `--base` with
+# no value spun forever. An unknown -flag must not fall into the catch-all and be read as the plan path.
 while [ "$#" -gt 0 ]; do case "$1" in
   -h|--help) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
   --strict) STRICT=1; shift ;;
-  --base) BASE="${2:-}"; shift 2 ;;
+  --base) [ "$#" -ge 2 ] || { echo "check-plan-freshness: --base needs a value (see --help)" >&2; exit 2; }; BASE="$2"; shift 2 ;;
+  -*) echo "check-plan-freshness: unknown flag: $1 (see --help)" >&2; exit 2 ;;
   *) PLAN="$1"; shift ;;
 esac; done
 [ -n "$PLAN" ] || { echo "check-plan-freshness: no plan file given (see --help)." >&2; exit 2; }

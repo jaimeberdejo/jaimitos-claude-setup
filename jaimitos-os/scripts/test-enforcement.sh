@@ -139,5 +139,11 @@ strict_ok "$ALIGN" && pass "a GFM alignment row (|:---|) is a separator, not a m
                    || fail "alignment row misparsed as data"
 
 echo ""
+echo "Regression (v2.15.0) — a mistyped flag must not become the file path"
+bash "$LINT" --strictt "$VALID" >/dev/null 2>&1
+[ "$?" = "2" ] && pass "unknown flag → exit 2 (not silently read as the ledger path)" \
+               || fail "a mistyped flag was swallowed as the file path"
+
+echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All lint-enforcement.sh tests passed."; exit 0
 else echo "$FAILS lint-enforcement.sh test(s) FAILED."; exit 1; fi

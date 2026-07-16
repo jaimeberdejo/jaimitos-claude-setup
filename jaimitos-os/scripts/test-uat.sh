@@ -108,5 +108,13 @@ blk "$NOBLK_PASS" && pass "PASSED item with no Blocking → still a structural e
                   || fail "a required field may not be optional in practice"
 
 echo ""
+echo "Regression (v2.15.0) — a mistyped flag must not become the file path"
+# The old catch-all read an unknown flag as the FILE, so `--stict` discarded the real ledger and
+# "inert when there is no ledger" turned a typo into a green release gate: exit 0, release not blocked.
+bash "$CHK" --stict "$CLEAN" >/dev/null 2>&1
+[ "$?" = "2" ] && pass "unknown flag → exit 2 (not silently read as the ledger path)" \
+               || fail "a mistyped flag was swallowed as the file path"
+
+echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All check-uat.sh tests passed."; exit 0
 else echo "$FAILS check-uat.sh test(s) FAILED."; exit 1; fi

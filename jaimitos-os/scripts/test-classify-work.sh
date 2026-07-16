@@ -96,5 +96,26 @@ bash "$CW" --components ten >/dev/null 2>&1 && fail "non-integer --components ex
 bash "$CW" --select MEGA >/dev/null 2>&1 && fail "bad --select exited 0" || pass "bad --select value refused"
 
 echo ""
+echo "Regression (v2.15.0) — a value-taking flag with no value must fail, not spin"
+# `shift 2` with one arg left is a POSIX no-op that RETURNS 1; without `set -e` the while loop never
+# advances and burns a CPU forever (rc=137 under a watchdog). --reason/--subject had no validator to
+# die on the empty value first, so they hung. A watchdog is mandatory: a hang test that hangs is useless.
+watchdog() {  # watchdog <secs> <cmd...> ; echoes the rc, or 137 if it had to be killed
+  local secs="$1"; shift
+  ( "$@" >/dev/null 2>&1 & p=$!
+    ( sleep "$secs" >/dev/null 2>&1; kill -9 $p 2>/dev/null ) & w=$!
+    wait $p 2>/dev/null; rc=$?; kill $w 2>/dev/null; exit $rc ) 2>/dev/null
+  echo $?
+}
+for flag in --reason --subject --components --phases --files --novelty --select; do
+  rc=$(watchdog 5 bash "$CW" "$flag")
+  case "$rc" in
+    2)        pass "$flag with no value → exit 2 (fail-closed, no hang)" ;;
+    137|124)  fail "$flag with no value HUNG (rc=$rc) — shift 2 no-op spin" ;;
+    *)        fail "$flag with no value → rc=$rc (want 2)" ;;
+  esac
+done
+
+echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All classify-work.sh tests passed."; exit 0
 else echo "$FAILS classify-work.sh test(s) FAILED."; exit 1; fi

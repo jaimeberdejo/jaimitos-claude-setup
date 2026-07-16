@@ -26,9 +26,13 @@
 # Usage: bash scripts/lint-enforcement.sh [--strict] [path-to-ledger]
 set -uo pipefail
 STRICT=0; FILE="docs/ENFORCEMENT.md"
+# Reject an unknown -flag (exit 2), as classify-work.sh and trace-requirements.sh already do. The old
+# catch-all read a mistyped flag as the FILE, so `--strictt` overwrote the real path and the ledger's
+# "inert when absent" design turned a typo into a clean exit 0 that linted nothing.
 for a in "$@"; do case "$a" in
   -h|--help) sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
   --strict) STRICT=1 ;;
+  -*) echo "lint-enforcement: unknown flag: $a (see --help)" >&2; exit 2 ;;
   *) FILE="$a" ;;
 esac; done
 [ -f "$FILE" ] || { echo "lint-enforcement: no $FILE — nothing to lint."; exit 0; }

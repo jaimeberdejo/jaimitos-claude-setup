@@ -11,17 +11,29 @@
 # Usage: bash scripts/trace-requirements.sh [--strict] [--roadmap <path>] [--spec <path>]
 set -uo pipefail
 STRICT=0; ROAD="docs/ROADMAP.md"; SPEC=""
+# `shift 2` with one arg left is a POSIX no-op returning 1, and there is no `set -e` — the loop
+# would never advance and spin forever. Guard every value-taking flag.
+need_val() { [ "$2" -ge 2 ] || { echo "trace-requirements: $1 needs a value (see --help)" >&2; exit 2; }; }
 while [ "$#" -gt 0 ]; do case "$1" in
   -h|--help) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
   --strict) STRICT=1; shift ;;
-  --roadmap) ROAD="${2:-}"; shift 2 ;;
-  --spec) SPEC="${2:-}"; shift 2 ;;
+  --roadmap) need_val --roadmap "$#"; ROAD="${2:-}"; shift 2 ;;
+  --spec) need_val --spec "$#"; SPEC="${2:-}"; shift 2 ;;
   *) echo "trace-requirements: unknown argument: $1 (see --help)" >&2; exit 2 ;;
 esac; done
 
 LIB="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/../.claude/lib" 2>/dev/null && pwd)" || LIB=""
 if [ -n "$LIB" ] && [ -f "$LIB/_requirements.sh" ]; then . "$LIB/_requirements.sh" 2>/dev/null || true; fi
-command -v requirements_lint >/dev/null 2>&1 || { echo "trace-requirements: requirement validator not found — nothing to trace."; exit 0; }
+# Cannot-verify is not nothing-to-verify. Being inert when there is no ROADMAP is by design; being
+# inert because the validator itself is unreachable is a fail-open, and under --strict it must not
+# report success — an unreachable validator proves nothing about the roadmap it never read.
+if ! command -v requirements_lint >/dev/null 2>&1; then
+  if [ "$STRICT" -eq 1 ]; then
+    echo "trace-requirements: requirement validator not found (looked in ${LIB:-<unresolved>}) — cannot trace." >&2
+    exit 2
+  fi
+  echo "trace-requirements: requirement validator not found — nothing to trace."; exit 0
+fi
 [ -f "$ROAD" ] || { echo "trace-requirements: no $ROAD — nothing to trace."; exit 0; }
 
 echo "Requirement traceability report — $ROAD"

@@ -29,9 +29,14 @@
 # Usage: bash scripts/check-uat.sh [--strict] [path-to-uat]
 set -uo pipefail
 STRICT=0; FILE="docs/UAT.md"
+# Reject an unknown -flag (exit 2), as classify-work.sh and trace-requirements.sh already do — their
+# headers state the reason: fail-closed, so a typo can never silently misclassify. The old catch-all
+# read a mistyped flag as the FILE, so `--stict` overwrote the real path and "inert when there is no
+# ledger" turned a typo into a green release gate: a blocking FAILED item, exit 0, release not blocked.
 for a in "$@"; do case "$a" in
   -h|--help) sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
   --strict) STRICT=1 ;;
+  -*) echo "check-uat: unknown flag: $a (see --help)" >&2; exit 2 ;;
   *) FILE="$a" ;;
 esac; done
 [ -f "$FILE" ] || { echo "check-uat: no $FILE — nothing to check."; exit 0; }

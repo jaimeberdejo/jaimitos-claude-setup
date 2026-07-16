@@ -54,16 +54,21 @@ SELECT=""; REASON=""; SUBJECT=""
 is_int() { case "$1" in ''|*[!0-9]*) return 1 ;; *) return 0 ;; esac; }
 
 # --- parse --------------------------------------------------------------------
+# `shift 2` with only one arg left is a POSIX no-op that RETURNS 1 — and this script runs without
+# `set -e`, so the loop never advances and spins forever on a CPU. Flags whose value has a validator
+# were only accidentally safe (the validator dies on the empty value first); --reason/--subject had
+# none and hung. Guard every value-taking flag uniformly rather than relying on that accident.
+need_val() { [ "$2" -ge 2 ] || die "$1 needs a value"; }
 while [ "$#" -gt 0 ]; do
   case "$1" in
     -h|--help) sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    --components) COMPONENTS="${2:-}"; is_int "$COMPONENTS" || die "--components needs an integer"; shift 2 ;;
-    --phases)     PHASES="${2:-}";     is_int "$PHASES"     || die "--phases needs an integer"; shift 2 ;;
-    --files)      FILES="${2:-}";      is_int "$FILES"      || die "--files needs an integer"; shift 2 ;;
-    --novelty)    NOVELTY="${2:-}"; case "$NOVELTY" in low|medium|high) ;; *) die "--novelty must be low|medium|high" ;; esac; shift 2 ;;
-    --select)     SELECT="${2:-}"; case "$SELECT" in TINY|STANDARD|DEEP) ;; *) die "--select must be TINY|STANDARD|DEEP" ;; esac; shift 2 ;;
-    --reason)     REASON="${2:-}"; shift 2 ;;
-    --subject)    SUBJECT="${2:-}"; shift 2 ;;
+    --components) need_val --components "$#"; COMPONENTS="${2:-}"; is_int "$COMPONENTS" || die "--components needs an integer"; shift 2 ;;
+    --phases)     need_val --phases "$#";     PHASES="${2:-}";     is_int "$PHASES"     || die "--phases needs an integer"; shift 2 ;;
+    --files)      need_val --files "$#";      FILES="${2:-}";      is_int "$FILES"      || die "--files needs an integer"; shift 2 ;;
+    --novelty)    need_val --novelty "$#"; NOVELTY="${2:-}"; case "$NOVELTY" in low|medium|high) ;; *) die "--novelty must be low|medium|high" ;; esac; shift 2 ;;
+    --select)     need_val --select "$#"; SELECT="${2:-}"; case "$SELECT" in TINY|STANDARD|DEEP) ;; *) die "--select must be TINY|STANDARD|DEEP" ;; esac; shift 2 ;;
+    --reason)     need_val --reason "$#";  REASON="${2:-}"; shift 2 ;;
+    --subject)    need_val --subject "$#"; SUBJECT="${2:-}"; shift 2 ;;
     --ambiguous)  AMBIGUOUS=1; shift ;;
     --research)   RESEARCH=1; shift ;;
     --external-interface) EXT_IFACE=1; shift ;;
