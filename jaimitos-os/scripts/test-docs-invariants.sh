@@ -134,6 +134,17 @@ assert_has "../skills/to-spec/SKILL.md" "Match depth to the spec's" \
 assert_has "../skills/grill/SKILL.md" "Match interview depth to the spec's" \
            "grill matches interview depth to the spec tier (discovers, does not mint ids)"
 
+# Grill's stopping condition (v2.15.0) — the interview terminates on an evidence condition (every
+# MATERIAL decision settled or recorded as an honest gap), not on exhaustion or on the tier label.
+# Pinned because an interview with no stopping rule invents requirements, and because deep discovery
+# stays a branch of THIS skill: no --deep flag, no discovery artifact, no second spec authority.
+assert_has "../skills/grill/SKILL.md" "unresolved material decision" \
+           "grill earns a deep branch from an unresolved decision, not from the tier label"
+assert_has "../skills/grill/SKILL.md" "Stop when the spec can be written honestly" \
+           "grill has an explicit stopping condition (stop once the spec is honestly writable)"
+assert_absent "../skills/grill/SKILL.md" "grill --deep" \
+           "no --deep flag — depth is a derived condition, not a user-typed mode (ADR: discovery stays in grill)"
+
 # Mapme brownfield/ownership/refresh modes (v2.14.0) — ALL mapping lives in the one mapme skill; no
 # separate brownfield/ownership/architecture skill. Maps stay GENERATED VIEW (never canonical), facts vs
 # inferences vs unknowns stay distinct, stated-vs-actual is honest, staleness is visible, flag-never-fix holds.

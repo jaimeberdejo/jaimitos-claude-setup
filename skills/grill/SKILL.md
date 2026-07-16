@@ -33,7 +33,17 @@ Grilling a phase only ever touches a **not-yet-started** phase — never a ticke
    spec needs only scope + a measurable criterion + non-goals — do not manufacture requirement
    hierarchies for it. A `DEEP` spec earns the deeper branches: architecture alternatives, data model,
    failure modes, migration/rollback, threat model — the fields the `## Deep design` section holds.
-   The tier is a guide to proportion, never a reason to skip a genuine open question.
+   The tier is a guide to proportion, never a reason to skip a genuine open question. What earns a
+   deep branch is an **unresolved material decision**, not the label: a `DEEP` spec whose architecture
+   is already settled has no architecture branch left to walk, and walking it anyway manufactures
+   choices the user never had to make.
+6. **Stop when the spec can be written honestly.** A decision is **material** when it changes scope,
+   the success criterion, or `Constraints`; a question that cannot change what gets built is not
+   material — don't ask it. The interview is over when every material decision is either settled in
+   its real home or recorded as an honest gap (blocking `[NEEDS CLARIFICATION]` inline, or a
+   non-blocking `## Open questions` entry). Then stop and offer `to-spec`. Past that point you are
+   inventing requirements, not discovering them — and an invented one costs more to remove than it
+   ever cost to add.
 
 ## Where each closed decision goes (compose — don't reimplement)
 Write only when a decision **closes**, never when a question is merely asked:
@@ -62,7 +72,7 @@ Write only when a decision **closes**, never when a question is merely asked:
 - A later decision that invalidates an earlier one → **overwrite it in place.** No strike-through,
   no tombstone marker — the earlier version lives in git history.
 - Mid-interview the document must read as an **incomplete but coherent** spec, not a shell with a list.
-- At the end don't synthesize on your own: offer "close it with `to-spec`?". If the user leaves,
-  `status: grilling` stays and everything is persisted.
+- At the end (rule 6) don't synthesize on your own: offer "close it with `to-spec`?". If the user
+  leaves, `status: grilling` stays and everything is persisted.
 
 <!-- Adapted from mattpocock/skills (MIT) — https://github.com/mattpocock/skills -->
