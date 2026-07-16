@@ -46,8 +46,11 @@ OUT=$(awk '
   /^[[:space:]]*\|/ {
     line=$0
     if (!header && line ~ /ID/ && line ~ /Claim/ && line ~ /Strength/) { header=1; intable=1; next }
-    if (intable && line ~ /-\|-|\|[[:space:]]*-{2,}/) { next }         # separator row
-    if (intable && line ~ /^[[:space:]]*\|[[:space:]]*-{2,}/) { next } # separator row (leading)
+    # Separator row = a row built ONLY from pipes/dashes/colons/space. Anchored at BOTH ends: an
+    # unanchored match (e.g. /\|[[:space:]]*-{2,}/) also matches a DATA row whose cell merely starts
+    # with "--" (a CLI flag in a Claim), silently skipping it — the row is then never counted, so an
+    # all-skipped ledger reports "no rows" + structure OK + exit 0 under --strict. Fail-open.
+    if (intable && line ~ /^[[:space:]]*\|[|:[:space:]-]*$/) { next }
     if (!intable) next
     n=split(line, a, "|")
     id=trim(a[2]); claim=trim(a[3]); src=trim(a[4]); enf=trim(a[5]); str=trim(a[6]); status=trim(a[7]); trig=trim(a[8])
@@ -72,8 +75,13 @@ OUT=$(awk '
     }
     # advisory honesty: a row cannot claim DETERMINISTIC strength while calling its own enforcement advisory
     if (str ~ /DETERMINISTIC/ && enf ~ /[Aa]dvisory/) bad(id ": Strength DETERMINISTIC but Enforcement says advisory")
+    next
   }
-  /^[^|]/ && intable && header && $0 !~ /^[[:space:]]*$/ { intable=0 }   # table ended at a non-pipe, non-blank line
+  # Table ends at a non-blank line that is not a table row. Matched on "not a table row" rather than
+  # /^[^|]/: an INDENTED table row starts with a space, so /^[^|]/ matched it and closed the table
+  # after the first row — every later row then fell out at "if (!intable) next", unvalidated. The
+  # `next` above keeps a data row from reaching this rule at all; this anchor is the second lock.
+  !/^[[:space:]]*\|/ && intable && header && $0 !~ /^[[:space:]]*$/ { intable=0 }
   END{
     if (!header) bad("no ledger table found (need a | ID | Claim | ... | Strength | ... | header row)")
     if (header && rows==0) warn("ledger has a header but no rows")

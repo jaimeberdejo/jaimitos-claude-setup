@@ -44,7 +44,12 @@ OUT=$(awk '
     if (cur=="") return
     if (status=="") bad(cur ": no Status")
     else if (status !~ /^(NOT_TESTED|PASSED|FAILED|BLOCKED|DEFERRED)$/) bad(cur ": invalid Status \"" status "\"")
-    if (blocking!="" && blocking !~ /^(YES|NO)$/) bad(cur ": invalid Blocking \"" blocking "\" (YES|NO)")
+    # Blocking is a REQUIRED field of the canonical format. An ABSENT one used to be read as "not
+    # blocking", so a half-filled entry for a test that just failed silently passed --strict — the
+    # omission most likely in practice was the one that failed open. A malformed value was already
+    # caught, which made forgetting the field safer than mistyping it. Absent data is not "no".
+    if (blocking=="") bad(cur ": no Blocking (YES|NO) — an acceptance item must declare whether it blocks")
+    else if (blocking !~ /^(YES|NO)$/) bad(cur ": invalid Blocking \"" blocking "\" (YES|NO)")
     # a DEFERRED item must be justified
     if (status=="DEFERRED" && !(has_reason && has_risk && has_resolution))
       bad(cur ": DEFERRED but missing justification (needs Reason + Risk + Resolution)")

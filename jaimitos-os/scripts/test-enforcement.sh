@@ -106,5 +106,38 @@ BEFORE="$(cat "$VALID")"; bash "$LINT" --strict "$VALID" >/dev/null 2>&1; AFTER=
 [ "$BEFORE" = "$AFTER" ] && pass "ledger byte-identical after lint" || fail "linter mutated the ledger"
 
 echo ""
+echo "Regression (v2.15.0) — a row must never escape validation"
+# v2.14.0 detected separator rows with an UNANCHORED regex, so a DATA row whose cell merely started
+# with "--" (a CLI flag in a Claim, or "-- none --" in an Enforcement cell) matched and was skipped.
+# The row was then never counted, so an all-skipped ledger reported "no rows" + structure OK + exit 0
+# under --strict. The rows most likely to be swallowed were exactly the ones the ledger exists to catch.
+DASH="$WORK/dashdash.md"
+cat > "$DASH" <<'EOF'
+# Enforcement Ledger
+Baseline commit: abc1234
+Last reviewed: 2026-07-16
+
+| ID | Claim | Source | Enforcement | Strength | Status | Trigger |
+|---|---|---|---|---|---|---|
+| ENF-001 | --dangerously-skip-permissions needs a sandbox | SECURITY.md | | BOGUS_TOKEN | DEFERRED | |
+EOF
+strict_fail "$DASH" && pass "a row whose cell starts with -- is still validated (not read as a separator)" \
+                    || fail "a -- prefixed cell let the whole row skip validation"
+
+# v2.14.0's data-row branch fell through to the table-end rule, whose /^[^|]/ matched an INDENTED row
+# (it starts with a space) and closed the table after row 1 — every later row fell out unvalidated.
+INDENT="$WORK/indent.md"
+printf '# Enforcement Ledger\nBaseline commit: abc1234\nLast reviewed: 2026-07-16\n\n  | ID | Claim | Source | Enforcement | Strength | Status | Trigger |\n  |---|---|---|---|---|---|---|\n  | ENF-001 | a real claim | ADR-001 | a real test | DETERMINISTIC | ACTIVE | every CI run |\n  | ENF-001 | DUPLICATE id | | | TOTAL_GARBAGE | DEFERRED | |\n' > "$INDENT"
+strict_fail "$INDENT" && pass "an indented table validates every row, not just the first" \
+                      || fail "only the first row of an indented table was validated"
+
+# The anchored separator must still accept standard GFM alignment rows, or a valid ledger fails with
+# nonsense ":---" id errors (the inverse failure of the same loose regex).
+ALIGN="$WORK/align.md"
+printf '# Enforcement Ledger\nBaseline commit: abc1234\nLast reviewed: 2026-07-16\n\n| ID | Claim | Source | Enforcement | Strength | Status | Trigger |\n|:---|:---|:---|:---|:---:|:---|:---|\n| ENF-001 | a claim | ADR-001 | a test | DETERMINISTIC | ACTIVE | every CI run |\n' > "$ALIGN"
+strict_ok "$ALIGN" && pass "a GFM alignment row (|:---|) is a separator, not a malformed data row" \
+                   || fail "alignment row misparsed as data"
+
+echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All lint-enforcement.sh tests passed."; exit 0
 else echo "$FAILS lint-enforcement.sh test(s) FAILED."; exit 1; fi

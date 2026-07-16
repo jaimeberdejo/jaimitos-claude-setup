@@ -90,5 +90,23 @@ BEFORE=$(cat "$CLEAN"); bash "$CHK" --strict "$CLEAN" >/dev/null 2>&1; AFTER=$(c
 [ "$BEFORE" = "$AFTER" ] && pass "ledger byte-identical after check" || fail "check mutated the ledger"
 
 echo ""
+echo "Regression (v2.15.0) — absent data must not read as permission"
+# v2.14.0 validated Blocking only when present, so an item that OMITTED it was treated as
+# "not blocking" and a FAILED acceptance item passed --strict. Forgetting the field was safer
+# than mistyping it — the omission most likely in practice was the one that failed open.
+NOBLK="$WORK/noblock.md"
+printf '# UAT\nBaseline commit: abc1234\n\n- UAT-001\n  Requirement: AC-001\n  Status: FAILED\n  Expected: charged once\n  Actual: double-charged\n' > "$NOBLK"
+blk "$NOBLK" && pass "FAILED item with NO Blocking field → --strict blocks (absent ≠ NO)" \
+             || fail "an omitted Blocking field failed open on a FAILED item"
+NOBLK_OUT=$(bash "$CHK" --strict "$NOBLK" 2>&1)
+printf '%s\n' "$NOBLK_OUT" | grep -q "no Blocking" && pass "the missing required field is named" \
+                                                   || fail "missing Blocking not named"
+# and an omitted Blocking is a structural error even when nothing failed — the field is required
+NOBLK_PASS="$WORK/noblock-passed.md"
+printf '# UAT\nBaseline commit: abc1234\n\n- UAT-001\n  Requirement: AC-001\n  Status: PASSED\n' > "$NOBLK_PASS"
+blk "$NOBLK_PASS" && pass "PASSED item with no Blocking → still a structural error" \
+                  || fail "a required field may not be optional in practice"
+
+echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All check-uat.sh tests passed."; exit 0
 else echo "$FAILS check-uat.sh test(s) FAILED."; exit 1; fi
