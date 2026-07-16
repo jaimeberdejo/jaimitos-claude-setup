@@ -86,9 +86,35 @@ Discover, and keep the three ownership kinds distinct (see the ownership model i
 - **Inferred maintainers** — from git history. Label them **INFERRED**; a Git-history guess is never
   presented as a verified owner. Where you cannot tell, say **UNKNOWN**.
 
-Write `docs/OWNERSHIP.md` using the component format (classifications `OWNED | SHARED | UNOWNED |
-GENERATED | VENDORED | EXTERNAL | UNKNOWN`). Only create it when the repo has enough real ownership
-structure to be worth governing.
+Write `docs/OWNERSHIP.md` **only when the repo has enough real ownership structure to be worth
+governing** (a small repo does not need one), using this component format — one block per component
+(classifications `OWNED | SHARED | UNOWNED | GENERATED | VENDORED | EXTERNAL | UNKNOWN`):
+
+```md
+## Component: Authentication
+Classification: OWNED
+Risk: HIGH_STAKES
+Paths:
+- `src/auth/**`
+Public interfaces:
+- `src/auth/session.ts`
+Primary tests:
+- `tests/auth/**`
+Verified review owner:        # from .github/CODEOWNERS — a fact, cite it
+- Platform team
+Inferred maintainer:          # from git history — INFERRED, never presented as verified
+- UNKNOWN
+Shared integration points:
+- `src/routes.ts`
+Evidence:
+- `.github/CODEOWNERS`
+Baseline:
+- `<commit>`
+```
+
+`docs/OWNERSHIP.md` is operational (logical) ownership — kept **distinct** from `.github/CODEOWNERS`
+(human-review authority) and from a plan's per-phase execution ownership. None of the three grants
+permission to implement or marks work complete.
 
 ## `mapme --refresh` — bounded update
 Refresh **only** the maps whose inputs actually changed — do not regenerate every map on every phase.

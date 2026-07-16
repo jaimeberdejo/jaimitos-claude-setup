@@ -78,6 +78,21 @@ implement the wrong thing, or do exactly what was asked in a way you'd block a m
   formatting nit — it fails Axis A exactly as a missing "Done when:" would. Grade only the ids the
   phase actually claims; do not import the source's every requirement, and treat an id the phase
   quietly dropped since planning as the same criteria-integrity problem as an edited "Done when:".
+- **Ownership compliance** — *when the plan declares a `## Change ownership` block.* Compare the phase's
+  actual diff scope (`git diff "$(cat .claude/.phase-base)"..HEAD --name-only`) against that block, and report:
+  - **Planned files modified** — the ones the plan named. Expected.
+  - **Unexpected files modified** — files the plan did not name. An unexpected file is **not** an automatic
+    failure (plans miss things), but an *unexplained* modification to an unrelated area, or to any
+    high-stakes component (auth / migrations / money / deletes / secrets), **must prevent PASS** until
+    explained.
+  - **Shared integration files modified** — a file the plan marked `Shared` is fine only if the declared
+    integration owner made the change or it is explicitly called out; a silent cross-boundary edit is a finding.
+  - **Ownership boundaries crossed** — work outside the plan's stated component boundary.
+  - **Required review** — `OBTAINED | MISSING | NOT REQUIRED`. A high-stakes path modified without the
+    required human review (per `.github/CODEOWNERS` when present, or a `Mode: supervised` phase) is a
+    blocking finding. A CODEOWNERS approval is a review signal — **never** implementation permission, and
+    never proof of completion.
+  When the plan declares no ownership block (tiny work), this bullet reduces to the check below.
 - Nothing unrelated was modified or deleted.
 
 ## Axis B — Engineering quality

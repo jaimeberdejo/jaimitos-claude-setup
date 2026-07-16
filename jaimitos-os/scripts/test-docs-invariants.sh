@@ -160,6 +160,26 @@ assert_has "../skills/mapme/SKILL.md" "flag it, never fix it" \
 assert_absent "../skills/mapme/SKILL.md" "speckit" \
            "mapme names no external tool"
 
+# Ownership model (v2.14.0) — three DISTINCT concepts: human-review (CODEOWNERS), logical component
+# (docs/OWNERSHIP.md), per-phase execution (planner). None grants implementation permission or completes
+# work. Overlapping writes stay sequential unless disjointness is proven; the evaluator checks actual scope.
+assert_has ".claude/agents/planner.md" "## Change ownership" \
+           "planner declares per-phase execution ownership (planned writes / shared / out of scope / reviewers)"
+assert_has ".claude/agents/planner.md" "run SEQUENTIALLY" \
+           "planner keeps execution sequential when disjoint write scopes cannot be proven"
+assert_has ".claude/agents/planner.md" "a grant to implement" \
+           "planner: CODEOWNERS is a review authority, not implementation permission"
+assert_has ".claude/agents/evaluator.md" "Ownership compliance" \
+           "evaluator reviews actual diff scope against the plan's ownership block"
+assert_has ".claude/agents/evaluator.md" "Unexpected files modified" \
+           "evaluator reports unexpected/unexplained diff scope (high-stakes drift blocks PASS)"
+assert_has ".claude/agents/evaluator.md" "implementation permission" \
+           "evaluator: a CODEOWNERS approval is a review signal, never implementation permission or completion"
+assert_has "../skills/mapme/SKILL.md" "operational (logical) ownership" \
+           "mapme keeps operational (OWNERSHIP.md) ownership distinct from CODEOWNERS and execution ownership"
+assert_has "../skills/mapme/SKILL.md" "OWNED | SHARED | UNOWNED" \
+           "mapme ownership component classifications present"
+
 # Prototype — sanctioned, but never a route to a tick.
 assert_has "../skills/prototype/SKILL.md" "**MAY NEVER** satisfy production implementation or release criteria" \
            "prototype output can never satisfy production/release criteria"

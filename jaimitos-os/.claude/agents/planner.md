@@ -44,6 +44,16 @@ your prompt).
      maintenance objective `OBJ-###` instead of a product requirement). Phases with no
      `Requirements:` block, and tiny/mechanical work, skip this — no id ceremony. The mapping
      creates no tasks and does not imply correctness; the evaluator traces it independently.
+   - **For a STANDARD or DEEP phase (skip for tiny/mechanical work): a `## Change ownership` section** —
+     `### Planned writes` (the files/dirs this phase may modify), `### Required reads` (read but do not
+     change), `### Shared files` (touched by more than one component — each needs a **named integration
+     owner**), `### Out of scope` (must-not-touch), `### Required reviewers` (from `.github/CODEOWNERS`
+     when present, or the human for high-stakes paths), and `### Integration order` (the sequence in which
+     tasks that share a seam must land). TINY work may use just two lines — `Scope: May modify: … / Must
+     not modify: …`. **If disjoint write scopes cannot be proven between tasks, they run SEQUENTIALLY** —
+     never claim safe parallelism you cannot prove, and never leave a Shared file without an integration
+     owner. Declaring ownership is not permission: `.github/CODEOWNERS` is a human-review authority, never
+     a grant to implement or a substitute for the evaluator's check.
    - A "Done when:" section reproducing the phase's exact roadmap criteria verbatim — never
      loosen, tighten, or rephrase them.
 
