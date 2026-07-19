@@ -17,7 +17,7 @@ tier:           # TINY | STANDARD | DEEP — recommended by scripts/classify-wor
 <!-- DEPTH BY TIER — fill only what the tier needs (scripts/classify-work.sh recommends the tier; you may override):
      · TINY     — What & why (objective + current vs expected) · Success criterion (the verification) ·
                   In scope (+ likely files) · Non-goals. Native REQ/AC ids are OPTIONAL. No Constraints depth,
-                  no Deep design, no formal ownership / UAT / PLAN_CHECK unless a risk signal appears.
+                  no Deep design, no ownership map, UAT acceptance, or PLAN_CHECK unless a risk signal appears.
      · STANDARD — everything TINY has, PLUS the ## Requirements REQ/AC section, ## Constraints, and
                   scenarios / edge cases / dependencies as they matter.
      · DEEP     — everything STANDARD has, PLUS the ## Deep design section below (architecture alternatives,

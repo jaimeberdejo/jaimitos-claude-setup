@@ -72,7 +72,7 @@ against the **actual dependency and module structure** you traced. Classify each
 
 **Do not automatically convert the current structure into the desired architecture.** A dependency that
 is widespread today is not thereby proven desirable — a widespread `A → B` may be exactly the debt to
-remove. Report the finding and let a human decide (an ADR, an enforcement-ledger row, or a doc fix);
+remove. Report the finding and let a human decide (an ADR or a doc fix);
 never silently promote "what is" into "what should be."
 
 ## `mapme --ownership` — map who owns what

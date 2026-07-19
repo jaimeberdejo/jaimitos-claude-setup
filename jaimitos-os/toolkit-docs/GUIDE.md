@@ -464,11 +464,11 @@ found it flagging idiomatic `rm -f known_file` in a hardening script that only e
 named, regenerable local files, and the wrong fix is rewriting working code into a worse idiom
 just to dodge a regex.
 
-> **Progressive control plane (v2.14.0):** the optional tiers, brownfield/ownership mapping, enforcement
-> ledger, evaluator PLAN_CHECK + pre-mortem, stale-plan revalidation, evidence schema 2, and lightweight
-> UAT are documented end-to-end in `CONTROL-PLANE.md` (this directory), with their deterministic-vs-model-
-> vs-human guarantee classification in `docs/dev/AUTHORING.md`. All opt-in, all offline, zero always-loaded
-> cost; `scripts/tick.sh` stays the sole completion authority.
+> **Progressive control plane:** the optional tiers, brownfield/ownership mapping, evaluator PLAN_CHECK +
+> pre-mortem, stale-plan revalidation, evidence schema 2, and lightweight UAT are documented end-to-end in
+> `CONTROL-PLANE.md` (this directory), with their deterministic-vs-model-vs-human guarantee classification in
+> `docs/dev/AUTHORING.md`. All opt-in, all offline, zero always-loaded cost; `scripts/tick.sh` stays the
+> sole completion authority.
 
 ### Enforcement reality (deterministic layer vs advisory layer)
 Be honest about what actually *enforces* versus what merely *advises* — different tiers:

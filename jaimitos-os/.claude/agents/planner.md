@@ -58,7 +58,7 @@ your prompt).
      <commit>` (the short HEAD at planning time) and the fields a reviewer fills before execution:
      `Still valid` · `Changed since planning` · `Stale assumptions` · `Plan adjustments required` ·
      `Blocking contradictions`. Run `scripts/check-plan-freshness.sh <plan>` for the deterministic signals
-     (baseline still an ancestor of HEAD; referenced files present / changed; cited `REQ/AC/OBJ/ENF` ids
+     (baseline still an ancestor of HEAD; referenced files present / changed; cited `REQ/AC/OBJ` ids
      still resolve). Rules: a small path/symbol move may be corrected in the plan with a note; a material
      strategy change requires a fresh PLAN_CHECK; a requirement or scope change requires explicit user
      approval. **An invalidated plan may not keep a prior PASS.** When many tasks share one stale

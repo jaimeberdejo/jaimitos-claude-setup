@@ -30,8 +30,7 @@ frontmatter (`tier:`) and may override the recommendation with a reason.
   architecture) normally **prevent TINY**; an override is allowed but printed loudly and must be recorded.
 - Unknown flags / bad values **fail closed** (exit 2) so a typo can never silently misclassify.
 - TINY = compact spec, diagnose+TDD, evidence, light evaluation. STANDARD = native REQ/AC, ownership-aware
-  plan, PLAN_CHECK, IMPLEMENTATION_REVIEW. DEEP = + research, mapme brownfield/ownership, architecture,
-  enforcement ledger, UAT.
+  plan, PLAN_CHECK, IMPLEMENTATION_REVIEW. DEEP = + research, mapme brownfield/ownership, architecture, UAT.
 
 ## 2. Progressive specification depth
 One `docs/SPEC.md` template, tier-scaled — **not** a second format. `tier:` frontmatter (informational,
@@ -77,7 +76,7 @@ the plan to the planner and blocks execution. `/phase` runs it after planning fo
 ## 6. Stale-plan revalidation
 A STANDARD/DEEP plan records its baseline and a `## Assumption revalidation` section (ADR-006).
 `scripts/check-plan-freshness.sh` gives deterministic signals: baseline still an ancestor of HEAD,
-referenced files present/changed, cited REQ/AC/OBJ/ENF ids still resolve. Hard signals fail `--strict` —
+referenced files present/changed, cited REQ/AC/OBJ ids still resolve. Hard signals fail `--strict` —
 an invalidated plan **may not keep a prior PASS**. A material change needs a fresh PLAN_CHECK; a scope
 change needs user approval; a small path move may be corrected in-plan with a note.
 
@@ -104,23 +103,23 @@ run is never resolution (re-run the loop many times post-fix and record the new 
 
 ## Security & guarantee classification
 Guarantees are classified honestly — linters check *shape*, the evaluator + human check *judgement*. See
-the table in `docs/dev/AUTHORING.md`. Deterministic: id/ledger/UAT/plan-freshness structure, evidence
+the table in `docs/dev/AUTHORING.md`. Deterministic: id + plan-freshness structure, evidence
 commit-binding + schema gate, tier reproducibility. Hook/gate-enforced: evaluator edit-isolation, evidence
 HEAD-binding. Model-dependent: map claim classification, plan pre-mortem, requirement satisfaction,
 ownership judgement. Human-dependent: CODEOWNERS review, UAT acceptance, tier override, tag/release.
-Advisory: enforcement-ledger rows labelled ADVISORY, orphan warnings, changed-file staleness.
+Advisory: orphan warnings, changed-file staleness.
 
 **Adversarial posture** (`test-control-plane-security.sh`): every new validator fails closed / stays inert
 on a missing or directory path, is strictly read-only, and never evaluates file content — a `$(...)` or
-backtick payload in a ledger/plan/spec/UAT line cannot execute.
+backtick payload in a plan/spec/UAT line cannot execute.
 
 ## Migration & rollback
 Every capability is opt-in / when-justified / conditional, so **legacy projects are unaffected**: a spec
-with no `tier:`, a repo with no ownership/enforcement/UAT docs, and a plan with no revalidation section all
+with no `tier:`, a repo with no ownership/UAT docs, and a plan with no revalidation section all
 behave exactly as before. Evidence: a v1/absent-`schema_version` file is still read (or cleanly rejected);
 `tick.sh` stays byte-identical on refusal. **Recovery** is fail-closed: interrupted map generation,
-malformed spec migration, a failed plan check, a stale plan, invalid evidence, an invalid enforcement
-reference, and an interrupted state transition all preserve the previous valid state, explain the manual
+malformed spec migration, a failed plan check, a stale plan, invalid evidence,
+and an interrupted state transition all preserve the previous valid state, explain the manual
 action, avoid destructive resets, and stay idempotent — there is no general repair framework. Rollback:
 additive commits revert cleanly; optional blocks/docs are removable; completed roadmap history is never
 rewritten.
@@ -143,7 +142,7 @@ and think the table is wrong). The agent row is new in v2.15.0: v2.14.0's table 
 descriptions and none for agents, which is how the largest always-loaded increase in that release went
 unstated.
 
-TINY work never loads DEEP guidance; maps, ownership, PLAN_CHECK, UAT, and enforcement detail load only
+TINY work never loads DEEP guidance; maps, ownership, PLAN_CHECK, and UAT detail load only
 when relevant. No new always-loaded agent; no Spec Kit / Yojana / Sutra context.
 
 ## Deliberately deferred (ADR-007)

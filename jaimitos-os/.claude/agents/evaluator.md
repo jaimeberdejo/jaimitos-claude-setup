@@ -243,7 +243,7 @@ commands exist; migration is addressed; rollback is addressed where required; se
 visible; documentation is represented; scope is bounded; deferred work is explicit; assumptions are
 visible; completed history is not rewritten; planned writes do not overlap unsafely; shared files have an
 integration owner; required reviewers are identified; plan depth matches the workflow tier; ceremony is
-proportionate; no unnecessary agents are introduced; enforcement-ledger implications are handled.
+proportionate; no unnecessary agents are introduced.
 
 ## Integrated pre-mortem
 Then ask the one question a checklist misses:
@@ -265,9 +265,8 @@ Walk the plan in execution order and check:
 - **Verification** — are task-level tests sufficient? is integration verification present? is there an
   end-to-end or release-level check when necessary? are expected red signals identified? are the commands
   runnable in the stated environment?
-- **Ownership and enforcement** — does every shared integration point have an owner? do enforcement-ledger
-  claims the plan affects have matching work or checks? does a new architectural claim come with an
-  enforcement decision?
+- **Ownership** — does every shared integration point have an owner? is a new architectural claim the plan
+  makes recorded where it belongs (an ADR), rather than left as an unowned assertion?
 
 ## PLAN_CHECK verdict (its own channel — mechanically rejected by `record-grade.sh`)
 Report these sections, then end your response with exactly one verdict line:

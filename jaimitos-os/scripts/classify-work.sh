@@ -181,7 +181,7 @@ EOT
     DEEP) cat <<'EOT'
 - sourced research; mapme --brownfield and mapme --ownership as needed
 - native DEEP spec (architecture, data model, contracts, migration/rollback, threat, failure modes)
-- enforcement ledger where architectural claims exist; ROADMAP; ownership-aware plan
+- ROADMAP; ownership-aware plan
 - stale-assumption revalidation; Evaluator PLAN_CHECK + pre-mortem (required)
 - TDD implementation; generic evidence; IMPLEMENTATION_REVIEW; UAT; release check; tick.sh
 EOT
@@ -191,12 +191,12 @@ EOT
 skipped_for() {
   case "$1" in
     TINY) cat <<'EOT'
-- no full requirement hierarchy, architecture review, ownership map, or formal UAT
+- no full requirement hierarchy, architecture review, ownership map, or UAT acceptance
 - no PLAN_CHECK unless a risk signal justifies it
 EOT
 ;;
     STANDARD) cat <<'EOT'
-- no DEEP research / architecture-alternatives / enforcement ledger unless a signal calls for it
+- no DEEP research / architecture-alternatives unless a signal calls for it
 - brownfield/ownership mapping only when the codebase is unfamiliar
 EOT
 ;;
