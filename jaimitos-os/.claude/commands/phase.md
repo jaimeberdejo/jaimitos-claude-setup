@@ -73,18 +73,34 @@ of roadmap order; bare `/phase` (no argument) is unchanged.
    skipped; do not invent findings). The planner writes a plan file under docs/plans/ (research
    notes + tasks + "Done when") and reports back the exact path it wrote. Confirm that file
    exists before continuing.
-4b. **Plan check — the `evaluator` in PLAN_CHECK mode (STANDARD / DEEP / supervised phases; skip for
-   TINY).** Before executing, dispatch the `evaluator` subagent in **PLAN_CHECK** mode (Task tool) with
-   the plan file path from step 4, the phase's exact heading and "Done when:" line(s), and the referenced
-   docs/SPEC.md requirements. It reads the *plan* only (no code exists yet) and runs the pre-mortem,
-   returning `PLAN_PASS`, `PLAN_PASS_WITH_WARNINGS`, or `PLAN_FAIL`. On **PLAN_FAIL**, STOP: return the plan
-   to the planner with the evaluator's reasons — do NOT execute a failed plan. On **PLAN_PASS_WITH_WARNINGS**,
-   record the warnings in the plan or docs/STATE.md, then proceed. On **PLAN_PASS**, proceed. The `PLAN_`
-   prefix is what keeps this a *separate channel* from the step-6 implementation grade: `record-grade.sh`
-   records only a bare `PASS` and rejects every `PLAN_*` token by name, so a plan review can never be
-   recorded as an implementation grade. TINY/mechanical
-   work skips this step (judge by the spec's `tier:` and the change's risk); a supervised or high-stakes
-   phase always runs it.
+4b. **Plan review routing — deterministic first, then the `evaluator` in PLAN_CHECK mode only when the
+   route says so.** Before executing, run the deterministic router and relay its decision block verbatim:
+   `bash scripts/plan-review-route.sh --plan <plan-from-step-4> --heading "<this exact phase heading>"`
+   (add `--supervised` when this phase's `Mode:` line is supervised). It reads the persisted `tier:` from
+   docs/SPEC.md and **validates it** (an invalid or absent tier fails safe to STANDARD + full review),
+   probes the plan's declared paths for high-stakes risk (via the shared `_high-stakes.sh`), checks plan
+   freshness, and prints a `## Plan review routing` block (Selected tier / Risk signals / Plan review /
+   Reason / Override / Supervised) ending in a machine-readable `ROUTE=…` line. Branch on it:
+   - **`ROUTE=FULL_PLAN_CHECK` (exit 10)** — dispatch the `evaluator` subagent in **PLAN_CHECK** mode (Task
+     tool) with the plan file path from step 4, the phase's exact heading and "Done when:" line(s), and the
+     referenced docs/SPEC.md requirements. It reads the *plan* only (no code exists yet) and runs the
+     pre-mortem, returning `PLAN_PASS`, `PLAN_PASS_WITH_WARNINGS`, or `PLAN_FAIL`. On **PLAN_FAIL**, STOP:
+     return the plan to the planner with the reasons — do NOT execute a failed plan. On
+     **PLAN_PASS_WITH_WARNINGS**, record the warnings in the plan or docs/STATE.md, then proceed. On
+     **PLAN_PASS**, proceed.
+   - **`ROUTE=DETERMINISTIC_ONLY` (exit 0)** — a clear low-risk STANDARD phase: the router's deterministic
+     checks (plan exists; baseline valid + fresh + cited ids resolve; no high-stakes path; no blocking
+     clarification) stand in for the independent review. Proceed **without** dispatching the evaluator. This
+     is *not* "independently approved" — describe it as "deterministic checks only" if asked.
+   - **`ROUTE=SKIP` (exit 0)** — TINY with no risk signal: proceed, no plan review (unchanged).
+   The router forces `FULL_PLAN_CHECK` whenever a high-stakes path, a `--supervised` phase, a hard-stale
+   plan, a blocking `[NEEDS CLARIFICATION]`, an invalid `tier:`, or a DEEP tier is present — so a false or
+   stale tier can never buy a lighter review, and a user may **not** silently waive full review for
+   high-stakes/supervised work (an `--override` to a weaker level is refused there, and any reasonless
+   override prints as `reason: MISSING`). The router NEVER ticks, grades, or edits, and emits no gradeable
+   token. The `PLAN_` prefix on the evaluator's verdicts keeps PLAN_CHECK a *separate channel* from the
+   step-6 implementation grade: `record-grade.sh` records only a bare `PASS` and rejects every `PLAN_*`
+   token by name, so a plan review can never be recorded as an implementation grade.
 5. **Execute — delegated to the `executor` subagent.** Invoke the `executor` subagent (Task
    tool) with a prompt containing: the phase's exact heading and the plan file path from step 4.
    The executor runs the TDD loop per task (failing test, minimal code, run test, commit) and

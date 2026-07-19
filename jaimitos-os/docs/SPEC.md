@@ -7,10 +7,14 @@ status: draft   # draft = not yet closed · grilling = interview open · ready =
 tier:           # TINY | STANDARD | DEEP — recommended by scripts/classify-work.sh, informational + overridable.
                 # Governs how much of this template to fill (see "Depth by tier" below). READINESS is NOT
                 # gated on it: readiness is derived from content, so a stale tier can never trick that gate.
-                # It DOES scale ceremony — /phase consults it to decide whether the independent PLAN_CHECK
-                # runs — so an unjustified TINY buys less review, not just a shorter spec. Nothing validates
-                # this field against the classifier: keeping it honest is human-dependent, and a high-stakes
-                # or supervised phase runs PLAN_CHECK regardless of what it says. Empty = STANDARD.
+                # It DOES scale ceremony — /phase runs scripts/plan-review-route.sh, which VALIDATES this
+                # value (an invalid or absent tier fails safe to STANDARD + full review) and routes the plan
+                # gate: clear low-risk STANDARD gets deterministic checks only, risky STANDARD / DEEP /
+                # supervised get the full independent PLAN_CHECK. A false or stale tier cannot buy a lighter
+                # review — a high-stakes path, a supervised phase, a hard-stale plan, or a blocking [NEEDS
+                # CLARIFICATION] forces the full check regardless. What stays human-dependent is whether the
+                # tier is APPROPRIATE for the work; the router checks the value and the risk, not judgement.
+                # Empty = STANDARD.
 ---
 # Spec: <NAME>
 
