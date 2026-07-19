@@ -1,12 +1,16 @@
 # Release candidate evidence — v2.16.0
 
-**Commit under test:** `ea7283f35015bc57da651a4b61bcd996803223f9` (`chore(release): v2.16.0`)
+**Commit under test:** `9578d62` (`fix(phase): close the --override fail-open found by independent review`)
 **Branch:** `release-6-consistency-proportionality`  ·  **VERSION:** `2.16.0`  ·  **Base:** `41677d4` (tag `v2.15.0`)
-**Recorded:** 2026-07-19 (this evidence file is the only change committed after `ea7283f`; every result below
-was produced against `ea7283f` with a clean tree).
+**Recorded:** 2026-07-19 (this evidence file is the only change committed after `9578d62`; every result below
+was produced against a clean tree).
 
 > Honesty note: results are transcribed as run. First-run failures are **kept**, with the correction beside
 > them. Nothing is reported as passing that was not run.
+>
+> **This evidence supersedes an earlier run on `ea7283f`.** After that run, three independent reviewers
+> (§8) found a BLOCKING fail-open in the router's `--override` path; it was fixed in `9578d62` and the full
+> battery re-run. The numbers below are the `9578d62` re-run.
 
 ---
 
@@ -23,7 +27,7 @@ user (`id -u` = 1001) — the Linux bash-5 / GNU / non-root leg. (A probe line p
 username due to an unescaped `$(id -un)` expanding in the outer shell; `id -u`=1001 is authoritative and the
 run was genuinely non-root.)
 
-## 2. Suite results (all on `ea7283f`)
+## 2. Suite results (all on `9578d62`)
 
 | Command | Env A (macOS 3.2) | Env B (Linux 5, non-root) |
 |---|---|---|
@@ -91,6 +95,28 @@ always-loaded workflow. Well within the ≤250 B target.
 Default installed footprint drops by ~27 files. `sync.sh` verified to NOT re-add the suite to a lean
 project and to leave sourced libs non-executable after an update. File modes vs `v2.15.0`: only the two
 intended lib demotions (755→644) and the two new executable scripts; no unexpected mode change.
+
+## 8. Independent review findings (author was not the only reviewer)
+
+Three independent reviewers (fresh context, not the implementing author) audited the full `v2.15.0..HEAD`
+diff: **A** implementation-correctness, **B** adversarial, **C** leanness.
+
+| # | Finding | Severity | Disposition |
+|---|---|---|---|
+| A1 = B-HIGH | `--override deterministic\|skip` only re-checked high-stakes/supervised, so it downgraded DEEP / invalid-tier / hard-stale / blocking-clarification to no PLAN_CHECK (exit 0); the DETERMINISTIC_ONLY checklist printed hardcoded `[ok]` that lied when reached that way | **BLOCKING** | **FIXED** (`9578d62`) — weaker override refused whenever `FORCE_FULL=1`; checklist lines derived from real signals. New tests cover override-refusal on every forcing signal; proven non-vacuous (reverting the fix fails the test) |
+| B-MED | path extractor truncated bare multi-dot filenames (`auth.service.ts` → `service.ts`, missing `auth`) | NON-BLOCKING | **FIXED** — filename branch allows interior dots; test added. The camelCase `_high-stakes.sh` miss is inherited (same at tick time), documented, not fixed here |
+| A2 | the new `sync.sh` footprint gate had no fixture | NON-BLOCKING | **FIXED** — `test-sync.sh` case 21 (never-add-to-lean + update-where-present) |
+| A3 = B-LOW | doc-invariant guard scanned 1 of 19 skills; exact-phrase, whitespace-brittle | NON-BLOCKING | **FIXED** — surfaces derive **all** shipped skills (32 surfaces); whitespace/hyphen-tolerant regexes. Arbitrary-paraphrase evasion is an accepted, documented limit (drift protection, not an NL classifier) |
+| C1 | redundant, untested `_test-cmd.sh` advisory in the router | NON-BLOCKING | **FIXED** (removed) — the tick evidence gate + `test-gate.sh` already fail closed on it |
+| C2 | `docs/SPEC.md` restated the full route table (duplication that would drift) | NON-BLOCKING | **FIXED** — collapsed to a CONTROL-PLANE pointer |
+| A4 | `phase.md` 4b had no branch for router `exit 2` | NIT | **FIXED** — documented (STOP; unreachable on the happy path) |
+| C3 | prose path-mentions escalate clear-STANDARD to full review | (by design) | **DOC honesty added** — the extractor's over-inclusion is now stated in code + guarantee scope |
+
+**Confirmed SAFE by review (attacks that held):** grade/plan channel separation (`PLAN_*` rejected;
+exact-`PASS`; `NO_TESTS_OK` anchored), the footprint gate (lean install, `--with-ci`⇒tests, sync never
+re-adds, sourced libs non-exec), freshness `--strict`, and `tick.sh` sole completion authority (the router
+emits no gradeable token). Non-goals held: four agents, no new canonical/installed artifact, no findings
+schema / review-pack / RELEASE_AUDIT, human sole publication authority (not tagged/pushed).
 
 ## 7. Verdict inputs
 
