@@ -8,6 +8,58 @@ uses [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [2.16.0] — 2026-07-19
+
+Correction and simplification release — not a framework expansion. It finishes the v2.15.0 cleanup
+(the enforcement + UAT ledgers were deleted in ADR-008, but operational residue still pointed at them),
+makes STANDARD plan review proportionate to risk, and trims the installed footprint. No new agent, no new
+canonical artifact; `scripts/tick.sh` stays the sole completion authority and the human the sole publication
+authority. Always-loaded context is unchanged (9528 B). Green on macOS bash 3.2 and Linux bash 5 / GNU /
+non-root.
+
+### Fixed — deleted-ledger operational residue
+- Eleven active surfaces still named the deleted enforcement/UAT ledgers as live guidance, or claimed
+  `check-plan-freshness.sh` still checks `ENF` ids: `classify-work.sh`, `evaluator.md` (the grader's own
+  checklist **and** pre-mortem), `planner.md`, `CONTROL-PLANE.md`, `GUIDE.md`, and `mapme`. The operational
+  instructions are removed; CHANGELOG/ADR history is untouched. "formal UAT" is reworded so it no longer
+  implies a deleted deterministic gate — informal/optional UAT survives.
+- `test-docs-invariants.sh` guarded only two (file, token) pairs, so all of the above passed green. It is
+  widened to the active operational surfaces with exact operational phrases (bare "ledger"/"UAT" excluded —
+  a high-stakes keyword and a surviving concept respectively); CHANGELOG/ADR/plan history and
+  `.claude/worktrees/` are out of scope. Proven non-vacuous: reintroducing a phrase fails the guard.
+
+### Added — proportional STANDARD plan review
+- `scripts/plan-review-route.sh`, a deterministic, inspectable router for the `/phase` plan gate. It
+  validates the persisted SPEC `tier:` (an invalid or absent value fails safe to STANDARD + full review),
+  probes the plan's declared paths for high-stakes risk via the shared `_high-stakes.sh` (reading the rc on
+  its own line so the rc-2 "regex does not compile" case fails **closed** rather than being swallowed by
+  command substitution), checks freshness, and prints a visible decision block (Selected tier / Risk
+  signals / Plan review / Reason / Override / Supervised). Clear low-risk STANDARD now takes deterministic
+  checks only and dispatches **no** evaluator PLAN_CHECK; risky STANDARD, DEEP, supervised, invalid-tier,
+  hard-stale plans and blocking `[NEEDS CLARIFICATION]` force the full check; a high-stakes path overrides a
+  false or stale TINY. `/phase` step 4b routes on its `ROUTE=` output. The router never ticks, grades, or
+  emits a gradeable token, and does not restate `classify-work.sh`'s tier→workflow text.
+
+### Changed — leaner installed footprint
+- The full guard-test suite (`scripts/test-*.sh`) + `run-guard-tests.sh` are now opt-in via `--with-tests`
+  (implied by `--with-ci`, whose shipped workflow runs the suite). A default install ships only
+  `test-evidence.sh` (the runtime evidence producer) and `test-hooks.sh` (the documented hook smoke) —
+  about 27 fewer files. `sync.sh` mirrors the gate: it updates the suite where a project already has it but
+  never re-adds it to a lean project. `doctor.sh` needed no change (its required set is manifest-derived).
+- Two sourced libraries (`_requirements.sh`, `_roadmap.sh`) are normalized from mode 755 to 644 —
+  libraries are sourced, never executed — and `sync.sh` no longer chmods libraries `+x` on update
+  (`install.sh` already chmods only hooks/scripts/sandbox).
+- CI now asserts non-root Linux before the guard and install suites, making the documented non-root mode an
+  explicit, exercised guarantee.
+
+### Documentation
+- `CONTROL-PLANE.md` is stated as the authority for the workflow and authority model (the GUIDE links to it
+  rather than restating); its stale "(v2.14.0)" header is gone and it describes the plan-review router. The
+  manual-copy path (README Option C) mirrors `install.sh`'s per-project skill set (excludes the installer
+  skill, keeps the user-invoked ones); `install.sh --force` is documented as a repair tool, not the upgrade
+  path — `sync.sh` is.
+- New ADRs: **ADR-009** (proportional STANDARD plan review) and **ADR-010** (opt-in installed test footprint).
+
 ## [2.15.0] — 2026-07-16
 
 Correction release. An independent review of the **released** v2.14.0 — the first anyone had run on it;
