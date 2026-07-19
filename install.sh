@@ -5,12 +5,18 @@
 # or do it by hand. This script never asks a model to do anything.
 #
 # Usage:
-#   bash install.sh [TARGET_DIR] [--force] [--global-skills] [--with-ci]
+#   bash install.sh [TARGET_DIR] [--force] [--global-skills] [--with-ci] [--with-tests]
 #     TARGET_DIR       where to install (default: current directory)
 #     --force          overwrite existing scaffold files (default: skip files that exist)
 #     --global-skills  also install the skills into ~/.claude/skills (in addition to project)
 #     --with-ci        also copy the CI workflow (.github/workflows/jaimitos-os-ci.yml).
-#                      Off by default — most projects already have their own CI.
+#                      Off by default — most projects already have their own CI. Implies --with-tests
+#                      (the shipped CI runs run-guard-tests.sh, so it needs the guard suite present).
+#     --with-tests     also install the full guard-test suite (scripts/test-*.sh + run-guard-tests.sh).
+#                      Off by default: a normal project ships only the runtime evidence producer
+#                      (test-evidence.sh) and the hook smoke test (test-hooks.sh); the ~26-file guard
+#                      suite is opt-in to keep the installed footprint lean. Add it to verify the gates
+#                      locally (bash scripts/run-guard-tests.sh) or when running the toolkit's CI.
 #     --allow-subdir   allow installing into a SUBDIRECTORY of an existing git repo. jaimitos-os
 #                      assumes ONE repo per project — its operational scripts resolve every path from
 #                      `git rev-parse --show-toplevel`, so a subdir install makes autopilot/tick/doctor
@@ -34,17 +40,20 @@ TARGET="."
 FORCE=0
 GLOBAL_SKILLS=0
 WITH_CI=0
+WITH_TESTS=0
 ALLOW_SUBDIR=0
 for arg in "$@"; do
   case "$arg" in
     -h|--help)
       # Universal --help, matching the operational scripts (models.sh/sync.sh/tick.sh/…). A genuinely
       # unknown flag still fails closed (exit 2) via the catch-all below — help must not mask a typo.
-      echo "usage: install.sh [TARGET_DIR] [--force] [--global-skills] [--with-ci] [--allow-subdir]"
+      echo "usage: install.sh [TARGET_DIR] [--force] [--global-skills] [--with-ci] [--with-tests] [--allow-subdir]"
       echo "  Drops the jaimitos-os scaffold + skills into TARGET_DIR (default: current dir)."
       echo "    --force          overwrite existing scaffold files (default: skip files that exist)"
       echo "    --global-skills  also install skills into ~/.claude/skills"
-      echo "    --with-ci        also copy the CI workflow (.github/workflows/jaimitos-os-ci.yml)"
+      echo "    --with-ci        also copy the CI workflow (jaimitos-os-ci.yml); implies --with-tests"
+      echo "    --with-tests     also install the full guard-test suite (test-*.sh + run-guard-tests.sh);"
+      echo "                     default ships only test-evidence.sh + test-hooks.sh (lean footprint)"
       echo "    --allow-subdir   allow installing into a SUBDIRECTORY of an existing git repo (scripts"
       echo "                     resolve paths from the git root, so expect them to misbehave)"
       echo "  The repo README is NEVER copied; the scaffold note ships as SCAFFOLD.md. Idempotent."
@@ -52,11 +61,15 @@ for arg in "$@"; do
     --force)         FORCE=1 ;;
     --global-skills) GLOBAL_SKILLS=1 ;;
     --with-ci)       WITH_CI=1 ;;
+    --with-tests)    WITH_TESTS=1 ;;
     --allow-subdir)  ALLOW_SUBDIR=1 ;;
     -*)              echo "install: unknown flag '$arg'" >&2; exit 2 ;;
     *)               TARGET="$arg" ;;
   esac
 done
+# --with-ci ships the CI workflow, which runs run-guard-tests.sh — so it MUST bring the guard suite,
+# or a CI-enabled project's own CI would fail with the suite absent. --with-ci therefore implies --with-tests.
+[ "$WITH_CI" -eq 1 ] && WITH_TESTS=1
 
 [ -d "$SCAFFOLD" ]   || { echo "install: can't find jaimitos-os/ next to this script ($SCAFFOLD)" >&2; exit 1; }
 [ -d "$SKILLS_SRC" ] || { echo "install: can't find skills/ next to this script ($SKILLS_SRC)" >&2; exit 1; }
@@ -156,6 +169,12 @@ while IFS= read -r srcfile; do
       [ "$WITH_CI" -eq 1 ] || continue ;;          # CI is opt-in
     PLAN-*.md)
       continue ;;                                  # toolkit dev/audit plans — never ship into a target
+    scripts/run-guard-tests.sh)
+      [ "$WITH_TESTS" -eq 1 ] || continue ;;       # the guard-suite runner ships with the suite (opt-in)
+    scripts/test-evidence.sh|scripts/test-hooks.sh)
+      : ;;                                         # ALWAYS ship: the runtime evidence producer + hook smoke
+    scripts/test-*.sh)
+      [ "$WITH_TESTS" -eq 1 ] || continue ;;       # the rest of the guard suite is opt-in (--with-tests)
     *.DS_Store|*.swp)
       continue ;;                                  # editor/OS cruft
   esac
@@ -249,6 +268,7 @@ chmod +x "$TARGET"/.claude/hooks/*.sh "$TARGET"/scripts/*.sh "$TARGET"/sandbox/*
 echo ""
 echo "install: copied $COPIED file(s), skipped $SKIPPED, failed $FAILED."
 [ "$WITH_CI" -eq 0 ] && echo "install: CI workflow NOT copied (re-run with --with-ci to add jaimitos-os-ci.yml)."
+[ "$WITH_TESTS" -eq 0 ] && echo "install: guard-test suite NOT copied (lean default: test-evidence.sh + test-hooks.sh only). Re-run with --with-tests to add scripts/test-*.sh + run-guard-tests.sh for local gate verification."
 if [ "$FAILED" -gt 0 ]; then
   echo "install: ⛔ $FAILED file(s) failed to copy — the install is INCOMPLETE. Fix the errors above and re-run." >&2
   exit 1

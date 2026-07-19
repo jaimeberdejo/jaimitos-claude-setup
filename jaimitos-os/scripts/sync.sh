@@ -90,10 +90,12 @@ project_owned() {
   esac
 }
 
-# Shipped scripts must stay executable after a copy (install.sh chmod +x's them on install).
+# Shipped EXECUTABLES must stay executable after a copy (install.sh chmod +x's them on install).
+# Sourced libraries under .claude/lib/ are NOT executed — install.sh chmods only hooks/scripts/sandbox,
+# so sync must not add an exec bit they should not carry (v2.16.0: two libs had drifted to 755).
 is_shipped_script() {
   case "$1" in
-    scripts/*.sh|.claude/hooks/*.sh|.claude/lib/*.sh|.github/scripts/*.sh|sandbox/*.sh) return 0 ;;
+    scripts/*.sh|.claude/hooks/*.sh|.github/scripts/*.sh|sandbox/*.sh) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -135,6 +137,12 @@ toolkit_files() {
     rel="${srcfile#"$TOOLKIT"/}"
     case "$rel" in
       toolkit-docs/*|.github/workflows/*|PLAN-*.md|*.DS_Store|*.swp) continue ;;
+      scripts/test-evidence.sh|scripts/test-hooks.sh) ;;   # always-managed: shipped into every project
+      scripts/run-guard-tests.sh|scripts/test-*.sh)
+        # The optional guard suite ships only with install --with-tests. sync mirrors that: it UPDATES
+        # the suite where a project already has it, but never ADDS it to a lean project (which would
+        # undo the footprint gate by re-shipping ~27 files as "new").
+        [ -f "$rel" ] || continue ;;
     esac
     project_owned "$rel" && continue
     printf '%s\t%s\n' "$rel" "$srcfile"

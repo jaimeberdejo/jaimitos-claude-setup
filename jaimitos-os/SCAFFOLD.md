@@ -24,7 +24,10 @@ project (so it doesn't pollute it); read it on GitHub:
   `skills/README.md` in the toolkit repo.
 - **docs/** — SPEC/ROADMAP/STATE/ARCHITECTURE templates + `decisions/` for ADRs.
 - **scripts/** — `autopilot.sh` (guarded autonomous loop), `tick.sh` (the completion gate),
-  `sync.sh` (manifest-driven updater), `doctor.sh`, `test-hooks.sh` and the guard-test suites.
+  `sync.sh` (manifest-driven updater), `doctor.sh`, `plan-review-route.sh` (the /phase plan-gate
+  router), plus `test-hooks.sh` (hook smoke) and `test-evidence.sh` (the evidence producer). The full
+  guard-test suite + `run-guard-tests.sh` are **opt-in** to keep the footprint lean — reinstall with
+  `--with-tests` to add them, then `bash scripts/run-guard-tests.sh` verifies the gates locally.
 - **sandbox/** — `Dockerfile.autopilot` + `run-autopilot-sandboxed.sh`, the supported way to run
   the headless loop unattended (no-credentials container; only the repo mounted, only
   `ANTHROPIC_API_KEY` passed).
@@ -34,7 +37,9 @@ previews the plan; unchanged files batch-update, anything you modified is never 
 (you get the diff instead). Scaffolded before v2.5.0? Run once with `--adopt-manifest` first.
 
 CI is **opt-in**: re-run the installer with `--with-ci` to also drop a
-`.github/workflows/jaimitos-os-ci.yml` into your project.
+`.github/workflows/jaimitos-os-ci.yml` into your project (it implies `--with-tests`, since the shipped
+workflow runs the guard suite). The guard-test suite itself is opt-in too — `--with-tests` adds
+`scripts/test-*.sh` + `run-guard-tests.sh` for local gate verification.
 
 ## Quick start
 The two required steps are `chmod` then `doctor.sh`:

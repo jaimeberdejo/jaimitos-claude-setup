@@ -47,22 +47,39 @@ PLANS_SHIPPED="$(find . -name 'PLAN-*.md' -not -path './.git/*')"
 grep -q "Jaimitos OS — the scaffold" README.md && bad "scaffold README content landed in target README.md" || ok "no scaffold content in target README.md"
 # CI absent by default.
 [ -e .github/workflows/jaimitos-os-ci.yml ] && bad "CI copied without --with-ci" || ok "CI absent by default"
-# Core scaffold + shared libs present.
+# Core scaffold + shared libs present by DEFAULT (lean install).
 # M13: check the full shipped manifest (was a sample — missed evaluator.md, phase/resume/wrap/autopilot
-# commands, _test-cmd.sh, test-sync.sh, etc.). doctor.sh on the installed tree (below) is the broader
-# backstop; this explicit list keeps the smoke test self-describing about what a complete install is.
+# commands, _test-cmd.sh, etc.). doctor.sh on the installed tree (below) is the broader backstop; this
+# explicit list keeps the smoke test self-describing about what a complete install is.
+# v2.16.0 footprint gate: the guard-test suite (scripts/test-*.sh) + run-guard-tests.sh are OPT-IN
+# (--with-tests / --with-ci) — asserted separately below — so they are deliberately NOT in this default
+# list. Only test-evidence.sh (runtime evidence producer) and test-hooks.sh (the smoke SCAFFOLD.md names)
+# ship by default. plan-review-route.sh + check-plan-freshness.sh are non-test runtime scripts (always).
 for f in CLAUDE.md .claude/settings.json \
-         scripts/autopilot.sh scripts/tick.sh scripts/test-evidence.sh scripts/record-grade.sh \
-         scripts/models.sh scripts/sync.sh scripts/doctor.sh scripts/run-guard-tests.sh \
+         scripts/autopilot.sh scripts/tick.sh scripts/test-evidence.sh scripts/test-hooks.sh \
+         scripts/record-grade.sh scripts/plan-review-route.sh scripts/check-plan-freshness.sh \
+         scripts/models.sh scripts/sync.sh scripts/doctor.sh \
          scripts/close-milestone.sh scripts/next-adr.sh scripts/lint-roadmap.sh \
-         scripts/test-models.sh scripts/test-sync.sh scripts/test-tick.sh scripts/test-test-cmd.sh \
-         .claude/lib/_secret-scan.sh .claude/lib/_high-stakes.sh .claude/lib/_test-cmd.sh .claude/lib/_eval-isolation.sh \
+         .claude/lib/_secret-scan.sh .claude/lib/_high-stakes.sh .claude/lib/_test-cmd.sh \
+         .claude/lib/_eval-isolation.sh .claude/lib/_requirements.sh .claude/lib/_roadmap.sh \
          .claude/agents/researcher.md .claude/agents/planner.md .claude/agents/executor.md .claude/agents/evaluator.md \
          .claude/commands/resume.md .claude/commands/wrap.md .claude/commands/phase.md \
          .claude/commands/autopilot.md .claude/commands/models.md \
          .claude/high-stakes-path-allowlist \
          sandbox/Dockerfile.autopilot sandbox/run-autopilot-sandboxed.sh; do
   [ -f "$f" ] && ok "installed $f" || bad "missing $f"
+done
+
+# Footprint gate: a DEFAULT install ships neither the full guard suite nor its runner (must be opt-in),
+# but must carry the two always-shipped test files. (These run on the default-install target, before the
+# --with-ci install below re-adds the suite.)
+[ -e scripts/run-guard-tests.sh ] && bad "run-guard-tests.sh shipped WITHOUT --with-tests" || ok "run-guard-tests.sh absent by default (opt-in)"
+for t in test-tick.sh test-sync.sh test-models.sh test-classify-work.sh test-plan-review-route.sh test-secret-scan.sh; do
+  [ -e "scripts/$t" ] && bad "gated guard test scripts/$t shipped by default (footprint gate broken)" || ok "gated guard test $t absent by default"
+done
+# Sourced libs must NOT be executable (they are sourced, never run); v2.16.0 normalized two that had drifted.
+for lib in _requirements.sh _roadmap.sh _high-stakes.sh _secret-scan.sh _test-cmd.sh _eval-isolation.sh; do
+  [ -x ".claude/lib/$lib" ] && bad "sourced lib .claude/lib/$lib is executable (should be non-exec)" || ok "sourced lib $lib is non-executable"
 done
 # Skills installed per-project — assert the FULL shipped manifest (every project skill lands with its
 # SKILL.md). A bare roadmap-only check let a dropped/renamed skill ship silently (v2.3.1 fix); this loop
@@ -108,9 +125,19 @@ OUT2="$(bash "$REPO/install.sh" . 2>&1)" || bad "re-run exited non-zero"
 case "$OUT2" in *"skip (exists)"*) ok "re-run skips existing files (idempotent)" ;; *) bad "re-run did not skip existing files" ;; esac
 [ "$(grep -c "jaimitos-os control/secret ignores" .gitignore)" -eq 1 ] && ok ".gitignore block not duplicated on re-run" || bad ".gitignore merge block duplicated"
 
-# --with-ci adds the workflow (named jaimitos-os-ci.yml, not ci.yml).
+# --with-ci adds the workflow (named jaimitos-os-ci.yml, not ci.yml) AND implies --with-tests (the shipped
+# CI runs run-guard-tests.sh, so the suite must travel with it or the project's own CI would fail).
 bash "$REPO/install.sh" . --with-ci >/dev/null 2>&1 || bad "--with-ci run exited non-zero"
 [ -f .github/workflows/jaimitos-os-ci.yml ] && ok "--with-ci installs jaimitos-os-ci.yml" || bad "--with-ci did not install CI"
+[ -f scripts/run-guard-tests.sh ] && ok "--with-ci implies --with-tests (guard suite installed)" || bad "--with-ci did not bring the guard suite"
+
+# --with-tests installs the full guard suite independently of CI (fresh target so the assertion is clean).
+WT="$(mktemp -d)" && ( cd "$WT" && git init -q && git config user.email t@t.t && git config user.name t )
+bash "$REPO/install.sh" "$WT" --with-tests >/dev/null 2>&1 || bad "--with-tests run exited non-zero"
+[ -f "$WT/scripts/run-guard-tests.sh" ] && ok "--with-tests installs run-guard-tests.sh" || bad "--with-tests did not install run-guard-tests.sh"
+{ [ -f "$WT/scripts/test-tick.sh" ] && [ -f "$WT/scripts/test-plan-review-route.sh" ]; } && ok "--with-tests installs the full guard suite" || bad "--with-tests missing guard-suite files"
+[ -f "$WT/scripts/test-evidence.sh" ] && ok "--with-tests keeps the default runtime test files too" || bad "--with-tests dropped test-evidence.sh"
+rm -rf "$WT"
 
 # The installed tree (scaffold at git root) passes its own hook smoke tests.
 if ( cd "$TMP" && bash scripts/test-hooks.sh ) >/dev/null 2>&1; then
