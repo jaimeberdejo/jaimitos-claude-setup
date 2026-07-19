@@ -132,6 +132,43 @@ route --plan docs/plans/p.md --override full --reason "extra caution"
   && pass "override to STRONGER review always honoured" || fail "stronger override not honoured (rc=$RC): $OUT"
 
 echo ""
+echo "A weaker override cannot waive the full review for ANY forcing signal (audit regression)"
+mkproj DEEP "src/widgets/list.ts"
+route --plan docs/plans/p.md --override skip
+{ [ "$RC" -eq 10 ] && has "REFUSED" && has "ROUTE=FULL_PLAN_CHECK"; } && pass "DEEP + --override skip → REFUSED (stays FULL)" || fail "DEEP override not refused (rc=$RC): $OUT"
+mkproj "BOGUS" "src/widgets/list.ts"
+route --plan docs/plans/p.md --override deterministic
+{ [ "$RC" -eq 10 ] && has "REFUSED"; } && pass "invalid tier + --override deterministic → REFUSED" || fail "invalid-tier override not refused (rc=$RC): $OUT"
+mkproj STANDARD "src/widgets/list.ts"
+printf '# Plan\n## Change ownership\nPlanned writes: `src/widgets/list.ts`\n[NEEDS CLARIFICATION] which?\n' > docs/plans/p.md
+route --plan docs/plans/p.md --override skip
+{ [ "$RC" -eq 10 ] && has "REFUSED"; } && pass "blocking clarification + --override skip → REFUSED" || fail "clarification override not refused (rc=$RC): $OUT"
+N=$((N+1)); GO="$WORK/ov$N"; mkdir -p "$GO/.claude/lib" "$GO/docs/plans"; cd "$GO" || exit 1
+cp "$SCAFFOLD/.claude/lib/_high-stakes.sh" "$SCAFFOLD/.claude/lib/_test-cmd.sh" .claude/lib/
+printf 'pytest -q\n' > .claude/test-command
+printf -- '---\ntier: STANDARD\n---\n# Spec\n' > docs/SPEC.md
+git init -q; git config user.email t@t.t; git config user.name t
+printf '# Plan\nBaseline: deadbeef1234\n## Change ownership\nPlanned writes: `src/widgets/list.ts`\n' > docs/plans/p.md
+git add -A >/dev/null; git commit -qm base
+route --plan docs/plans/p.md --override skip
+{ [ "$RC" -eq 10 ] && has "REFUSED"; } && pass "hard-stale plan + --override skip → REFUSED" || fail "hard-stale override not refused (rc=$RC): $OUT"
+
+echo ""
+echo "The decision block never prints a false '[ok]' it did not verify"
+mkproj STANDARD "src/billing/charge.ts"   # high-stakes → FULL; the DETERMINISTIC_ONLY checklist must not appear
+route --plan docs/plans/p.md --override deterministic
+{ [ "$RC" -eq 10 ] && ! has "[ok] no high-stakes path declared in the plan"; } \
+  && pass "a forced-FULL phase prints no false '[ok] no high-stakes path' checklist" || fail "false [ok] attestation printed (rc=$RC): $OUT"
+
+echo ""
+echo "High-stakes detection: a bare multi-dot filename is not truncated"
+mkproj STANDARD "auth.service.ts"
+if bash -c '. .claude/lib/_high-stakes.sh; high_stakes_match "auth.service.ts" >/dev/null 2>&1'; then
+  pass "precondition: auth.service.ts matches HIGH_STAKES_RE (truncated 'service.ts' would not)"; else fail "PRECONDITION broken: auth.service.ts not high-stakes"; fi
+route --plan docs/plans/p.md
+{ [ "$RC" -eq 10 ] && has "high-stakes path"; } && pass "auth.service.ts (bare multi-dot) → FULL (not truncated to service.ts)" || fail "multi-dot filename truncated, missed high-stakes (rc=$RC): $OUT"
+
+echo ""
 echo "Usage: missing --plan / nonexistent plan fail closed (exit 2)"
 route --plan "$WORK/nope.md"; [ "$RC" -eq 2 ] && pass "nonexistent plan → exit 2" || fail "nonexistent plan not exit 2 (rc=$RC)"
 route; [ "$RC" -eq 2 ] && pass "missing --plan → exit 2" || fail "missing --plan not exit 2 (rc=$RC)"

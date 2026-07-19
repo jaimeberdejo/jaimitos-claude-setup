@@ -81,13 +81,18 @@ case "$RAW_TIER" in
 esac
 
 # --- high-stakes risk probe over the plan's declared paths -----------------
-# Guarantee scope (kept honest, per the guarantee table): this is deterministic over the tier + the
-# paths the plan DECLARES, not over the implementation (no code exists yet at 4b). Extracting paths from
-# the whole plan is deliberately OVER-inclusive — high-stakes fails toward FULL, never toward SKIP.
+# Guarantee scope (kept honest, per the guarantee table): this is deterministic over the tier + the paths
+# the plan DECLARES, not over the implementation (no code exists yet at 4b). Extracting paths from the whole
+# plan is deliberately OVER-inclusive toward risk — a path merely NAMED in prose still escalates to FULL, so
+# the light path is narrower in practice than "clear STANDARD" suggests; that bias is intentional (fails
+# toward FULL, never toward SKIP). The filename branch allows interior dots so a bare multi-dot name like
+# `auth.service.ts` is not truncated to `service.ts`. Matching itself is delegated to _high-stakes.sh, so a
+# name it cannot match (e.g. a camelCase `OAuthClient`) is missed identically here and at tick time — no new
+# gap, just the shared matcher's limitation.
 HS_SIGNAL=0
 if [ -f .claude/lib/_high-stakes.sh ] && . .claude/lib/_high-stakes.sh 2>/dev/null \
    && command -v high_stakes_match >/dev/null 2>&1; then
-  PLAN_PATHS=$(grep -oE '[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)+|[A-Za-z0-9_-]+\.(py|ts|tsx|js|jsx|go|rs|rb|java|kt|c|cc|cpp|h|hpp|sql|sh|md|json|ya?ml|toml|env)' "$PLAN" 2>/dev/null | sort -u)
+  PLAN_PATHS=$(grep -oE '[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)+|[A-Za-z0-9_.-]+\.(py|ts|tsx|js|jsx|go|rs|rb|java|kt|c|cc|cpp|h|hpp|sql|sh|md|json|ya?ml|toml|env)' "$PLAN" 2>/dev/null | sort -u)
   if [ -n "$PLAN_PATHS" ]; then
     high_stakes_match "$PLAN_PATHS" >/dev/null; HS_RC=$?     # read rc on its own line — NOT inside an `if`
     case "$HS_RC" in
@@ -134,19 +139,22 @@ else                           ROUTE="DETERMINISTIC_ONLY"; fi
 
 SUP_OUT="NO"; { [ "$SUPERVISED" = 1 ] || [ "$HS_SIGNAL" = 1 ]; } && SUP_OUT="YES"
 
-# --- override (stronger always allowed; weaker never for high-stakes/supervised) ---
+# --- override: STRONGER review is always allowed; a WEAKER route (deterministic/skip) is REFUSED whenever
+#     ANY forcing signal is present. FORCE_FULL already captures all six (high-stakes, supervised, DEEP,
+#     invalid tier, hard-stale, blocking clarification) — a user may not silently waive the full independent
+#     review that risk demands, and that must not be scoped to just high-stakes/supervised (which let a
+#     DEEP / invalid-tier / stale / unclear plan be waived to no review at all — an audit finding).
 OVERRIDE_LINE="NO"
 if [ -n "$OV" ]; then
   case "$OV" in
     full|FULL) ROUTE="FULL_PLAN_CHECK" ;;
-    deterministic|DETERMINISTIC)
-      if [ "$HS_SIGNAL" = 1 ] || [ "$SUPERVISED" = 1 ]; then
-        OVERRIDE_LINE="YES — REFUSED: high-stakes/supervised work requires full independent review"; ROUTE="FULL_PLAN_CHECK"
-      else ROUTE="DETERMINISTIC_ONLY"; fi ;;
-    skip|SKIP)
-      if [ "$HS_SIGNAL" = 1 ] || [ "$SUPERVISED" = 1 ]; then
-        OVERRIDE_LINE="YES — REFUSED: high-stakes/supervised work requires full independent review"; ROUTE="FULL_PLAN_CHECK"
-      else ROUTE="SKIP"; fi ;;
+    deterministic|DETERMINISTIC|skip|SKIP)
+      if [ "$FORCE_FULL" = 1 ]; then
+        OVERRIDE_LINE="YES — REFUSED: a forcing signal (${SIGNALS:-DEEP tier}) requires the full independent review"
+        ROUTE="FULL_PLAN_CHECK"
+      else
+        case "$OV" in skip|SKIP) ROUTE="SKIP" ;; *) ROUTE="DETERMINISTIC_ONLY" ;; esac
+      fi ;;
     *) echo "plan-review-route: --override must be full|deterministic|skip" >&2; exit 2 ;;
   esac
   if [ "$OVERRIDE_LINE" = NO ]; then
@@ -184,21 +192,16 @@ echo "Override: $OVERRIDE_LINE"
 echo "Supervised: $SUP_OUT"
 
 if [ "$ROUTE" = DETERMINISTIC_ONLY ]; then
+  # Each line is DERIVED from the actual signal, never hard-coded — so the block can never assert an
+  # "[ok]" it did not verify. (A test command / verification strategy is deliberately NOT checked here:
+  # it is a project-level config that the tick-time evidence gate + test-gate hook already fail closed on,
+  # so re-surfacing it at plan time added no guarantee — removed as redundant.)
   echo ""
   echo "Deterministic checks (stand in for the independent review):"
   echo "  [ok] plan file exists"
-  echo "  [ok] baseline valid, not hard-stale, cited ids resolve (check-plan-freshness --strict)"
-  echo "  [ok] no high-stakes path declared in the plan"
-  echo "  [ok] no blocking [NEEDS CLARIFICATION]"
-  if [ -f .claude/lib/_test-cmd.sh ] && . .claude/lib/_test-cmd.sh 2>/dev/null \
-     && command -v authorized_test_cmd >/dev/null 2>&1; then
-    authorized_test_cmd >/dev/null 2>&1; TC_RC=$?
-    case "$TC_RC" in
-      0) echo "  [ok] verification strategy: a test command is configured" ;;
-      1) echo "  [ok] verification strategy: phase explicitly declared test-less (none:)" ;;
-      *) echo "  [warn] no authorized test command configured — set .claude/test-command so the light path has a real verifier" ;;
-    esac
-  fi
+  [ "$FRESH_SIGNAL" = 0 ]   && echo "  [ok] baseline valid, not hard-stale, cited ids resolve (check-plan-freshness --strict)" || echo "  [FAIL] plan is hard-stale"
+  [ "$HS_SIGNAL" = 0 ]      && echo "  [ok] no high-stakes path declared in the plan"                                            || echo "  [FAIL] a high-stakes path is declared"
+  [ "$CLARIFY_SIGNAL" = 0 ] && echo "  [ok] no blocking [NEEDS CLARIFICATION]"                                                   || echo "  [FAIL] a blocking [NEEDS CLARIFICATION] is present"
 fi
 
 echo ""

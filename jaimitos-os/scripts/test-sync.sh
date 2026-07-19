@@ -300,6 +300,35 @@ rc=$(runsync --yes)
   && pass "a resolved conflict does not recur on a subsequent sync" \
   || fail "resolved conflict recurred (rc=$rc)"
 
+# 21 — footprint gate (v2.16.0): the optional guard suite is UPDATE-where-present, never ADDED to a lean
+# project (which would undo the install-time --with-tests gate by re-shipping ~27 files as "new").
+# test-evidence.sh is always managed and IS offered; test-*.sh / run-guard-tests.sh are gated on local presence.
+mktoolkit; mkproject t21; scaffold_project
+printf '#!/usr/bin/env bash\necho tk-test-foo-v1\n'  > "$TOOLKIT/scripts/test-foo.sh"
+printf '#!/usr/bin/env bash\necho tk-runguard-v1\n'  > "$TOOLKIT/scripts/run-guard-tests.sh"
+printf '#!/usr/bin/env bash\necho tk-evidence-v1\n'  > "$TOOLKIT/scripts/test-evidence.sh"
+rc=$(runsync --dry-run)
+{ [ "$rc" -eq 0 ] && ! grep -qE 'test-foo\.sh|run-guard-tests\.sh' "$WORK/out"; } \
+  && pass "lean project: the optional guard suite (test-*.sh / run-guard-tests.sh) is NOT re-added by sync" \
+  || fail "footprint gate broken — sync offered the guard suite to a lean project (rc=$rc)"
+grep -q 'test-evidence.sh' "$WORK/out" \
+  && pass "always-managed test-evidence.sh IS still offered to a lean project" \
+  || fail "always-managed test-evidence.sh was wrongly gated out (rc=$rc)"
+# update-where-present: a FRESH project scaffolded WITH a guard-suite file (its manifest records it at
+# adopt time) gets that file updated on a toolkit bump — the gate is update-where-present, not never-touch.
+printf '#!/usr/bin/env bash\necho tk-test-foo-v1\n' > "$TOOLKIT/scripts/test-foo.sh"
+mkproject t21b
+mkdir -p scripts .claude
+cp "$TOOLKIT/scripts/foo.sh" scripts/foo.sh
+cp "$TOOLKIT/.claude/settings.json" .claude/settings.json
+cp "$TOOLKIT/scripts/test-foo.sh" scripts/test-foo.sh                       # project HAS the guard-suite file
+bash "$SYNC" --toolkit "$TOOLKIT" --adopt-manifest >/dev/null 2>&1          # FRESH adopt records test-foo.sh
+printf '#!/usr/bin/env bash\necho tk-test-foo-v2\n' > "$TOOLKIT/scripts/test-foo.sh"
+rc=$(runsync --yes)
+{ [ "$rc" -eq 0 ] && grep -q 'tk-test-foo-v2' scripts/test-foo.sh; } \
+  && pass "a guard-suite file already present IS updated on a toolkit bump (update-where-present)" \
+  || fail "present guard-suite file not updated (rc=$rc)"
+
 echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All sync.sh tests passed."; exit 0
 else echo "$FAILS sync test(s) FAILED."; echo "--- last output ---"; tail -n 25 "$WORK/out" 2>/dev/null; exit 1; fi

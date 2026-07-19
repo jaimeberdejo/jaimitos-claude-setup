@@ -93,6 +93,8 @@ of roadmap order; bare `/phase` (no argument) is unchanged.
      clarification) stand in for the independent review. Proceed **without** dispatching the evaluator. This
      is *not* "independently approved" — describe it as "deterministic checks only" if asked.
    - **`ROUTE=SKIP` (exit 0)** — TINY with no risk signal: proceed, no plan review (unchanged).
+   - **exit 2** — a usage error (missing plan file or bad flag): STOP and report. Step 4 already confirmed
+     the plan exists, so this signals a broken hand-off, not a routing decision — do not proceed.
    The router forces `FULL_PLAN_CHECK` whenever a high-stakes path, a `--supervised` phase, a hard-stale
    plan, a blocking `[NEEDS CLARIFICATION]`, an invalid `tier:`, or a DEEP tier is present — so a false or
    stale tier can never buy a lighter review, and a user may **not** silently waive full review for

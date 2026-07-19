@@ -224,25 +224,38 @@ assert_absent "../docs/dev/AUTHORING.md" "lint-enforcement.sh" \
 echo ""
 echo "deleted enforcement/UAT ledgers stay deleted on ACTIVE operational surfaces (ADR-008)"
 echo ""
+# Fixed toolkit surfaces: the commands + the four agents (a small, review-gated set).
 LEDGER_SURFACES="scripts/classify-work.sh \
 .claude/agents/researcher.md .claude/agents/planner.md .claude/agents/executor.md .claude/agents/evaluator.md \
 .claude/commands/phase.md .claude/commands/wrap.md .claude/commands/autopilot.md .claude/commands/resume.md .claude/commands/models.md \
-toolkit-docs/CONTROL-PLANE.md toolkit-docs/GUIDE.md docs/SPEC.md ../skills/mapme/SKILL.md"
-LEDGER_PHRASES=("enforcement ledger" "enforcement-ledger" "UAT ledger" "formal UAT" "OBJ/ENF" "lint-enforcement" "check-uat")
-ledger_hits=0
+toolkit-docs/CONTROL-PLANE.md toolkit-docs/GUIDE.md docs/SPEC.md"
+# PLUS every shipped skill, DERIVED from the skills/ tree so a newly-added skill is covered without editing
+# this list ("derive catalogs, don't duplicate" — a hand list is one more thing to forget; a review found
+# only mapme guarded and the other 18 skills unscanned). setup-jaimitos-os is global-only but still scanned.
+for _sk in "$ROOT"/../skills/*/SKILL.md; do
+  [ -f "$_sk" ] || continue
+  LEDGER_SURFACES="$LEDGER_SURFACES ../skills/$(basename "$(dirname "$_sk")")/SKILL.md"
+done
+# Whitespace/hyphen-tolerant regexes: "enforcement  ledger" and "enforcement-ledger" both match. Bare
+# "ledger"/"UAT" stay unguarded (a high-stakes keyword / a surviving concept). A determined paraphrase
+# ("record it in the objective register") is out of scope by design — this is drift protection ON TOP of
+# the removal, not a natural-language classifier.
+LEDGER_PATTERNS=('enforcement[-[:space:]]+ledger' 'UAT[[:space:]]+ledger' 'formal[[:space:]]+UAT' 'OBJ/ENF' 'lint-enforcement' 'check-uat')
+ledger_hits=0; ledger_surf_n=0
 for surf in $LEDGER_SURFACES; do
+  ledger_surf_n=$((ledger_surf_n+1))
   if [ ! -f "$ROOT/$surf" ]; then
     bad "ledger-guard: active surface not found: $surf (a file moved — update this list, do not drop coverage)"
     ledger_hits=$((ledger_hits+1)); continue
   fi
-  for ph in "${LEDGER_PHRASES[@]}"; do
-    if grep -qiF "$ph" "$ROOT/$surf"; then
+  for ph in "${LEDGER_PATTERNS[@]}"; do
+    if grep -qiE "$ph" "$ROOT/$surf"; then
       bad "active surface $surf still references the removed '$ph' — route through tick.sh/PLAN_CHECK, not a ledger (ADR-008)"
       ledger_hits=$((ledger_hits+1))
     fi
   done
 done
-[ "$ledger_hits" -eq 0 ] && ok "no active operational surface instructs using the removed enforcement/UAT ledgers (14 surfaces × ${#LEDGER_PHRASES[@]} phrases)"
+[ "$ledger_hits" -eq 0 ] && ok "no active operational surface instructs using the removed enforcement/UAT ledgers ($ledger_surf_n surfaces × ${#LEDGER_PATTERNS[@]} phrases)"
 
 # Evaluator PLAN_CHECK + pre-mortem (v2.14.0) — the SAME independent evaluator gains a second mode. No new
 # agent, no second evaluator. IMPLEMENTATION_REVIEW keeps the two-axis PASS/NEEDS_WORK contract that
