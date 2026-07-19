@@ -278,6 +278,28 @@ rc=$(runsync --dry-run)
   && pass "enumeration mirrors install.sh's exclusions (docs/plans/cruft/meta-skill never offered)" \
   || fail "enumeration exclusions broken (rc=$rc)"
 
+# 20 — a RESOLVED conflict does not recur. A modified file is skipped (diff shown); once the user
+# aligns it to the toolkit version, the next sync reclassifies it "already current" and self-repairs
+# its stale manifest entry (sync.sh's cmp -s branch), so a third sync is clean — no perpetual
+# "manual merge" for a file the user already resolved.
+mktoolkit; mkproject t20; scaffold_project
+printf '#!/usr/bin/env bash\necho PROJECT-CUSTOM\n' > scripts/foo.sh            # local edit
+printf '#!/usr/bin/env bash\necho toolkit-foo-v2\n' > "$TOOLKIT/scripts/foo.sh" # toolkit bump
+rc=$(runsync --yes)
+{ [ "$rc" -eq 0 ] && grep -qi "manual merge required" "$WORK/out" && grep -q PROJECT-CUSTOM scripts/foo.sh; } \
+  && pass "precondition: the conflict is flagged 'manual merge required' and the file left untouched" \
+  || fail "precondition broken: conflict not flagged (rc=$rc)"
+cp "$TOOLKIT/scripts/foo.sh" scripts/foo.sh                                     # user resolves to toolkit
+rc=$(runsync --yes)
+{ [ "$rc" -eq 0 ] && ! grep -qi "manual merge required" "$WORK/out" \
+  && grep -qF "$(sha scripts/foo.sh)  scripts/foo.sh" .claude/.jaimitos-manifest; } \
+  && pass "after resolving to the toolkit version, re-sync is clean and self-repairs the manifest entry" \
+  || fail "resolved conflict still flagged, or manifest not self-repaired (rc=$rc)"
+rc=$(runsync --yes)
+{ [ "$rc" -eq 0 ] && ! grep -qi "manual merge required" "$WORK/out"; } \
+  && pass "a resolved conflict does not recur on a subsequent sync" \
+  || fail "resolved conflict recurred (rc=$rc)"
+
 echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All sync.sh tests passed."; exit 0
 else echo "$FAILS sync test(s) FAILED."; echo "--- last output ---"; tail -n 25 "$WORK/out" 2>/dev/null; exit 1; fi
