@@ -51,6 +51,7 @@ TESTS=(
   test-models.sh
   test-classify-work.sh
   test-stale-plan.sh
+  test-plan-review-route.sh
   test-diagnose.sh
   test-control-plane-security.sh
   test-sandbox.sh
