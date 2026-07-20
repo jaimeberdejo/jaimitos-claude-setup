@@ -107,8 +107,9 @@ mkrepo t8; printf 'pytest -q\n' > "$REPO/.claude/test-command"; ( cd "$REPO" && 
 sp "$REPO" >/dev/null
 ( cd "$REPO" && printf 'pytest tests/trivial.py\n' > .claude/test-command && echo work > app.py && git add -A && git commit -q -m 'work + weaken tests' )
 HEAD=$(git -C "$REPO" rev-parse HEAD)
-printf 'run_id=%s\nverdict=PASS\nno_tests_ok=0\n' "$HEAD" > "$REPO/.claude/.phase-grade"
-printf '{"passed":true,"command":"pytest tests/trivial.py","run_id":"%s"}\n' "$HEAD" > "$REPO/.claude/.tick-evidence.json"
+A8=$(grep -E '^base=' "$REPO/.claude/.phase-anchor" | head -1 | cut -d= -f2-)   # v2.17: bind grade/evidence to the anchor base+heading
+printf 'run_id=%s\nverdict=PASS\nno_tests_ok=0\nheading=## Phase 1 — Work\nbase=%s\n' "$HEAD" "$A8" > "$REPO/.claude/.phase-grade"
+printf '{"schema_version":3,"passed":true,"command":"pytest tests/trivial.py","run_id":"%s","heading":"## Phase 1 — Work","base":"%s"}\n' "$HEAD" "$A8" > "$REPO/.claude/.tick-evidence.json"
 ( cd "$REPO" && bash scripts/tick.sh "## Phase 1 — Work" ) >"$WORK/out" 2>&1; trc=$?
 { [ "$trc" != 0 ] && grep -qi 'differs from the phase-start authorized command' "$WORK/out"; } \
   && pass "F3a/H2: mid-phase test-command swap → tick refuses (graded command != phase-start command)" \
@@ -119,8 +120,9 @@ mkrepo t9; printf 'pytest -q\n' > "$REPO/.claude/test-command"; ( cd "$REPO" && 
 sp "$REPO" >/dev/null
 ( cd "$REPO" && echo work > app.py && git add -A && git commit -q -m work )
 HEAD=$(git -C "$REPO" rev-parse HEAD)
-printf 'run_id=%s\nverdict=PASS\nno_tests_ok=0\n' "$HEAD" > "$REPO/.claude/.phase-grade"
-printf '{"passed":true,"command":"pytest -q","run_id":"%s"}\n' "$HEAD" > "$REPO/.claude/.tick-evidence.json"
+A9=$(grep -E '^base=' "$REPO/.claude/.phase-anchor" | head -1 | cut -d= -f2-)   # v2.17: bind grade/evidence to the anchor base+heading
+printf 'run_id=%s\nverdict=PASS\nno_tests_ok=0\nheading=## Phase 1 — Work\nbase=%s\n' "$HEAD" "$A9" > "$REPO/.claude/.phase-grade"
+printf '{"schema_version":3,"passed":true,"command":"pytest -q","run_id":"%s","heading":"## Phase 1 — Work","base":"%s"}\n' "$HEAD" "$A9" > "$REPO/.claude/.tick-evidence.json"
 ( cd "$REPO" && bash scripts/tick.sh "## Phase 1 — Work" ) >"$WORK/out" 2>&1; trc=$?
 { [ "$trc" = 0 ] && grep -q 'ticked' "$WORK/out"; } \
   && pass "F3a: unchanged test command start→grade → ticks normally (no false refusal)" \
