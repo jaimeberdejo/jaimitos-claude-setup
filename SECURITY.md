@@ -54,15 +54,16 @@ guarantees (a pre-mortem, a map classification, and ownership judgement are revi
   **fail-closed** if the tool isn't installed (the scan errors rather than silently degrading to
   the regex). `doctor.sh` hard-fails when a selected scanner is missing. Still opt-in, because it
   adds an external dependency.
-- **A secret added and then removed inside the same phase slips past the default regex scan — and
-  `--pr` still pushes the commit that contains it.** `secret_scan_diff` scans the NET two-endpoint
-  diff `BASE..HEAD`, so a credential committed in one commit and `git rm`'d in a later one within
-  the same phase nets to zero and is reported clean. The tick gate ticks, and the push gate — which
-  scans that same net diff — lets `--pr` push the whole branch, intermediate commit included. This
-  is a limit of the **default `regex` backend**, not of the gate: `LEAN_SECRET_SCANNER=gitleaks`
-  (or `trufflehog`) scans the range **commit by commit** and catches it, and is fail-closed if the
-  tool isn't installed. **Set a real backend for any run that pushes** (`--pr`), or rewrite the
-  branch history before pushing.
+- **The default regex scan runs commit-by-commit (v2.17), so a secret added and then removed inside
+  a phase is caught.** `secret_scan_diff` iterates every commit in `BASE..HEAD` and scans each
+  commit's own diff, so a credential committed in one commit and `git rm`'d in a later one no longer
+  nets to zero — the tick gate and the `--pr` push gate both flag the intermediate commit. This
+  closes the earlier add-then-remove gap for the **default `regex` backend**. It remains a
+  PREFIX-matcher, **not a scanner**: prefix-less secrets (bare-hex Twilio/Mailgun-style tokens,
+  Django/Rails random `SECRET_KEY` values, generic `password=` / high-entropy strings) are still
+  missed — on every commit. For real coverage set `LEAN_SECRET_SCANNER=gitleaks` (or `trufflehog`):
+  it scans the range commit-by-commit with entropy/verification and is fail-closed if the tool isn't
+  installed. Do NOT read "every commit is scanned" as "no secret can reach the remote."
 - **`permissions.deny` is defense-in-depth, not a boundary.** The `Read(...)` denies are a
   real boundary; the `Bash(...)` denies are a bypassable speed-bump (`less`, `source`,
   `python -c …`). There are deliberately **no network denies** (v2.5.0 removed the old

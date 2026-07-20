@@ -150,22 +150,38 @@ secret_scan_diff() {
     && git rev-parse --verify --quiet "${range##*..}^{commit}" >/dev/null 2>&1 \
     || { echo "secret-scan: cannot resolve range '$range' — fail-closed"; return 2; }
   # Backend dispatch. The range is already validated above, so both endpoints resolve. The regex
-  # path (default) falls through to the original logic below — byte-for-byte unchanged.
+  # path (default) falls through to the commit-by-commit scan below.
   case "${LEAN_SECRET_SCANNER:-regex}" in
     regex) : ;;
     gitleaks)   _secret_scan_gitleaks   "${range%%..*}" "${range##*..}"; return $? ;;
     trufflehog) _secret_scan_trufflehog "${range%%..*}" "${range##*..}"; return $? ;;
     *) echo "secret-scan: unknown LEAN_SECRET_SCANNER='${LEAN_SECRET_SCANNER}' (expected regex|gitleaks|trufflehog) — fail-closed"; return 2 ;;
   esac
+  # Regex backend: scan COMMIT-BY-COMMIT across the range, not the net two-endpoint diff (v2.17
+  # OBJ-1710). A secret added in commit A and removed in commit B nets to zero over BASE..HEAD, so the
+  # endpoint diff reported clean while `--pr` still pushed the commit that contains it. Iterating each
+  # commit's own diff (`<commit>^!`) catches the intermediate. This is still the prefix-matching regex —
+  # every commit is scanned, but prefix-less secrets are still missed; set LEAN_SECRET_SCANNER for real
+  # coverage (gitleaks/trufflehog already scan per-commit, above).
   local -a found=()
-  local f hits line
-  while IFS= read -r f; do
-    [ -z "$f" ] && continue
-    _secret_basename_match "$f" && found+=("  [filename] $f")
-  done < <(git diff --name-only "$range" 2>/dev/null)
-  hits=$(_secret_content_hits "$range")
+  local c f hits line commits ch
+  commits=$(git rev-list --reverse "$range" 2>/dev/null)
+  if [ -z "$commits" ]; then
+    # Empty range (e.g. BASE==HEAD, or an all-merge range): scan the net endpoint diff so it is never skipped.
+    while IFS= read -r f; do [ -z "$f" ] && continue; _secret_basename_match "$f" && found+=("  [filename] $f"); done < <(git diff --name-only "$range" 2>/dev/null)
+    hits=$(_secret_content_hits "$range")
+  else
+    hits=""
+    while IFS= read -r c; do
+      [ -z "$c" ] && continue
+      while IFS= read -r f; do [ -z "$f" ] && continue; _secret_basename_match "$f" && found+=("  [filename] $f (${c:0:12})"); done < <(git diff --name-only "${c}^!" 2>/dev/null)
+      ch=$(_secret_content_hits "${c}^!")
+      [ -n "$ch" ] && hits="${hits}${hits:+
+}${ch}"
+    done <<< "$commits"
+  fi
   if [ -n "$hits" ]; then
-    found+=("  [content] secret token(s) in range $range:")
+    found+=("  [content] secret token(s) in range $range (scanned commit-by-commit):")
     while IFS= read -r line; do [ -n "$line" ] && found+=("      $line"); done <<< "$hits"
   fi
   if [ "${#found[@]}" -gt 0 ]; then printf '%s\n' "${found[@]}"; return 1; fi

@@ -138,5 +138,18 @@ PATH="$STUBDIR:$PATH" LEAN_SECRET_SCANNER=gitleaks STUB_GITLEAKS_RC=2 secret_sca
 [ "$rc" -eq 2 ] && echo "  ✓ stub gitleaks error exit → fail-closed (2)" || { echo "  ✗ stub gitleaks error path rc=$rc (expected 2)"; FAILS=$((FAILS+1)); }
 
 echo ""
+echo "commit-by-commit (v2.17): a secret added then removed nets clean over BASE..HEAD but is caught"
+BASE_AR=$(git rev-parse HEAD)
+printf 'AKIAIOSFODNN7EXAMPLE\n' > ar_secret.txt; git add ar_secret.txt; git commit -q -m 'A: introduce a secret'
+git rm -q ar_secret.txt; git commit -q -m 'B: remove the secret'
+# Premise: the NET two-endpoint diff is clean — the file is absent at BASE and at HEAD, so the old
+# endpoint-only scan reported it clean while --pr still pushed commit A.
+NET=$(git diff --name-only "$BASE_AR..HEAD")
+[ -z "$NET" ] && echo "  ✓ net BASE..HEAD diff is empty (the add+remove cancels)" || { echo "  ✗ net diff not empty: $NET"; FAILS=$((FAILS+1)); }
+# The default (regex) scan now iterates commits, so it catches the secret in the intermediate commit A.
+( unset LEAN_SECRET_SCANNER; secret_scan_diff "$BASE_AR..HEAD" >/dev/null 2>&1; exit $? ); rc=$?
+[ "$rc" -eq 1 ] && echo "  ✓ commit-by-commit scan catches the add-then-remove secret (rc 1)" || { echo "  ✗ add-then-remove secret NOT caught (rc=$rc)"; FAILS=$((FAILS+1)); }
+
+echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All secret-scan fixture tests passed."; exit 0
 else echo "$FAILS fixture test(s) FAILED."; exit 1; fi
