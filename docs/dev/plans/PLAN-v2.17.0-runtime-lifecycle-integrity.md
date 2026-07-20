@@ -120,8 +120,8 @@ repo outside `$HOME`; symlinked installer path; unwritable destination.
 
 ## Context-budget target
 No new agent; no new always-loaded material. New logic is shell-side (scripts/libs loaded only when run).
-Baseline: agent-description total 1015/2000 B (evaluator 449 B — unchanged). CLAUDE.md/wrap.md unchanged
-in always-loaded size except necessary identity narration.
+Baseline: agent-description total 1215/2000 B (researcher 296 / planner 238 / executor 232 / evaluator
+449 — all byte-identical to v2.16.0). CLAUDE.md unchanged; evaluator/wrap edits are in BODIES.
 
 ## Rollback strategy
 Each fix is a self-contained commit revertable alone. The shared resolver (M3) is additive — tick keeps

@@ -8,6 +8,65 @@ uses [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [2.17.0] — 2026-07-20
+
+Runtime & lifecycle-integrity correction/hardening release — **not** a framework expansion, and not the
+release-audit experiment (`RELEASE_AUDIT` is deferred to v2.18). It makes one invariant hold end to end:
+the exact phase range independently reviewed = evidenced = scanned = ticked, and the completion transition
+is durably committed before any success or publication. No new agent, no new canonical artifact;
+`scripts/tick.sh` stays the sole completion authority and the human the sole publication authority. Always-
+loaded context is unchanged (agent descriptions byte-identical to v2.16.0, 1215/2000 B). Green on macOS
+bash 3.2 / BSD and Linux bash 5 / GNU / non-root.
+
+### Fixed — headless runtime integrity
+- **A nonzero-exit evaluator could still pass.** `autopilot.sh` only checked the watchdog band (`rc >= 124`),
+  so an evaluator that exited 1–123 with a stdout ending in `PASS` was recorded and ticked. It now fails
+  closed on any nonzero `EVAL_RC` before the verdict is parsed (mirrors the builder's own check).
+- **A failed completion commit could still publish.** The completion commit was `git commit … || true`
+  followed by an unconditional `RUN_RESULT="success"`. It now checks add+commit, asserts HEAD contains the
+  `docs/ROADMAP.md`+`docs/STATE.md` transition, and only then declares success; a failure keeps the branch
+  local, prints recovery, and exits nonzero.
+
+### Fixed — one phase identity, and grade/evidence binding
+- **Review and tick could judge different ranges.** The manual evaluator diffed `.claude/.phase-base` while
+  `tick.sh` preferred `.claude/.phase-anchor`. New `.claude/lib/_phase-range.sh` (+ read-only CLI
+  `scripts/phase-range.sh`) is the ONE precedence (`TICK_BASE` → `.phase-anchor` → `.phase-base`) with the
+  strict-ancestor + anchor base-integrity checks; `tick.sh` delegates to it, the evaluator resolves its
+  window from it, and headless `autopilot.sh` exports the trusted base as `TICK_BASE` for the evaluator too
+  (ADR-011).
+- **Grade/evidence were bound only to HEAD**, so at one commit a grade/evidence for phase X could tick phase
+  Y. `record-grade.sh` and `test-evidence.sh` now stamp the phase `heading`+`base` (evidence
+  `schema_version` 3); `tick.sh` refuses unless they match the phase and resolved base, verifies the
+  evidence `content_hash`, and drops `.tick-evidence.json` on a successful tick. Legacy v1/v2 evidence is
+  accepted with a deprecation warning (documented sunset).
+
+### Fixed — lifecycle: sync, milestone closure, install, portability
+- **Sync left retired files behind.** `sync.sh` now reconciles manifest entries the toolkit no longer ships:
+  report-first; `--prune` + a confirmation removes only an UNCHANGED retired file (never a modified one);
+  path-safety refuses absolute/`..`/symlink/out-of-root paths (ADR-012).
+- **Milestone closure was not transactional** and `--name` was unvalidated (a bare `--name` infinite-looped).
+  `close-milestone.sh` validates `--name` (path/`..`/control-char/empty → exit 2; missing value guarded) and
+  closes transactionally with byte-identical rollback on any failure.
+- **Install failures could return success.** `install.sh` resolves its real dir through a symlink, fails
+  nonzero on a zero/partial `--global-skills` copy, and surfaces `chmod` failures. The README manual-copy
+  loop uses `"${d%/}"` so BSD `cp -r` nests skills instead of flattening them.
+- **macOS watchdog** now probes perl for USABILITY (not mere presence) so a broken-but-present perl falls
+  through to `setsid`. The reported "breaks under `C.UTF-8`" premise was **contradicted** — the setpgrp/exec
+  one-liner is locale-insensitive (a bad locale is a non-fatal warning); a CI fixture proves it.
+
+### Fixed — security
+- **camelCase high-stakes paths were missed.** `_high-stakes.sh` tokenizes camelCase/PascalCase before
+  matching (`OAuthClient.ts`, `getUserSession.ts`, `secretManager.ts` now match), a correctness fix that
+  leaves the vocabulary unchanged; every consumer (tick, plan-review routing, autopilot, doctor) inherits it.
+- **A secret added then removed within a phase slipped the default push scan.** The default regex backend of
+  `_secret-scan.sh` now scans commit-by-commit, catching the intermediate commit; it remains a prefix-matcher
+  (not a scanner) — `SECURITY.md` says so honestly.
+
+### Changed — native requirement handoff, guarantees
+- The `roadmap` skill, evaluator and planner now present native `docs/SPEC.md` (`to-spec`) requirement
+  sources as first-class alongside external ones; the linter already resolved them. `docs/dev/AUTHORING.md`
+  gains the new deterministic-guarantee rows.
+
 ## [2.16.0] — 2026-07-19
 
 Correction and simplification release — not a framework expansion. It finishes the v2.15.0 cleanup

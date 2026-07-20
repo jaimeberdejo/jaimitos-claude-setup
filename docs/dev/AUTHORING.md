@@ -49,6 +49,15 @@ trust-focused toolkit quietly stops being trustworthy.
 | Debugging avoided a speculative-fix loop | **Model-dependent** — reviewed as evidence |
 | A new skill or agent was genuinely *justified* | **Model-dependent + mandatory human review** (control-plane change) |
 | Module architecture is proportionate; the architecture fits | **Model-dependent** |
+| A nonzero-exit evaluator process cannot produce a passing grade (headless) | **Deterministic** — `autopilot.sh` fails closed on `EVAL_RC != 0` before recording a grade (`test-autopilot-gates.sh`) |
+| A completion transition is durably committed before a run reports success / publishes | **Deterministic** — `autopilot.sh` checks add+commit and asserts HEAD contains ROADMAP/STATE (`test-autopilot-gates.sh`) |
+| The independent review, evidence, secret/high-stakes scan and tick judge the SAME `BASE..HEAD` window | **Deterministic** — one shared `_phase-range.sh` precedence (`test-phase-range.sh`); manual mode stays tamper-evident, not builder-proof — headless `TICK_BASE` is the trust-equivalent path |
+| A grade/evidence recorded for one phase cannot tick another phase at the same HEAD | **Deterministic** — `tick.sh` requires grade/evidence `heading`+`base` (evidence schema 3) to match the phase and resolved base (`test-tick.sh`) |
+| Evidence fields were not edited after they were written | **Deterministic (tamper-EVIDENT, not tamper-proof)** — `tick.sh` recomputes the schema-3 `content_hash` (`test-tick.sh`); a builder with arbitrary git can re-hash |
+| Milestone closure never leaves canonical state half-written | **Deterministic** — `close-milestone.sh` prepares+validates then applies with byte-identical rollback (`test-close-milestone.sh`) |
+| A retired managed file is removed only when it is a pristine toolkit copy, and only on `--prune` + confirmation | **Deterministic** — `sync.sh` reconciliation is report-first, opt-in, path-safety-checked (`test-sync.sh`); a modified/unknown path is never removed |
+| A secret committed then removed within a phase is still caught before push | **Deterministic (regex prefix-matcher, not a scanner)** — `_secret-scan.sh` scans commit-by-commit (`test-secret-scan.sh`); prefix-less secrets are still missed — set `LEAN_SECRET_SCANNER` for real coverage |
+| A requested global/symlinked install failure returns a nonzero exit | **Deterministic** — `install.sh` counts failures + resolves symlinks (`install-smoke.sh`) |
 
 **Never write a release note that implies a row in the bottom half is enforced.**
 
