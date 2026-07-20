@@ -216,5 +216,48 @@ rc=$(runclose "$REPO" --name v9)
   || fail "architecture notice blocked the close (rc=$rc)"
 
 echo ""
+echo "--name validation (v2.17): usage errors exit 2, a missing value cannot hang, unsafe labels refuse"
+# A watchdog-wrapped runner: a --name with no value used to infinite-loop on `shift 2`; SIGALRM (rc 142)
+# would flag a regression instead of hanging the whole suite. A clean usage refusal returns 2.
+run_to() { ( cd "$1" && shift && perl -e 'alarm shift; exec @ARGV' 5 bash scripts/close-milestone.sh "$@" ) >"$WORK/out" 2>&1; echo $?; }
+
+mkrepo mv1 "$DONE"; rc=$(run_to "$REPO" --name)
+{ [ "$rc" = 2 ] && grep -q 'requires a value' "$WORK/out"; } \
+  && pass "--name with no value → exit 2 (no infinite loop)" || fail "--name missing value mishandled (rc=$rc)"
+
+mkrepo mv2 "$DONE"; rc=$(runclose "$REPO" --name '   ')
+{ [ "$rc" = 2 ] && grep -q 'empty after trimming' "$WORK/out" && [ ! -d "$REPO/docs/archive" ]; } \
+  && pass "--name all-whitespace → exit 2, nothing archived" || fail "empty --name mishandled (rc=$rc)"
+
+mkrepo mv3 "$DONE"; rc=$(runclose "$REPO" --name 'a..b')
+{ [ "$rc" = 2 ] && grep -qi "not contain '..'" "$WORK/out" && [ ! -d "$REPO/docs/archive" ]; } \
+  && pass "--name with '..' → exit 2 (no traversal), nothing archived" || fail "traversal --name mishandled (rc=$rc)"
+
+mkrepo mv4 "$DONE"; rc=$(runclose "$REPO" --name 'a/b')
+{ [ "$rc" = 2 ] && grep -qi 'path separator' "$WORK/out"; } \
+  && pass "--name with a path separator → exit 2" || fail "path-sep --name mishandled (rc=$rc)"
+
+mkrepo mv5 "$DONE"; rc=$(runclose "$REPO" --bogus)
+[ "$rc" = 2 ] && pass "unknown argument → exit 2 (usage)" || fail "unknown arg did not exit 2 (rc=$rc)"
+
+echo ""
+echo "Transactional close (v2.17): a failure during apply restores ROADMAP + STATE byte-for-byte"
+# Inject an archive-move failure: make docs/archive a READ-ONLY directory so the mv into it fails
+# AFTER the backups + temp preparation. The transaction must roll back — restore ROADMAP and STATE
+# exactly, create no archive, exit non-zero.
+mkrepo mt1 "$DONE"
+R_BEFORE=$( { shasum -a 256 "$REPO/docs/ROADMAP.md" 2>/dev/null || sha256sum "$REPO/docs/ROADMAP.md"; } | cut -d' ' -f1)
+S_BEFORE=$( { shasum -a 256 "$REPO/docs/STATE.md"   2>/dev/null || sha256sum "$REPO/docs/STATE.md";   } | cut -d' ' -f1)
+mkdir "$REPO/docs/archive"; chmod 555 "$REPO/docs/archive"
+rc=$(runclose "$REPO" --name v1)
+R_AFTER=$( { shasum -a 256 "$REPO/docs/ROADMAP.md" 2>/dev/null || sha256sum "$REPO/docs/ROADMAP.md"; } | cut -d' ' -f1)
+S_AFTER=$( { shasum -a 256 "$REPO/docs/STATE.md"   2>/dev/null || sha256sum "$REPO/docs/STATE.md";   } | cut -d' ' -f1)
+chmod 755 "$REPO/docs/archive" 2>/dev/null || true
+archived_count=$(find "$REPO/docs/archive" -type f 2>/dev/null | wc -l | tr -d ' ')
+{ [ "$rc" = 1 ] && [ "$R_AFTER" = "$R_BEFORE" ] && [ "$S_AFTER" = "$S_BEFORE" ] && [ "$archived_count" = 0 ] && grep -q 'rolled back' "$WORK/out"; } \
+  && pass "archive-move failure → rolled back byte-for-byte, no archive, exit 1" \
+  || fail "transaction did not roll back cleanly (rc=$rc, R:$([ "$R_AFTER" = "$R_BEFORE" ] && echo ok || echo CHANGED) S:$([ "$S_AFTER" = "$S_BEFORE" ] && echo ok || echo CHANGED) archived=$archived_count)"
+
+echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All milestone closure tests passed."; exit 0
 else echo "$FAILS milestone test(s) FAILED."; echo "--- last output ---"; tail -n 15 "$WORK/out" 2>/dev/null; exit 1; fi

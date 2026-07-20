@@ -17,18 +17,36 @@ cd "$(git rev-parse --show-toplevel 2>/dev/null || echo .)" || exit 1
 ROADMAP="docs/ROADMAP.md"
 STATE="docs/STATE.md"
 
-NAME=""
+NAME=""; NAME_GIVEN=0
+# need_val: a flag that takes a value must have one — a bare `--name` at end of args used to run
+# `shift 2` on a single positional, a no-op under `set -uo pipefail` (no set -e) that left $1 == --name
+# and spun the while-loop forever. Guard it (same fix trace-requirements.sh carries).
+need_val() { [ "$2" -ge 2 ] || { echo "close-milestone: $1 requires a value" >&2; exit 2; }; }
 while [ $# -gt 0 ]; do
   case "$1" in
-    --name) NAME="${2:-}"; shift 2 ;;
+    --name) need_val "$1" "$#"; NAME="$2"; NAME_GIVEN=1; shift 2 ;;
     -h|--help)
       echo "usage: close-milestone.sh [--name <label>]"
       echo "  Archive a COMPLETED roadmap and scaffold the next. Refuses while any open item or an"
-      echo "  unresolved NEXT_FINDINGS.md remains — no bypass by design."
+      echo "  unresolved NEXT_FINDINGS.md remains — no bypass by design. --name must be a safe archive"
+      echo "  label (no path separator, no '..', no control chars); unknown args exit 2."
       exit 0 ;;
-    *) echo "close-milestone: unknown argument '$1'" >&2; exit 1 ;;
+    *) echo "close-milestone: unknown argument '$1'" >&2; exit 2 ;;
   esac
 done
+
+# Validate an explicit --name: it becomes the archive filename docs/archive/ROADMAP-<name>.md, so a path
+# separator, a `..` traversal, control chars, or an all-whitespace value must be refused (exit 2) rather
+# than flow into a path. A DERIVED label (VERSION/tag/date, below) is already safe.
+if [ "$NAME_GIVEN" = 1 ]; then
+  NAME=$(printf '%s' "$NAME" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')   # trim
+  [ -n "$NAME" ] || { echo "close-milestone: --name is empty after trimming whitespace — give a real label" >&2; exit 2; }
+  case "$NAME" in
+    */*|*\\*) echo "close-milestone: --name must not contain a path separator: '$NAME'" >&2; exit 2 ;;
+    *..*)     echo "close-milestone: --name must not contain '..': '$NAME'" >&2; exit 2 ;;
+  esac
+  printf '%s' "$NAME" | LC_ALL=C grep -q '[[:cntrl:]]' && { echo "close-milestone: --name must not contain control characters" >&2; exit 2; }
+fi
 
 refuse() { echo "close-milestone: REFUSED — $1" >&2; exit 1; }
 
@@ -125,13 +143,34 @@ if [ -z "$NAME" ]; then
 fi
 [ -z "$NAME" ] && NAME=$(date -u +%Y%m%d 2>/dev/null || echo milestone)
 
-mkdir -p docs/archive
+mkdir -p docs/archive || refuse "could not create docs/archive/."
 DEST="docs/archive/ROADMAP-$NAME.md"
 # Never clobber existing history — suffix if a same-named archive already exists.
 [ -e "$DEST" ] && DEST="docs/archive/ROADMAP-$NAME-$(date -u +%H%M%S 2>/dev/null || echo dup).md"
-git mv "$ROADMAP" "$DEST" 2>/dev/null || mv "$ROADMAP" "$DEST"
 
-cat > "$ROADMAP" <<'MD'
+# --- transactional close (v2.17 OBJ-1706) --------------------------------------------------------
+# Archive-move + roadmap-recreate + STATE-reset were three separate LIVE in-place mutations with no
+# rollback contract: a failure after the move left the roadmap archived with no fresh roadmap, and a
+# failure in the STATE rewrite left ROADMAP already replaced. Now the fresh roadmap + reset STATE are
+# built in temp files and validated FIRST, the originals are backed up byte-for-byte, and any failure
+# during apply restores ROADMAP + STATE exactly and removes the half-written archive. (Plain `mv` — git
+# detects the rename on the human's `git add -A`; this keeps rollback a simple file restore.)
+R_BAK=$(mktemp 2>/dev/null || echo "$ROADMAP.close-bak.$$"); cp "$ROADMAP" "$R_BAK" || refuse "could not back up $ROADMAP (nothing changed)."
+S_BAK=""; if [ -f "$STATE" ]; then S_BAK=$(mktemp 2>/dev/null || echo "$STATE.close-bak.$$"); cp "$STATE" "$S_BAK" || refuse "could not back up $STATE (nothing changed)."; fi
+NEW_R=$(mktemp 2>/dev/null || echo "$ROADMAP.close-new.$$"); NEW_S=""
+
+cm_cleanup()  { rm -f "$R_BAK" "$NEW_R" 2>/dev/null; [ -n "$S_BAK" ] && rm -f "$S_BAK" 2>/dev/null; [ -n "$NEW_S" ] && rm -f "$NEW_S" 2>/dev/null; return 0; }
+cm_rollback() {
+  cp "$R_BAK" "$ROADMAP" 2>/dev/null || true
+  [ -n "$S_BAK" ] && { cp "$S_BAK" "$STATE" 2>/dev/null || true; }
+  [ -e "$DEST" ] && rm -f "$DEST" 2>/dev/null || true
+  cm_cleanup
+  echo "close-milestone: ⛔ $1 — rolled back (ROADMAP + STATE restored byte-for-byte, no archive created)." >&2
+  exit 1
+}
+
+# Prepare the fresh roadmap into a temp.
+cat > "$NEW_R" <<'MD'
 # Roadmap
 
 <!--
@@ -141,9 +180,11 @@ an observable/machine-checkable condition, and a "Mode: loopable | supervised" l
 See docs/archive/ for the previous milestone's phases as examples.
 -->
 MD
+[ -s "$NEW_R" ] || cm_rollback "fresh roadmap generation produced empty output"
 
-# Reset the STATE auto-block (if present) to point at authoring the next scope.
-if [ -f "$STATE" ] && grep -qF '<!-- lean:auto:begin -->' "$STATE"; then
+# Prepare the reset STATE into a temp (only when it carries the auto-block).
+if [ -n "$S_BAK" ] && grep -qF '<!-- lean:auto:begin -->' "$STATE"; then
+  NEW_S=$(mktemp 2>/dev/null || echo "$STATE.close-new.$$")
   awk -v d="$NAME" '
     /<!-- lean:auto:begin -->/ {
       print
@@ -154,7 +195,15 @@ if [ -f "$STATE" ] && grep -qF '<!-- lean:auto:begin -->' "$STATE"; then
     }
     /<!-- lean:auto:end -->/ { print; skip=0; next }
     !skip { print }
-  ' "$STATE" > "$STATE.tmp" && mv "$STATE.tmp" "$STATE"
+  ' "$STATE" > "$NEW_S" || cm_rollback "STATE regeneration failed"
+  [ -s "$NEW_S" ] || cm_rollback "STATE regeneration produced empty output"
 fi
+
+# Apply: archive-move → recreate → reset. Any failure restores both files and removes the archive.
+mv "$ROADMAP" "$DEST"      || cm_rollback "could not archive $ROADMAP → $DEST"
+cp "$NEW_R" "$ROADMAP"     || cm_rollback "could not write the fresh $ROADMAP"
+if [ -n "$NEW_S" ]; then cp "$NEW_S" "$STATE" || cm_rollback "could not write the reset $STATE"; fi
+{ [ -f "$DEST" ] && [ -f "$ROADMAP" ]; } || cm_rollback "post-close verification failed (archive or fresh roadmap missing)"
+cm_cleanup
 
 echo "close-milestone: ✓ archived $ROADMAP → $DEST; fresh roadmap created. Author the next scope (roadmap skill)."
