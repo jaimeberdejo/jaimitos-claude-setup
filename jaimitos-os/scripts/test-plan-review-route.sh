@@ -52,6 +52,18 @@ route --plan docs/plans/p.md
   && pass "TINY + high-stakes → FULL + supervised + exit 10" || fail "TINY high-stakes not escalated (rc=$RC): $OUT"
 
 echo ""
+echo "TINY + camelCase high-stakes path → FULL + Supervised (v2.17: the shared matcher tokenizes"
+echo "camelCase, so plan-review routing and tick.sh reach the IDENTICAL decision — no router-local gap)"
+mkproj TINY "src/OAuthClient.ts"
+# precondition: the SAME shared _high-stakes.sh the plan router and tick.sh both call matches the
+# camelCase path (before v2.17 it was missed identically at both — now caught identically at both).
+if bash -c '. .claude/lib/_high-stakes.sh; high_stakes_match "src/OAuthClient.ts" >/dev/null 2>&1'; then
+  pass "precondition: camelCase src/OAuthClient.ts matches the shared HIGH_STAKES_RE"; else fail "PRECONDITION broken: camelCase path not high-stakes"; fi
+route --plan docs/plans/p.md
+{ [ "$RC" -eq 10 ] && has "ROUTE=FULL_PLAN_CHECK" && has "Supervised: YES"; } \
+  && pass "TINY + camelCase high-stakes → FULL + supervised (plan-time == tick-time)" || fail "camelCase high-stakes not escalated at plan time (rc=$RC): $OUT"
+
+echo ""
 echo "Clear low-risk STANDARD → DETERMINISTIC_ONLY, no evaluator dispatch (exit 0)"
 mkproj STANDARD "src/widgets/list.ts"
 if bash -c '. .claude/lib/_high-stakes.sh; high_stakes_match "src/widgets/list.ts" >/dev/null 2>&1'; then

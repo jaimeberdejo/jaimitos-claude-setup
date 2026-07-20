@@ -65,6 +65,45 @@ for p in \
 do should_ignore "$p"; done
 
 echo ""
+echo "camelCase / PascalCase — the anchored keywords must fire on an intra-segment boundary the raw"
+echo "path hides (v2.17: high_stakes_match tokenizes camelCase before matching). These MISSED before:"
+for p in \
+  "src/OAuthClient.ts" \
+  "app/getUserSession.ts" \
+  "services/UserLogin.go" \
+  "core/getWallet.ts" \
+  "src/secretManager.ts" \
+  "app/paymentHandler.ts" \
+  "services/authService.ts" \
+  "db/AccountLedger.kt"
+do should_match "$p"; done
+
+echo ""
+echo "camelCase over-match — DELIBERATE matches decided explicitly (fail-safe generosity; a benign"
+echo "hit only forces supervised review, it is never a false PASS): the auth[a-z0-9_-]* family also"
+echo "catches pure-English author/authority, and the loose substrings (payment/migrat) fire anywhere:"
+for p in \
+  "src/author.py" \
+  "lib/authority.py" \
+  "src/authorized-copy.js" \
+  "app/paymentStyle.ts" \
+  "docs/migrationGuide.md"
+do should_match "$p"; done
+
+echo ""
+echo "camelCase false-positive canaries — must STAY clean (the boundary is real, not naive substring):"
+echo "  coauthor (auth mid-word, not a segment/camel boundary), tokenizer, secretary, sessional,"
+echo "  accountANT, and a benign PascalCase compound — none is a high-stakes segment:"
+for p in \
+  "src/coauthor.py" \
+  "util/tokenizer.py" \
+  "people/secretary.py" \
+  "src/sessional.py" \
+  "src/getAccountantList.ts" \
+  "components/UserButton.tsx"
+do should_ignore "$p"; done
+
+echo ""
 echo "Fail-safe: an empty/unset HIGH_STAKES_RE must treat ALL paths as high-stakes (never fail open):"
 (
   unset HIGH_STAKES_RE

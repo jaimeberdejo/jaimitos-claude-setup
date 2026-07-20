@@ -10,12 +10,14 @@
 # YOUR project's sensitive paths.
 #
 # Segment keywords match as a path SEGMENT, bounded by `/`, a filename separator
-# (`.`/`_`/`-`), or end — so they fire on directories AND single-file modules alike
-# (`auth/x`, `auth.py`, `session-store.ts`). `auth[a-z0-9_-]*` covers auth / authn /
-# authentication / oauth2 / auth-service. The loose substrings (delete/email/deploy/…)
-# match ANYWHERE in the path. The gate fails SAFE when over-broad (a false hit just
-# forces supervised review), so this list is intentionally generous — better to stop
-# on a benign `discharge.py` than to miss a real `refund` path. Edit it for YOUR repo.
+# (`.`/`_`/`-`), a camelCase boundary, or end — so they fire on directories, single-file
+# modules AND camelCase/PascalCase names alike (`auth/x`, `auth.py`, `session-store.ts`,
+# `OAuthClient.ts`, `getUserSession.ts`). high_stakes_match() tokenizes camelCase before
+# matching (see there); `auth[a-z0-9_-]*` covers auth / authn / authentication / oauth2 /
+# auth-service. The loose substrings (delete/email/deploy/…) match ANYWHERE in the path.
+# The gate fails SAFE when over-broad (a false hit just forces supervised review), so this
+# list is intentionally generous — better to stop on a benign `discharge.py` than to miss a
+# real `refund` path (`author.py`/`authority.py` match by design). Edit it for YOUR repo.
 HIGH_STAKES_RE='(^|/)(oauth[0-9]*|auth[a-z0-9_-]*|login|sessions?|accounts?|payments?|billing|transactions?|compliance|suitability|secrets?|kyc|wallet|ledger)([/._-]|$)|migrat|money|payment|credential|delete|deletion|destroy|email|deploy|refund|withdraw|charge|webhook'
 
 # --- path-allowlist escape for high_stakes_match() -----------------------------
@@ -92,8 +94,21 @@ high_stakes_match() {
     echo "high-stakes:   fix the regex in .claude/lib/_high-stakes.sh; the gate is disabled until it compiles." >&2
     return 2
   fi
-  local matched line
-  matched=$(printf '%s\n' "$1" | grep -Ei "$HIGH_STAKES_RE" 2>/dev/null)
+  local matched line norm
+  # Tokenize camelCase / PascalCase so a SEGMENT keyword (anchored on /._- or end)
+  # also fires at an intra-segment boundary the raw path hides — OAuthClient,
+  # getUserSession, secretManager. We insert a '/' at lower/digit→Upper and
+  # ACRONYM→Word transitions (OAuthClient → O/Auth/Client), match the NORMALIZED
+  # form, but emit the ORIGINAL path so the allowlist and every caller still see the
+  # real path. This is purely additive: the regex string is unchanged, the loose
+  # substrings (delete/email/deploy/…) already matched anywhere, and a term that was
+  # not a segment boundary before (accountANT, sessionAL) is still not one after.
+  # The regex compiled above, so grep here only returns 0/1 (never the rc-2 error).
+  matched=$(printf '%s\n' "$1" | while IFS= read -r line || [ -n "$line" ]; do
+    [ -n "$line" ] || continue
+    norm=$(printf '%s' "$line" | sed -E 's|([a-z0-9])([A-Z])|\1/\2|g; s|([A-Z]+)([A-Z][a-z])|\1/\2|g')
+    printf '%s\n' "$norm" | grep -Eiq "$HIGH_STAKES_RE" 2>/dev/null && printf '%s\n' "$line"
+  done)
   if [ -n "$matched" ]; then
     matched=$(while IFS= read -r line; do
       _high_stakes_allowlisted "$line" || printf '%s\n' "$line"
