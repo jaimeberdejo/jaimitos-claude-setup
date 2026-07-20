@@ -130,7 +130,15 @@ Three independent reviews (subagents) ran against `v2.16.0..HEAD`.
 - **ACCEPTED LIMIT / honest residual:** manual mode stays tamper-evident, not builder-proof (headless
   `TICK_BASE` is the trust-equivalent path); legacy v1/v2 evidence skips the evidence-side binding with
   a warning (the grade binding still blocks reuse). Both were confirmed by Review B as correctly bounded.
-- **Review A (correctness):** _to be appended._
+- **Review A (correctness):** every milestone verdict CORRECT at HEAD; no open correctness defect. Review
+  A **independently** found the same M9 fail-open regression (naming `WebHookHandler.ts`/`stripeWebHook.ts`
+  in addition to the refund/delete/auth casings) and confirmed `17bd7f2` fixes it, re-verifying the union
+  at HEAD. Residuals it accepts as-is: the null-`content_hash` skip (advisory; headless evidence is
+  integrity-checked + regenerated), the M1 break-before-`eval_restore` ordering (harmless — run stops, no
+  publish), and no circular-symlink guard in `resolve_dir` (pathological). Confirmed no bash-3.2/BSD
+  violations; ran the affected suite under bash 3.2.57.
+- Two independent reviews (A + B) caught the M9 regression before release — the single most important
+  finding, now fixed and double-verified.
 - Reviews B and C independently confirmed: no duplicate canonical state (the resolver REPLACED tick's
   inline copy), no field without a consumer, no guarantee exceeding enforcement, no v2.18 leakage, no
   always-loaded growth, every change maps to an objective.
@@ -139,13 +147,35 @@ Three independent reviews (subagents) ran against `v2.16.0..HEAD`.
 `VERSION DECISION: v2.17.0` — a minor release: new user-visible behaviour (a shared resolver, evidence
 schema 3, a `sync --prune` flag, install/watchdog fixes, matcher + secret-scan hardening). Not a patch.
 
-## 15. Verification (final-commit-bound)
-_Filled after the release-doc commit; see the runtime-evidence follow-up._ Pre-commit evidence:
-- macOS **bash 3.2.57 / BSD**: full guard suite green (`run-guard-tests.sh`).
-- Linux **bash 5.1.16 / GNU / non-root (uid 1000)** container: full guard suite green.
-- `install-smoke.sh` PASS · `test-docs-invariants.sh` green · `test-docs.sh` green ·
-  shellcheck `-S warning -e SC1090,SC1091` exit 0 · actionlint exit 0 · `bash -n` over all `*.sh` OK.
+## 15. Verification (bound to release commit `4f159de`)
+All of the following ran on the clean tree at `4f159de` (this report's own commit is docs-only on top, so
+the behavioural evidence holds for the tip):
+- macOS **bash 3.2.57 / BSD**: `run-guard-tests.sh` → **All guard tests passed** (28 suites, exit 0).
+- Linux **bash 5.1.16(1) / GNU / non-root (uid 1000)** container: `run-guard-tests.sh` → **All guard
+  tests passed** (exit 0).
+- `.github/scripts/install-smoke.sh` → **PASS** (incl. symlinked installer + failing global-skills).
+- `release-check.sh --prepare` → 0 errors (1 grandfathered-tag warning), VERSION 2.17.0 == newest
+  CHANGELOG, clean tree, `v2.17.0` absent.
+- `shellcheck -S warning -e SC1090,SC1091` over install + scaffold scripts/hooks/libs/sandbox → **exit 0**.
+- `actionlint` on both workflows → **exit 0**.
+- `bash -n` over every `*.sh` (excl. `.git`/worktrees) → **OK**.
+- Focused mutations proven non-vacuous (§11). First-run failures encountered and fixed, not hidden:
+  `test-start-phase` M4-binding gap and the shared-lib count (both caught by the full suite); the M9
+  camelCase union regression (caught by two independent reviews). All re-verified green.
 
 ## 16. Release recommendation
-See the final line after the runtime-evidence follow-up is recorded and `release-check --prepare` is run
-on the clean tagged tree.
+
+Architecture: four permanent agents; no `RELEASE_AUDIT`; `tick.sh` sole completion authority; human sole
+publication authority; no duplicate canonical state. Safety: the invariant holds — nonzero evaluator exit
+cannot pass, a failed completion commit cannot publish, review/evidence/scan/tick share one range,
+same-HEAD cross-phase reuse is refused, retired-file removal is opt-in+confirmed, closure rolls back
+byte-for-byte, the high-stakes union restored the coverage the mid-branch regression dropped, and the
+push scan is commit-by-commit. Proportionality/leanness confirmed by independent review; zero always-loaded
+growth. Verification is complete on the exact commit across both platforms.
+
+```
+RELEASE VERDICT: READY TO TAG
+```
+
+Tag `v2.17.0` on the release commit only with explicit operator authorization. No push, tag, PR, merge or
+publish has been performed.
