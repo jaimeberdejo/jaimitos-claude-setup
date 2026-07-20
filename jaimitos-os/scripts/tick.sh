@@ -234,62 +234,24 @@ esac
 # (finding H1). The TICK_BASE path is safe because the orchestrator derives the base OUTSIDE the
 # builder; the manual .phase-base path is human-reviewed, not builder-proof, until scripts/start-phase.sh
 # anchors it (planned). Do NOT read this comment as "a forged file cannot narrow the scan" — it can.
-ANCHOR_USED=0
-if [ -n "${TICK_BASE+set}" ]; then
-  BASE="$TICK_BASE"
-  BASE_SRC="TICK_BASE env (orchestrator-trusted)"
-  [ -n "$BASE" ] || refuse "TICK_BASE is set but empty — a trusted base must be a real commit (fail-closed)"
-elif [ -f .claude/.phase-anchor ]; then
-  ANCHOR_USED=1
-  # Manual mode, NEW mechanism (H1): prefer the TRACKED, tamper-evident anchor authored by
-  # scripts/start-phase.sh over the gitignored, builder-writable .phase-base. The anchor's base lives
-  # in committed git history, so advancing it is a VISIBLE commit inside the judged range — not the
-  # silent ignored-file rewrite the old .phase-base allowed. (Still not builder-PROOF — that needs the
-  # orchestrator's out-of-builder shell, i.e. headless TICK_BASE — but it is tamper-evident + reviewed.)
-  BASE=$(grep -E '^base=' .claude/.phase-anchor 2>/dev/null | head -1 | cut -d= -f2-)
-  BASE_SRC=".claude/.phase-anchor (start-phase.sh)"
-  [ -n "$BASE" ] || refuse "no base= in .claude/.phase-anchor — re-run scripts/start-phase.sh (fail-closed)"
-else
-  BASE=$(cat .claude/.phase-base 2>/dev/null || true)
-  BASE_SRC=".claude/.phase-base"
-  [ -n "$BASE" ] || refuse "no phase start recorded — run scripts/start-phase.sh first (fail-closed)"
+# Resolve the trusted phase window via the SHARED resolver (v2.17 OBJ-1703). The precedence
+# (TICK_BASE → .claude/.phase-anchor → .claude/.phase-base), the strict-ancestor guard, and the anchor
+# base-integrity check now live ONCE in .claude/lib/_phase-range.sh — the SAME resolver the manual
+# evaluator, record-grade, test-evidence and /wrap use, so every consumer judges the identical range.
+[ -f .claude/lib/_phase-range.sh ] && . .claude/lib/_phase-range.sh 2>/dev/null || true
+command -v resolve_phase_range >/dev/null 2>&1 || refuse "phase-range resolver unavailable — fail-closed"
+resolve_phase_range "$heading"; pr_rc=$?
+if [ "$pr_rc" = 3 ]; then
+  # Anchor base-integrity narrowing → supervised review (exit 3, same severity as a high-stakes hit).
+  echo "tick: ⛔ $PR_ERR" >&2
+  echo "tick:    This is how a narrowed scan window looks. NOT ticking (supervised review required)." >&2
+  exit 3
 fi
-# Strict-ancestor guard (ALL sources): resolve to a real commit, require it is NOT HEAD (which would
-# make BASE..HEAD empty) and IS a genuine ancestor of HEAD (not unrelated history). Any failure is
-# fail-closed — a forged base can neither narrow the scan to nothing nor point it at the wrong commits.
-BASE_SHA=$(git rev-parse --verify --quiet "${BASE}^{commit}" 2>/dev/null || true)
-[ -n "$BASE_SHA" ] || refuse "phase base ($BASE_SRC = '$BASE') is not a resolvable commit (fail-closed)"
-[ "$BASE_SHA" != "$HEAD" ] || refuse "phase base ($BASE_SRC) equals HEAD — the scan window would be empty (fail-closed)"
-git merge-base --is-ancestor "$BASE_SHA" "$HEAD" 2>/dev/null \
-  || refuse "phase base ($BASE_SRC = '$BASE') is not an ancestor of HEAD (fail-closed)"
-RANGE="${BASE_SHA}..HEAD"
+[ "$pr_rc" = 0 ] || refuse "$PR_ERR"
+BASE_SHA="$PR_BASE_SHA"; BASE_SRC="$PR_SOURCE"; ANCHOR_USED="$PR_ANCHOR_USED"; RANGE="$PR_RANGE"
 # Print the exact judged range (C-C): in manual mode the human on the loop is the trusted reviewer, so
 # make the window they are vouching for explicit rather than implicit.
 echo "tick: judging range ${BASE_SHA:0:12}..${HEAD:0:12}  (base source: $BASE_SRC)" >&2
-
-# --- anchor base-integrity (F3b / audit I1) ---
-# The strict-ancestor guard above stops an EMPTY or unrelated base, but not NARROWING: a builder could
-# advance the anchor's base= to a later ancestor and commit it (visible, but the old code still ticked).
-# The anchor is authored by scripts/start-phase.sh as a commit whose PARENT is exactly the recorded
-# base. So require: the commit that LAST modified .claude/.phase-anchor has base= as its first parent.
-# A naive base rewrite ('base=<later ancestor>' + an ordinary commit) then fails closed — that commit's
-# parent is the previous HEAD, not the new base. HONEST residual (documented): a builder that runs
-# arbitrary git can still `reset --hard` + re-anchor to reconstruct history; no local, crypto-free check
-# prevents that — which is exactly why HEADLESS derives the base OUTSIDE the builder (TICK_BASE). This
-# raises the manual bar from tamper-EVIDENT to "the naive narrowing is REFUSED".
-if [ "$ANCHOR_USED" = 1 ]; then
-  a_commit=$(git log -1 --format=%H -- .claude/.phase-anchor 2>/dev/null || true)
-  if [ -n "$a_commit" ]; then
-    a_parent=$(git rev-parse --verify --quiet "${a_commit}^" 2>/dev/null || true)
-    if [ -n "$a_parent" ] && [ "$a_parent" != "$BASE_SHA" ]; then
-      echo "tick: ⛔ .claude/.phase-anchor base does not match the commit that set it —" >&2
-      echo "tick:    anchor base=${BASE_SHA:0:12} but the anchor-setting commit ${a_commit:0:12} has parent ${a_parent:0:12}." >&2
-      echo "tick:    This is how a narrowed scan window looks (the base was advanced). Re-run scripts/start-phase.sh" >&2
-      echo "tick:    from the true phase start on a clean tree, or review the range manually. NOT ticking." >&2
-      exit 3
-    fi
-  fi
-fi
 
 [ -f .claude/lib/_secret-scan.sh ] && . .claude/lib/_secret-scan.sh 2>/dev/null || true
 [ -f .claude/lib/_high-stakes.sh ] && . .claude/lib/_high-stakes.sh 2>/dev/null || true

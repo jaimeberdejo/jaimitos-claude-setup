@@ -40,6 +40,7 @@ TESTS=(
   test-evidence-schema.sh
   test-roadmap-lib.sh
   test-start-phase.sh
+  test-phase-range.sh
   test-docs.sh
   test-docs-invariants.sh
   test-skills.sh

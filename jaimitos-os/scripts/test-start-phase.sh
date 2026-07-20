@@ -21,7 +21,7 @@ trap 'rm -rf "$WORK" 2>/dev/null' EXIT
 mkrepo() {
   REPO="$WORK/$1"; rm -rf "$REPO"; mkdir -p "$REPO/.claude/lib" "$REPO/scripts" "$REPO/docs"
   cp "$SP" "$REPO/scripts/start-phase.sh"; cp "$TICK" "$REPO/scripts/tick.sh"
-  for l in _roadmap _test-cmd _secret-scan _high-stakes; do cp "$SCAFFOLD/.claude/lib/$l.sh" "$REPO/.claude/lib/"; done
+  for l in _roadmap _test-cmd _secret-scan _high-stakes _phase-range; do cp "$SCAFFOLD/.claude/lib/$l.sh" "$REPO/.claude/lib/"; done
   printf '## Phase 1 — Work\n\n- [ ] do the work\nDone when: x\nMode: loopable\n' > "$REPO/docs/ROADMAP.md"
   printf 'next: work\n' > "$REPO/docs/STATE.md"
   printf '.claude/.phase-base\n.claude/.phase-grade\n.claude/.tick-evidence.json\nNEXT_FINDINGS.md\n' > "$REPO/.gitignore"

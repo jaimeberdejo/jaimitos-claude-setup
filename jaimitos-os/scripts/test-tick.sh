@@ -37,6 +37,7 @@ mkrepo() {
   cp "$HS_LIB" "$REPO/.claude/lib/_high-stakes.sh"
   cp "$SS_LIB" "$REPO/.claude/lib/_secret-scan.sh"
   cp "$SCAFFOLD/.claude/lib/_roadmap.sh" "$REPO/.claude/lib/_roadmap.sh"
+  cp "$SCAFFOLD/.claude/lib/_phase-range.sh" "$REPO/.claude/lib/_phase-range.sh"
   printf '## Phase 1 — Work\n\n- [ ] do the work\n' > "$REPO/docs/ROADMAP.md"
   printf 'next: work\n' > "$REPO/docs/STATE.md"
   cat > "$REPO/.gitignore" <<'GI'
@@ -192,7 +193,7 @@ good_grade t9e; good_evidence t9e; rc=$(runtick "$REPO")
 # diff) must still suppress a high-stakes path changed in the phase → exit 0 ticks. Proves the guard
 # fires ONLY on an in-phase gate-config change and does not break legitimate pre-existing allowlists.
 REPO="$WORK/t9f"; rm -rf "$REPO"; mkdir -p "$REPO/.claude/lib" "$REPO/scripts" "$REPO/docs"
-cp "$TICK" "$REPO/scripts/tick.sh"; cp "$HS_LIB" "$REPO/.claude/lib/_high-stakes.sh"; cp "$SS_LIB" "$REPO/.claude/lib/_secret-scan.sh"; cp "$SCAFFOLD/.claude/lib/_roadmap.sh" "$REPO/.claude/lib/_roadmap.sh"
+cp "$TICK" "$REPO/scripts/tick.sh"; cp "$HS_LIB" "$REPO/.claude/lib/_high-stakes.sh"; cp "$SS_LIB" "$REPO/.claude/lib/_secret-scan.sh"; cp "$SCAFFOLD/.claude/lib/_roadmap.sh" "$REPO/.claude/lib/_roadmap.sh"; cp "$SCAFFOLD/.claude/lib/_phase-range.sh" "$REPO/.claude/lib/_phase-range.sh"
 printf '## Phase 1 — Work\n\n- [ ] do the work\n' > "$REPO/docs/ROADMAP.md"
 printf 'next: work\n' > "$REPO/docs/STATE.md"
 printf 'auth/login.py: reviewed at init, pre-existing entry\n' > "$REPO/.claude/high-stakes-path-allowlist"
@@ -484,7 +485,7 @@ PASS" ) >/dev/null 2>&1; grc=$?
 # tick reaches the base check (they're verified first); the refusal must name "ancestor" so this only
 # passes when THAT guard fires (dropping the guard lets tick scan an arbitrary B..C range and tick → red).
 REPO="$WORK/t15"; rm -rf "$REPO"; mkdir -p "$REPO/.claude/lib" "$REPO/scripts" "$REPO/docs"
-cp "$TICK" "$REPO/scripts/tick.sh"; cp "$HS_LIB" "$REPO/.claude/lib/_high-stakes.sh"; cp "$SS_LIB" "$REPO/.claude/lib/_secret-scan.sh"; cp "$SCAFFOLD/.claude/lib/_roadmap.sh" "$REPO/.claude/lib/_roadmap.sh"
+cp "$TICK" "$REPO/scripts/tick.sh"; cp "$HS_LIB" "$REPO/.claude/lib/_high-stakes.sh"; cp "$SS_LIB" "$REPO/.claude/lib/_secret-scan.sh"; cp "$SCAFFOLD/.claude/lib/_roadmap.sh" "$REPO/.claude/lib/_roadmap.sh"; cp "$SCAFFOLD/.claude/lib/_phase-range.sh" "$REPO/.claude/lib/_phase-range.sh"
 printf '## Phase 1 — Work\n\n- [ ] do the work\n' > "$REPO/docs/ROADMAP.md"
 printf 'next: work\n' > "$REPO/docs/STATE.md"
 printf '.claude/.phase-base\n.claude/.phase-grade\n.claude/.tick-evidence.json\nNEXT_FINDINGS.md\n' > "$REPO/.gitignore"

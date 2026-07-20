@@ -61,14 +61,17 @@ Plausibility is not correctness. "It looks right" is not a pass.
 ## Groundwork (before either axis)
 1. Read docs/STATE.md and docs/ROADMAP.md to find the active task and its
    "Done when:" line.
-2. Determine the full scope of the phase's changes. The builder records the phase
-   start ref in `.claude/.phase-base`. Use it: `git diff "$(cat .claude/.phase-base)"..HEAD`.
-   Do NOT use `git diff HEAD~1` — the builder commits after every task, so HEAD~1
-   shows only the last task, not the whole phase. If `.claude/.phase-base` is missing,
-   fall back to the last clearly-pre-phase commit and say which ref you used.
-   (Under headless `scripts/autopilot.sh` this file is authoritative and trustworthy: the
-   orchestrator OVERWRITES `.claude/.phase-base` with the base it derived in its own shell
-   before you run, so a builder cannot forge it to shrink the diff you review.)
+2. Determine the full scope of the phase's changes from the SHARED phase-range resolver —
+   the SAME window `scripts/tick.sh` will scan, so your review and the completion gate can
+   never judge different ranges (v2.17 OBJ-1703). Run `bash scripts/phase-range.sh` first
+   (it prints Phase / Base / Head / Range / Source); if it errors — no phase start recorded,
+   an unresolvable base, or a narrowed window — say which and STOP, do NOT guess a range.
+   Otherwise diff its Base..Head: `git diff "$(bash scripts/phase-range.sh --base)"..HEAD`.
+   Do NOT use `git diff HEAD~1` — the builder commits after every task, so HEAD~1 shows only
+   the last task, not the whole phase. The resolver uses one precedence for every consumer:
+   the headless orchestrator-trusted `TICK_BASE` (autopilot exports the base it derived in
+   its own shell, so a builder cannot forge it) → the tracked, tamper-evident
+   `.claude/.phase-anchor` → `.claude/.phase-base`; it fails closed.
 3. Run the verification commands yourself: the test suite, typecheck, lint.
    Do not assume they pass — run them and read the exit status. If a
    `test-results.json` exists (written by the test-gate hook), treat it as a hint
@@ -90,7 +93,7 @@ implement the wrong thing, or do exactly what was asked in a way you'd block a m
 - **Partial behavior** — the happy path landed; the edge cases the criterion exists for did not.
 - **Unrequested behavior / scope drift** — work nobody asked for is a finding, not a bonus.
 - **Criteria integrity.** Diff the acceptance docs over the phase:
-  `git diff "$(cat .claude/.phase-base)"..HEAD -- docs/ROADMAP.md docs/STATE.md`.
+  `git diff "$(bash scripts/phase-range.sh --base)"..HEAD -- docs/ROADMAP.md docs/STATE.md`.
   If the active phase's "Done when:" line(s) or the phase heading were CHANGED during the phase,
   that is an **automatic NEEDS_WORK** — the builder must not edit the bar it is graded against.
   Grade against the ORIGINAL "Done when:" from the phase base, not the current text. Tightening,
@@ -106,7 +109,7 @@ implement the wrong thing, or do exactly what was asked in a way you'd block a m
   phase actually claims; do not import the source's every requirement, and treat an id the phase
   quietly dropped since planning as the same criteria-integrity problem as an edited "Done when:".
 - **Ownership compliance** — *when the plan declares a `## Change ownership` block.* Compare the phase's
-  actual diff scope (`git diff "$(cat .claude/.phase-base)"..HEAD --name-only`) against that block, and report:
+  actual diff scope (`git diff "$(bash scripts/phase-range.sh --base)"..HEAD --name-only`) against that block, and report:
   - **Planned files modified** — the ones the plan named. Expected.
   - **Unexpected files modified** — files the plan did not name. An unexpected file is **not** an automatic
     failure (plans miss things), but an *unexplained* modification to an unrelated area, or to any

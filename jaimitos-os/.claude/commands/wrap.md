@@ -38,9 +38,11 @@ Close out this session:
       tracked tree is dirty — the grade must describe a clean, committed tree).
    d. Run the gate: `bash scripts/tick.sh "<exact phase heading>"`. It verifies the grade +
       fresh green tests + a clean secret scan + no high-stakes changes, then ticks the roadmap
-      and updates the STATE auto-block. It prints the exact `BASE..HEAD` range it judged (derived
-      from the `.claude/.phase-anchor` set by `start-phase.sh`) — glance at it and confirm it covers
-      the whole phase. If it REFUSES, surface the reason — do not tick by hand. Two refusals you may
+      and updates the STATE auto-block. It prints the exact `BASE..HEAD` range it judged — the SAME
+      window the evaluator reviewed in step 3a, both resolved via the shared `scripts/phase-range.sh`
+      (precedence: trusted `TICK_BASE` → `.claude/.phase-anchor` from `start-phase.sh` →
+      `.claude/.phase-base`), so review and gate never judge different ranges. Glance at it and confirm
+      it covers the whole phase. If it REFUSES, surface the reason — do not tick by hand. Two refusals you may
       see since v2.9.0: (i) if the graded test command doesn't match the one recorded in the anchor at
       phase start (someone changed `.claude/test-command` mid-phase) or the anchor's base was advanced
       after it was set, tick refuses — re-run `start-phase.sh` from a clean tree if the change was

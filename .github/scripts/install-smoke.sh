@@ -58,10 +58,12 @@ grep -q "Jaimitos OS — the scaffold" README.md && bad "scaffold README content
 for f in CLAUDE.md .claude/settings.json \
          scripts/autopilot.sh scripts/tick.sh scripts/test-evidence.sh scripts/test-hooks.sh \
          scripts/record-grade.sh scripts/plan-review-route.sh scripts/check-plan-freshness.sh \
+         scripts/phase-range.sh \
          scripts/models.sh scripts/sync.sh scripts/doctor.sh \
          scripts/close-milestone.sh scripts/next-adr.sh scripts/lint-roadmap.sh \
          .claude/lib/_secret-scan.sh .claude/lib/_high-stakes.sh .claude/lib/_test-cmd.sh \
          .claude/lib/_eval-isolation.sh .claude/lib/_requirements.sh .claude/lib/_roadmap.sh \
+         .claude/lib/_phase-range.sh \
          .claude/agents/researcher.md .claude/agents/planner.md .claude/agents/executor.md .claude/agents/evaluator.md \
          .claude/commands/resume.md .claude/commands/wrap.md .claude/commands/phase.md \
          .claude/commands/autopilot.md .claude/commands/models.md \
@@ -78,7 +80,7 @@ for t in test-tick.sh test-sync.sh test-models.sh test-classify-work.sh test-pla
   [ -e "scripts/$t" ] && bad "gated guard test scripts/$t shipped by default (footprint gate broken)" || ok "gated guard test $t absent by default"
 done
 # Sourced libs must NOT be executable (they are sourced, never run); v2.16.0 normalized two that had drifted.
-for lib in _requirements.sh _roadmap.sh _high-stakes.sh _secret-scan.sh _test-cmd.sh _eval-isolation.sh; do
+for lib in _requirements.sh _roadmap.sh _high-stakes.sh _secret-scan.sh _test-cmd.sh _eval-isolation.sh _phase-range.sh; do
   [ -x ".claude/lib/$lib" ] && bad "sourced lib .claude/lib/$lib is executable (should be non-exec)" || ok "sourced lib $lib is non-executable"
 done
 # Skills installed per-project — assert the FULL shipped manifest (every project skill lands with its

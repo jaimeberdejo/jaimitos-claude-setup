@@ -378,7 +378,7 @@ BASE_SIGNATURE=""
 # control prompt should force supervised review, not silently continue — so they are integrity-checked
 # here alongside the scripts. (A legitimate agent-prompt change is a supervised toolkit edit, not an
 # unattended autopilot phase.)
-GATE_CONTROL_FILES="scripts/tick.sh .claude/lib/_high-stakes.sh .claude/lib/_secret-scan.sh .claude/lib/_eval-isolation.sh .claude/lib/_roadmap.sh scripts/test-evidence.sh scripts/record-grade.sh .claude/lib/_test-cmd.sh .claude/test-command .claude/high-stakes-path-allowlist .claude/agents/researcher.md .claude/agents/planner.md .claude/agents/executor.md .claude/agents/evaluator.md"
+GATE_CONTROL_FILES="scripts/tick.sh .claude/lib/_high-stakes.sh .claude/lib/_secret-scan.sh .claude/lib/_eval-isolation.sh .claude/lib/_roadmap.sh .claude/lib/_phase-range.sh scripts/test-evidence.sh scripts/record-grade.sh .claude/lib/_test-cmd.sh .claude/test-command .claude/high-stakes-path-allowlist .claude/agents/researcher.md .claude/agents/planner.md .claude/agents/executor.md .claude/agents/evaluator.md"
 gate_control_intact() {
   local p
   for p in $GATE_CONTROL_FILES; do
@@ -477,6 +477,9 @@ for i in $(seq 1 "$MAX_ITER"); do
   # iteration (tick rc 0 + commit) or the roadmap-complete break below — ANY failure/abort/block
   # break leaves RUN_RESULT "failed", and the finish gate refuses to push it.
   RUN_RESULT="failed"
+  # The trusted base is derived per-iteration and exported (as TICK_BASE) only AFTER the builder runs,
+  # for the evaluator + tick. Clear it here so THIS iteration's builder never inherits a stale value.
+  unset TICK_BASE
   # Kill-switch: present in the worktree working dir OR the operator's original checkout. A user
   # AGENT_STOP is an interruption, not a completed run — RUN_RESULT stays "failed" → never published.
   if [ -f AGENT_STOP ] || [ -f "$ORIG_ROOT/AGENT_STOP" ]; then
@@ -575,14 +578,18 @@ for i in $(seq 1 "$MAX_ITER"); do
     break
   fi
 
-  # Override the builder-written .claude/.phase-base with the TRUSTED base captured above, BEFORE the
-  # evaluator (which reads .phase-base for its phase-diff + criteria-integrity check, evaluator.md:38,48)
-  # and tick.sh (via TICK_BASE below) run. The builder writes this file from inside its bypass-mode
-  # session; under headless autopilot it is UNTRUSTED (a forged BASE=HEAD would empty the scan window
-  # and hide a high-stakes/secret commit). .claude/.phase-base is gitignored, so this write never dirties
-  # the tracked tree or the pre-grade snapshot.
+  # Override the builder-written .claude/.phase-base with the TRUSTED base captured above, and EXPORT it
+  # as TICK_BASE, BEFORE the evaluator and tick.sh run. The evaluator now resolves its review window via
+  # the shared scripts/phase-range.sh, which honours TICK_BASE first — so the independent review and the
+  # completion gate judge the IDENTICAL range from the orchestrator-trusted base (v2.17 OBJ-1703), not
+  # the builder-writable file/anchor. The builder writes .phase-base from inside its bypass-mode session;
+  # under headless autopilot that is UNTRUSTED (a forged BASE=HEAD would empty the scan window and hide a
+  # high-stakes/secret commit). .claude/.phase-base is gitignored, so this write never dirties the tracked
+  # tree or the pre-grade snapshot. TICK_BASE is unset at the top of each iteration (before the builder),
+  # so a builder never inherits it; it is exported here, after the builder, for the evaluator + tick only.
   if [ -n "$PHASE_BASE" ]; then
     printf '%s\n' "$PHASE_BASE" > .claude/.phase-base
+    export TICK_BASE="$PHASE_BASE"
   fi
 
   # Produce AUTHORITATIVE tick evidence now that the builder has fully exited and HEAD is

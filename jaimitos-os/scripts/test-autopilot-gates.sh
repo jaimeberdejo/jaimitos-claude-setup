@@ -151,6 +151,7 @@ mkrepo() {
   cp "$TC_LIB" "$REPO/.claude/lib/_test-cmd.sh"
   cp "$EI_LIB" "$REPO/.claude/lib/_eval-isolation.sh"
   cp "$RM_LIB" "$REPO/.claude/lib/_roadmap.sh"
+  cp "$SCAFFOLD/.claude/lib/_phase-range.sh" "$REPO/.claude/lib/_phase-range.sh"
   printf '{ "permissions": { "deny": ["Read(.env)"] } }\n' > "$REPO/.claude/settings.json"
   # Mirror a real install's .gitignore so log/evidence/control files stay UNTRACKED — exactly
   # like a shipped project. Without this the stub would commit autopilot.log and the .claude
