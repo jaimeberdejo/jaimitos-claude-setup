@@ -99,12 +99,14 @@ implement the wrong thing, or do exactly what was asked in a way you'd block a m
   Grade against the ORIGINAL "Done when:" from the phase base, not the current text. Tightening,
   clarifying, or unrelated-phase edits still warrant a flag; weakening or removing is a hard fail.
 - **Requirement traceability** — *only when the active phase declares a `Requirements:` line.* Most
-  phases do not; when there is none, this bullet adds nothing and you move on. When a phase was
-  planned from an external requirements source (a PRD, a ticket, an imported feature specification),
-  it may carry a `Requirements:` block listing stable ids and a `Sources:` line naming where they are
-  defined. Then each listed id is an **additional acceptance criterion**: locate its definition in the
-  named source, and state, per id, whether the diff **satisfies** it, **partially** satisfies it, or
-  **does not touch** it. An id you cannot trace to code or a test is an **unmet criterion**, not a
+  phases do not; when there is none, this bullet adds nothing and you move on. When a phase was planned
+  from a requirements source — native `docs/SPEC.md` (`REQ/AC/OBJ` ids from the `to-spec` skill) or an
+  external one (a PRD, a ticket, an imported feature specification) — it carries a `Requirements:` block
+  listing stable ids and a `Sources:` line naming where they are defined. Then each listed id is an
+  **additional acceptance criterion**: locate its definition in the named source (for `docs/SPEC.md`,
+  `trace-requirements.sh` has already confirmed the id resolves), and state, per id, whether the diff
+  **satisfies** it, **partially** satisfies it, or **does not touch** it. An id you cannot trace to code
+  or a test is an **unmet criterion**, not a
   formatting nit — it fails Axis A exactly as a missing "Done when:" would. Grade only the ids the
   phase actually claims; do not import the source's every requirement, and treat an id the phase
   quietly dropped since planning as the same criteria-integrity problem as an edited "Done when:".

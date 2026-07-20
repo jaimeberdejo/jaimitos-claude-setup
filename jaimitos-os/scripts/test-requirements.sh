@@ -136,5 +136,35 @@ has "no structural problems" "$OUT"              && pass "inert: structure clean
 has "every active requirement is planned" "$OUT" && pass "inert: coverage clean with no ids"     || fail "inert coverage wrong: $OUT"
 
 echo ""
+echo "Native SPEC->ROADMAP handoff (v2.17): a phase naming docs/SPEC.md as its Source resolves its"
+echo "REQ/AC ids; an id removed from the SPEC or mistyped in the phase fails --strict. (The evaluator"
+echo "then tracing each id to code/tests is model-dependent — recorded in the v2.17 dogfood, not here.)"
+native_roadmap() {
+  cat > docs/ROADMAP.md <<EOF
+## Phase 1 — token expiry
+- [ ] implement expiry
+Done when: tokens expire
+Mode: loopable
+Sources:
+- docs/SPEC.md
+Requirements:
+- $1
+- $2
+EOF
+}
+# clean: an explicitly spec-sourced phase resolves its native REQ + AC ids.
+write_spec; native_roadmap REQ-001 AC-001
+bash "$TRACE" --strict >/dev/null 2>&1 && pass "native: Sources: docs/SPEC.md phase resolves REQ-001 + AC-001 (--strict clean)" || fail "native ids did not resolve: $(bash "$TRACE" 2>&1)"
+# id REMOVED from the SPEC → the phase's reference no longer resolves → --strict fails naming it.
+write_spec; native_roadmap REQ-001 AC-001
+awk '/^### REQ-001 /{skip=1} /^### REQ-002 /{skip=0} skip!=1' docs/SPEC.md > docs/SPEC.md.tmp && mv docs/SPEC.md.tmp docs/SPEC.md
+OUT=$(bash "$TRACE" 2>&1)
+{ ! bash "$TRACE" --strict >/dev/null 2>&1 && printf '%s' "$OUT" | grep -q 'REQ-001'; } \
+  && pass "native: an id removed from docs/SPEC.md fails --strict (named)" || fail "removed native id not caught: $OUT"
+# id MISTYPED in the phase → does not resolve → --strict fails.
+write_spec; native_roadmap REQ-0O1 REQ-002
+bash "$TRACE" --strict >/dev/null 2>&1 && fail "mistyped native id did not fail --strict" || pass "native: a mistyped id (REQ-0O1) fails --strict"
+
+echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All trace-requirements.sh tests passed."; exit 0
 else echo "$FAILS trace-requirements.sh test(s) FAILED."; exit 1; fi

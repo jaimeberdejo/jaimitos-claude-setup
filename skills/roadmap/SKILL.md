@@ -78,31 +78,50 @@ Then produce that many phases, ordered so each one builds on the last. Every pha
 Order heuristic: pure logic / data model first → evaluation harness early (it's the
 truth source) → interfaces → hardening last.
 
-## Optional: carry external requirement ids into a phase
+## Optional: carry requirement ids into a phase
 
-Only when the project is planned from an **external requirements source** with stable ids — a PRD, a
-ticket, an imported feature specification — a phase MAY carry two extra lines under its tasks:
+When the project has a requirements source with stable ids, a phase MAY carry two extra lines under
+its tasks. The source can be **native** — a `docs/SPEC.md` written with the `to-spec` skill, which
+mints `REQ/AC/OBJ` ids — or **external** — a PRD, a ticket, an imported feature specification. Name the
+source on the `Sources:` line so it is unambiguous which it is; both are first-class.
+
+Native (`docs/SPEC.md`, the common case for a spec-driven project):
+
+```md
+Sources:
+- docs/SPEC.md
+Requirements:
+- REQ-012 — password reset tokens expire after 15 minutes
+- AC-017 — a used token cannot be redeemed twice
+```
+
+External (an imported requirements source):
 
 ```md
 Sources:
 - specs/account-recovery/spec.md
 Requirements:
 - REQ-AR-001 — the reset token expires after 15 minutes
-- REQ-AR-003 — a used token cannot be redeemed twice
 ```
 
 - **`Sources:`** names where the ids are defined; **`Requirements:`** lists the ids this phase is
-  accountable for (with a short label). Use whatever id scheme the source already uses — `FR-001`,
-  `REQ-AR-001`, `JIRA-1234` — this convention names no tool and adopts no format of its own.
-- The `roadmap`/`lint-roadmap` schema **ignores** these lines, so they are always safe to add and
-  never required. The payoff is at grading time: when a phase declares `Requirements:`, the
-  `evaluator` treats each id as an additional acceptance criterion and traces it to code or a test,
-  failing the phase for any id it cannot account for.
+  accountable for (with a short label). The definition **stays in the source** — never copied into the
+  roadmap. Use whatever id scheme the source uses — the native `REQ/AC/OBJ`, or `FR-001` / `JIRA-1234`
+  from an external one; this convention names no tool and adopts no format of its own.
+- The `roadmap`/`lint-roadmap` schema **ignores** these lines for structure, so they are always safe to
+  add and never required — but when the source is `docs/SPEC.md`, `lint-roadmap.sh` (and
+  `trace-requirements.sh`) DO resolve each id against the spec: an id that no spec definition backs is a
+  lint error, and an active spec `REQ/OBJ` that no phase references is surfaced as an orphan. The payoff
+  at grading time is the same for both source kinds: the `evaluator` treats each declared id as an
+  additional acceptance criterion, traces it to code or a test, and fails the phase for any id it cannot
+  account for.
 - **Attribute honestly.** A phase's `Requirements:` must list exactly the ids it truly owns — not the
   source's every id. Give the evaluator an id the phase was never meant to satisfy and you manufacture
   a failure nobody introduced.
-- Do **not** add this to a phase with no external id source. A hand-written roadmap's `Done when:`
-  line is already its acceptance criterion; inventing ids for it is ceremony, not traceability.
+- Do **not** invent ids for a hand-written roadmap that has **no** SPEC and no external source — a
+  `Done when:` line is already its acceptance criterion, and minting ids just to reference them is
+  ceremony. But when `docs/SPEC.md` (or an external source) already defines stable ids, referencing the
+  ones a phase owns is real end-to-end traceability, not ceremony.
 
 ## Mark each phase loopable or supervised
 
