@@ -187,5 +187,24 @@ case "$H4_OUT2" in *SUBDIRECTORY*) ok "H4: --allow-subdir still warns loudly" ;;
 rm -rf "$SUB"
 
 echo ""
+echo "portability (v2.17): symlinked installer + failure propagation"
+# A symlinked install.sh must resolve its REAL repo dir (readlink chain), not the symlink's location —
+# the old `dirname "$BASH_SOURCE"` then pointed next to the symlink and the install failed to find jaimitos-os/.
+SL="$(mktemp -d)"; ln -s "$REPO/install.sh" "$SL/inst.sh"
+SLT="$(mktemp -d)" && ( cd "$SLT" && git init -q && git config user.email t@t.t && git config user.name t )
+if bash "$SL/inst.sh" "$SLT" >/dev/null 2>&1 && [ -f "$SLT/.claude/settings.json" ] && [ -f "$SLT/scripts/tick.sh" ]; then
+  ok "install.sh invoked through a symlink resolves its real repo and installs"
+else bad "symlinked install.sh did not install correctly"; fi
+rm -rf "$SL" "$SLT"
+
+# A --global-skills install whose global dir cannot be created must FAIL (nonzero), not print success.
+GT="$(mktemp -d)" && ( cd "$GT" && git init -q && git config user.email t@t.t && git config user.name t )
+ROHOME="$(mktemp -d)"; mkdir -p "$ROHOME/.claude"; : > "$ROHOME/.claude/skills"   # a FILE where the skills DIR must go → mkdir -p fails
+GO_OUT="$(HOME="$ROHOME" bash "$REPO/install.sh" "$GT" --global-skills 2>&1)"; GO_RC=$?
+{ [ "$GO_RC" != 0 ] && printf '%s' "$GO_OUT" | grep -qi 'global'; } \
+  && ok "a --global-skills install that can't write exits non-zero (no silent success)" || bad "failed global-skills install did not fail (rc=$GO_RC)"
+rm -rf "$GT" "$ROHOME"
+
+echo ""
 if [ "$FAILS" -eq 0 ]; then echo "install smoke test: PASS"; exit 0
 else echo "install smoke test: $FAILS failure(s)"; exit 1; fi

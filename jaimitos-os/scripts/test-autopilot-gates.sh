@@ -637,6 +637,20 @@ contains "$(logof "$REPO")" "passed independent grade" && fail "M2: completion c
 ticked "$REPO" && pass "M2: tick applied in the working tree (the failure is the commit, not the tick)" || fail "M2: tick did not apply to the working tree"
 [ "$rc" != 0 ] && pass "M2: failed completion commit → run exits non-zero (rc=$rc)" || fail "M2: run exit was $rc (want non-zero)"
 
+# 39 — M8 (watchdog usability probe): a BROKEN-but-present perl must fall through to setsid rather than
+# be selected and fail. With a perl stub that always exits non-zero ahead on PATH, a clean run still ticks.
+mkrepo r39
+BADPERL="$WORK/badperl"; mkdir -p "$BADPERL"; printf '#!/usr/bin/env bash\nexit 3\n' > "$BADPERL/perl"; chmod +x "$BADPERL/perl"
+BUILDER_MODE=clean EVAL_MODE=pass; export BUILDER_MODE EVAL_MODE
+( cd "$REPO" && PATH="$BADPERL:$BIN:$PATH" LEAN_TEST_CMD=true AUTOPILOT_POLL_INTERVAL=0.2 bash scripts/autopilot.sh 1 --no-worktree --allow-dirty ) >"$WORK/out" 2>&1
+ticked "$REPO" && pass "M8: a broken-but-present perl falls through (setsid) — run still ticks" || fail "M8: broken perl not survived"
+
+# 40 — M8 (locale): the watchdog runs under C.UTF-8 (perl's non-fatal 'Setting locale failed' warning
+# must not break the run — the setpgrp/exec one-liner is locale-insensitive).
+mkrepo r40; BUILDER_MODE=clean EVAL_MODE=pass; export BUILDER_MODE EVAL_MODE
+( cd "$REPO" && PATH="$BIN:$PATH" LANG=C.UTF-8 LC_ALL=C.UTF-8 LEAN_TEST_CMD=true AUTOPILOT_POLL_INTERVAL=0.2 bash scripts/autopilot.sh 1 --no-worktree --allow-dirty ) >"$WORK/out" 2>&1
+ticked "$REPO" && pass "M8: watchdog runs under C.UTF-8 (locale warning is non-fatal)" || fail "M8: C.UTF-8 broke the run"
+
 echo ""
 if [ "$FAILS" -eq 0 ]; then echo "All autopilot gate tests passed."; exit 0
 else echo "$FAILS gate test(s) FAILED."; echo "--- last run output ---"; tail -n 25 "$WORK/out" 2>/dev/null; exit 1; fi

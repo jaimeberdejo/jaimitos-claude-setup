@@ -415,7 +415,15 @@ run_child_with_watchdog() {
 
   CURRENT_CHILD_PID=""
   CURRENT_CHILD_PGID=""
-  if command -v perl >/dev/null 2>&1; then
+  # Probe the perl backend for USABILITY, not mere presence (v2.17 OBJ-1708): a broken-but-present perl,
+  # or one that cannot setpgrp, must fall through to setsid rather than be selected and then fail. The
+  # probe runs the exact construct we rely on and checks it EXITS 0. (A bad locale like C.UTF-8 makes
+  # perl print a non-fatal "Setting locale failed" warning but still exit 0 — so it stays usable, which
+  # is correct: the setpgrp/exec one-liner is locale-insensitive.) Cached across calls in WD_PERL_OK.
+  if [ -z "${WD_PERL_OK:-}" ]; then
+    if command -v perl >/dev/null 2>&1 && perl -e 'setpgrp(0,0); exit 0' >/dev/null 2>&1; then WD_PERL_OK=1; else WD_PERL_OK=0; fi
+  fi
+  if [ "$WD_PERL_OK" = 1 ]; then
     # perl backgrounded → setpgrp(0,0) makes it its own group leader → exec keeps the SAME pid, so $!
     # is exactly the child pid AND its pgid (deterministic, unlike setsid's fork-or-not behaviour).
     perl -e 'setpgrp(0,0); exec @ARGV' -- "$@" >"$out_file" 2>>"$AUTOPILOT_LOG" &

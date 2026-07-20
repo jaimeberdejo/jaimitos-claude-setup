@@ -31,8 +31,19 @@
 
 set -uo pipefail
 
-# Resolve this script's directory (the repo root) so it works from anywhere.
-SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Resolve this script's REAL directory (the repo root) so it works from anywhere — including when
+# install.sh is invoked through a SYMLINK placed elsewhere (e.g. ~/bin/install.sh -> repo/install.sh).
+# BSD readlink has no -f, so walk the symlink chain by hand (portable on macOS + Linux).
+resolve_dir() {
+  local src="$1" dir
+  while [ -L "$src" ]; do
+    dir="$(cd -P "$(dirname "$src")" 2>/dev/null && pwd)" || return 1
+    src="$(readlink "$src")"
+    case "$src" in /*) : ;; *) src="$dir/$src" ;; esac
+  done
+  cd -P "$(dirname "$src")" 2>/dev/null && pwd
+}
+SRC="$(resolve_dir "${BASH_SOURCE[0]}")"
 SCAFFOLD="$SRC/jaimitos-os"
 SKILLS_SRC="$SRC/skills"
 
@@ -190,15 +201,28 @@ while IFS= read -r srcfile; do
   copy_file ".claude/skills/$skillrel" "$srcfile"
 done < <(find "$SKILLS_SRC" -mindepth 2 -type f)   # mindepth 2 = inside skill dirs; skips the top-level skills/README.md
 
-# 3. Optional global skills install.
+# 3. Optional global skills install. A REQUESTED global install that fails to write, or copies zero
+# skills, must NOT print success — it feeds FAILED so the exit-1 gate below fires (v2.17 OBJ-1707).
 if [ "$GLOBAL_SKILLS" -eq 1 ]; then
   GDIR="$HOME/.claude/skills"
   echo "install: also copying skills → $GDIR"
-  while IFS= read -r d; do
-    name="$(basename "$d")"
-    if [ -e "$GDIR/$name" ] && [ "$FORCE" -eq 0 ]; then echo "  skip global (exists): $name"; continue; fi
-    mkdir -p "$GDIR" && cp -r "$d" "$GDIR/"
-  done < <(find "$SKILLS_SRC" -mindepth 1 -maxdepth 1 -type d)
+  if ! mkdir -p "$GDIR"; then
+    echo "install: ⛔ could not create the global skills dir $GDIR — global install FAILED." >&2
+    FAILED=$((FAILED+1))
+  else
+    G_COPIED=0; G_SKIPPED=0
+    while IFS= read -r d; do
+      name="$(basename "$d")"
+      if [ -e "$GDIR/$name" ] && [ "$FORCE" -eq 0 ]; then echo "  skip global (exists): $name"; G_SKIPPED=$((G_SKIPPED+1)); continue; fi
+      if cp -r "$d" "$GDIR/"; then G_COPIED=$((G_COPIED+1)); else echo "  FAILED global copy: $name" >&2; FAILED=$((FAILED+1)); fi
+    done < <(find "$SKILLS_SRC" -mindepth 1 -maxdepth 1 -type d)
+    if [ "$G_COPIED" -eq 0 ] && [ "$G_SKIPPED" -eq 0 ]; then
+      echo "install: ⛔ global skills requested but ZERO skills were copied (nothing at $SKILLS_SRC?) — FAILED." >&2
+      FAILED=$((FAILED+1))
+    else
+      echo "install: global skills — copied $G_COPIED, skipped $G_SKIPPED (existing)."
+    fi
+  fi
 fi
 
 # 3b. Merge scaffold .gitignore rules into a pre-existing target .gitignore.
@@ -262,8 +286,22 @@ if [ -f "$TARGET/.claude/lib/_high-stakes.sh" ]; then
   grep -E '^HIGH_STAKES_RE=' "$TARGET/.claude/lib/_high-stakes.sh" > "$TARGET/.claude/.high-stakes-default" 2>/dev/null || true
 fi
 
-# 4. Make hooks/scripts executable (incl. the sandbox wrapper).
-chmod +x "$TARGET"/.claude/hooks/*.sh "$TARGET"/scripts/*.sh "$TARGET"/sandbox/*.sh 2>/dev/null || true
+# 4. Make hooks/scripts executable (incl. the sandbox wrapper). A genuine chmod failure on a real file
+# is surfaced (feeds FAILED) instead of being swallowed — a non-executable hook/gate is a broken install.
+# Per-file so a directory that legitimately has no *.sh (glob stays literal) is not a false failure.
+chmod_dir() {
+  local d="$1" f ok=0
+  for f in "$d"/*.sh; do
+    [ -f "$f" ] || continue
+    chmod +x "$f" 2>/dev/null || { echo "install: ⚠ could not chmod +x $f" >&2; ok=1; }
+  done
+  return "$ok"
+}
+CHMOD_OK=1
+chmod_dir "$TARGET/.claude/hooks" || CHMOD_OK=0
+chmod_dir "$TARGET/scripts"       || CHMOD_OK=0
+chmod_dir "$TARGET/sandbox"       || CHMOD_OK=0
+[ "$CHMOD_OK" -eq 1 ] || { echo "install: ⛔ some files could not be made executable — the install is INCOMPLETE." >&2; FAILED=$((FAILED+1)); }
 
 echo ""
 echo "install: copied $COPIED file(s), skipped $SKIPPED, failed $FAILED."

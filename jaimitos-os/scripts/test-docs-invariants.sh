@@ -209,6 +209,8 @@ for gone in scripts/lint-enforcement.sh scripts/check-uat.sh scripts/test-enforc
 done
 assert_absent "../README.md" "check-uat" \
            "README claims no UAT release gate (the validator is gone)"
+assert_has "../README.md" 'cp -r "${d%/}"' \
+           "README Option C nests skills (no BSD trailing-slash flatten)"
 assert_absent "../docs/dev/AUTHORING.md" "lint-enforcement.sh" \
            "the guarantee table claims no enforcement-ledger gate (the validator is gone)"
 

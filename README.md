@@ -131,7 +131,10 @@ cp -r ~/jaimitos-claude-setup/jaimitos-os/. /path/to/your-repo/
 # (module-design, prototype, review-feedback).
 mkdir -p /path/to/your-repo/.claude/skills
 for d in ~/jaimitos-claude-setup/skills/*/; do
-  [ "$(basename "$d")" = setup-jaimitos-os ] || cp -r "$d" /path/to/your-repo/.claude/skills/
+  # NOTE the "${d%/}" — a trailing slash on the source makes BSD/macOS `cp -r` copy the directory's
+  # CONTENTS into the destination (flattening every skill's files into .claude/skills/) instead of
+  # nesting the skill dir. Stripping it nests correctly on both BSD and GNU cp.
+  [ "$(basename "$d")" = setup-jaimitos-os ] || cp -r "${d%/}" /path/to/your-repo/.claude/skills/
 done
 cd /path/to/your-repo && chmod +x .claude/hooks/*.sh scripts/*.sh && bash scripts/doctor.sh
 ```
